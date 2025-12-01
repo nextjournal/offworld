@@ -1,0 +1,4 @@
+{:deps {:aliases [:dev]}
+ :dev-http {8000 "public"}
+ :builds {:table {:target :browser
+                  :modules {:main {:entries [nextjournal.table.main]}}}}}

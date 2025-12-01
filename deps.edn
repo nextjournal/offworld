@@ -1,0 +1,7 @@
+{:deps {no.cjohansen/replicant {:mvn/version "2025.06.21"}}
+ :paths ["src"]
+ :aliases {:dev {:exec-fn user/start-shadow!
+                 :extra-paths ["dev"]
+                 :extra-deps {no.cjohansen/nexus {:mvn/version "2025.11.1"}
+                              thheller/shadow-cljs {:mvn/version "3.3.2"}
+                              io.github.nextjournal/clerk {:mvn/version "0.18.1158"}}}}}
