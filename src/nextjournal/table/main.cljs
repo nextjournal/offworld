@@ -1,13 +1,7 @@
 (ns nextjournal.table.main
-  (:require [nexus.registry :as nxr]
+  (:require [nexus.core :as nexus]
             [replicant.dom :as r]))
 
-
-(defn save [_ store path value]
-  (swap! store assoc-in path value))
-
-(defn increment [state path]
-  [[:effects/save path (+ (:step state) (get-in state path))]])
 
 (defn render [state]
   [:div
@@ -23,31 +17,30 @@
     {:on {:click [[:actions/inc [:number]]]}}
     "Count!"]])
 
-;; App state
-(def store (atom {}))
+(def !state
+  (atom {}))
 
-;; Handle user input: register effects, actions and placeholders.
-;; If you don't like registering these globally, the next section
-;; shows how to use nexus.core, which has no implicit state.
-(nxr/register-effect! :effects/save save)
-(nxr/register-action! :actions/inc increment)
+(def nexus
+  {:nexus/system->state deref
+   :nexus/effects {:effects/save (fn save [_ store path value]
+                                   (swap! store assoc-in path value))}
+   :nexus/actions {:actions/inc (fn inc [state path]
+                                  [[:effects/save path (+ (:step state) (get-in state path))]])}
+   :nexus/placeholders {:event.target/value (fn event-target-value [{:replicant/keys [dom-event]}]
+                                              (prn :event.target/value dom-event)
+                                              (some-> dom-event .-target .-value))
+                        :fmt/number (fn fmt-number [_ value]
+                                      (prn :fmt/number value)
+                                      (or (some-> value parse-long) 0))}})
 
-(nxr/register-placeholder!
- :event.target/value
- (fn [{:replicant/keys [dom-event]}]
-   (some-> dom-event .-target .-value)))
+(r/set-dispatch! #(nexus/dispatch nexus !state %1 %2))
 
-(nxr/register-placeholder!
- :fmt/number
- (fn [_ value]
-   (or (some-> value parse-long) 0)))
+(defonce root-el
+  (js/document.getElementById "app"))
 
-(nxr/register-system->state! deref)
-
-;; Wire up the render loop
-(r/set-dispatch! #(nxr/dispatch store %1 %2))
-(add-watch store ::render #(r/render js/document.body (render %4)))
+(add-watch !state ::render (fn [_ _ _ new-state]
+                             (r/render root-el (render new-state))))
 
 ;; Trigger the initial render
-(reset! store {:number 0, :step 1})
+(reset! !state {:number 0, :step 3})
 
