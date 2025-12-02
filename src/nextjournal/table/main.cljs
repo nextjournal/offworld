@@ -3,9 +3,6 @@
             [nextjournal.table.ui :as ui]
             [replicant.dom :as r]))
 
-
-
-
 (def !state
   (atom {}))
 

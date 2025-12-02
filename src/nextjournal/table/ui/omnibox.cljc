@@ -1,6 +1,7 @@
-(ns nextjournal.table.ui.omnibox)
+(ns nextjournal.table.ui.omnibox
+  (:require [nextjournal.table.ui.utils :as utils]))
 
-(defn input [{:keys [rows choices filters set-filters text !expanded !selected keyword? numeric? date? data-testid] :as opts}]
+(defn input [opts]
   [:input
    {:type "text"
     :class ["w-full" "cursor-default" "rounded-[3px]" "px-[6px]"
@@ -8,9 +9,9 @@
             "focus:outline-none" "focus:ring-2" "focus:ring-blue-500" "sm:leading-6"
             "bg-white"]
     :placeholder "Filter..."
-    :data-testid data-testid
-    :value       text
-    :on {:input [[:effects/save [::value] [:event.target/value]]
+    :data-testid (:data-testid opts)
+    :value (:value opts)
+    :on {:input [[:effects/save (utils/conjv (:state/path-prefix opts) :value) [:event.target/value]]
                  #_(do
                      (reset! !text (-> % .-currentTarget .-value))
                      (reset! !selected nil)
@@ -60,8 +61,9 @@
   [:div "popover"])
 
 (defn omnibox [opts]
+  (prn opts)
   [:div
-   (input opts)
+   (input (utils/substate opts [::input]))
    (when (:popover-visible opts)
      (popover opts))
    (pr-str opts)])
