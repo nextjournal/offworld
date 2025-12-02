@@ -17,17 +17,20 @@
                                   [[:effects/save path (+ (:step state) (get-in state path))]])}
    :nexus/placeholders {:event.target/value (fn event-target-value [{:replicant/keys [dom-event]}]
                                               (some-> dom-event .-target .-value))
-                        :fmt/number (fn fmt-number [_ value]
-                                      (or (some-> value parse-long) 0))}})
+                        :fmt/as-long (fn fmt-as-long [_ value]
+                                       (or (some-> value parse-long) 0))
+                        :fmt/as-double (fn fmt-as-double [_ value]
+                                         (or (some-> value parse-double) 0.0))}})
 
 (r/set-dispatch! #(nexus/dispatch nexus !state %1 %2))
 
 (defonce root-el
   (js/document.getElementById "app"))
 
-(add-watch !state ::render (fn [_ _ _ new-state]
-                             (r/render root-el (ui/render new-state))))
+(defn main []
+  (add-watch !state ::render (fn [_ _ _ new-state]
+                               (r/render root-el (ui/render new-state))))
 
-;; Trigger the initial render
-(reset! !state {:number 0, :step 3})
+  ;; Trigger the initial render
+  (reset! !state {}))
 
