@@ -1,4 +1,4 @@
-(ns nextjournal.table.views)
+(ns nextjournal.table.ui)
 
 (defn render [state]
   [:div
@@ -13,4 +13,3 @@
    [:button.btn
     {:on {:click [[:actions/inc [:number]]]}}
     "Count!"]])
-

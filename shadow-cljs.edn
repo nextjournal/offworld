@@ -1,4 +1,8 @@
 {:deps {:aliases [:dev]}
- :dev-http {8000 "public"}
- :builds {:table {:target :browser
-                  :modules {:main {:entries [nextjournal.table.main]}}}}}
+ :dev-http {8000 ["public" "classpath:public"]}
+ :builds {:app {:target :browser
+                :modules {:main {:init-fn nextjournal.table.main/main}}}
+          :portfolio
+          {:target :browser
+           :modules {:main {:init-fn nextjournal.table.scenes/main}}
+           :dev {:output-dir "public/portfolio-js"}}}}

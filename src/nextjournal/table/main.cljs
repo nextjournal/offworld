@@ -1,6 +1,6 @@
 (ns nextjournal.table.main
   (:require [nexus.core :as nexus]
-            [nextjournal.table.views :as views]
+            [nextjournal.table.ui :as ui]
             [replicant.dom :as r]))
 
 
@@ -26,7 +26,7 @@
   (js/document.getElementById "app"))
 
 (add-watch !state ::render (fn [_ _ _ new-state]
-                             (r/render root-el (views/render new-state))))
+                             (r/render root-el (ui/render new-state))))
 
 ;; Trigger the initial render
 (reset! !state {:number 0, :step 3})
