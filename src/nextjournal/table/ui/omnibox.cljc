@@ -2,7 +2,11 @@
 
 (defn input [{:keys [rows choices filters set-filters text !expanded !selected keyword? numeric? date? data-testid] :as opts}]
   [:input
-   {:type        "text"
+   {:type "text"
+    :class ["w-full" "cursor-default" "rounded-[3px]" "px-[6px]"
+            "ring-1" "ring-slate-300" "font-normal" "placeholder-slate-400"
+            "focus:outline-none" "focus:ring-2" "focus:ring-blue-500" "sm:leading-6"
+            "bg-white"]
     :placeholder "Filter..."
     :data-testid data-testid
     :value       text
@@ -50,3 +54,14 @@
                             (update-selected opts -1))
 
                           nil))]}}])
+
+
+(defn popover [opts]
+  [:div "popover"])
+
+(defn omnibox [opts]
+  [:div
+   (input opts)
+   (when (:popover-visible opts)
+     (popover opts))
+   (pr-str opts)])

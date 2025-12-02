@@ -14,7 +14,7 @@
 (defn main []
   (portfolio/start!
    {:config
-    {:css-paths ["/css/pico.min.css"]
+    {:css-paths ["/css/ductile.css"]
      :viewport/defaults
      {:background/background-color "#fdeddd"}}})  )
 
