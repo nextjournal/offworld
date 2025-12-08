@@ -1,6 +1,7 @@
 {:deps {no.cjohansen/replicant {:mvn/version "2025.06.21"}}
  :paths ["src"]
  :aliases {:dev {:exec-fn user/start-shadow!
+                 :main-opts ["-m" "shadow.cljs.devtools.cli"]
                  :extra-paths ["dev"]
                  :extra-deps {no.cjohansen/nexus {:mvn/version "2025.11.1"}
                               no.cjohansen/dataspex {:mvn/version "2025.10.1"}

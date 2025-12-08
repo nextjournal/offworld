@@ -11,6 +11,12 @@
 (defscene input []
   (omnibox-ui/input {}))
 
+(defscene filter-button []
+  (omnibox-ui/filter-button {:value "s"}))
+
+(defscene remove-filter-2 []
+  (omnibox-ui/remove-filter-button {}))
+
 (defn main []
   (portfolio/start!
    {:config

@@ -1,5 +1,32 @@
 (ns nextjournal.table.ui.omnibox
-  (:require [nextjournal.table.ui.utils :as utils]))
+  (:require [clojure.string :as str]
+            [nextjournal.table.ui.utils :as utils]
+            [nextjournal.table.filters :as filters]
+            [portfolio.replicant :refer [defscene]]))
+
+(def icon-filter
+  [:svg {:viewBox "0 0 20 20"
+         :fill "currentColor"
+         :xmlns "http://www.w3.org/2000/svg"}
+   [:path {:d "M18 1H2V3L10 13L18 3V1Z"}]
+   [:path {:d "M8 5H12V18L8 15V5Z"}]])
+
+(defn remove-filter-button [opts]
+  [:button
+   {:class ["px-[6px]" "py-[3px]" "rounded-l-[3px]" "text-slate-400" "hover:text-inherit"]
+    :on {:click [[::remove-filter]]}}
+   "×"])
+
+#?(:cljs (defscene remove-filter-scene []
+           (remove-filter-button {})))
+
+(defn filter-button [{:keys [label]}]
+  [:div
+   {:class ["ring-1" "ring-slate-300" "bg-white" "text-[12px]" "px-[6px]" "py-[3px]" "rounded-[3px]" "group"]}
+   label])
+
+#?(:cljs (defscene filter-button-scene []
+           (filter-button {:value ""})))
 
 (defn input [opts]
   [:input
@@ -11,7 +38,9 @@
     :placeholder "Filter..."
     :data-testid (:data-testid opts)
     :value (:value opts)
-    :on {:input [[:effects/save (utils/conjv (:state/path-prefix opts) :value) [:event.target/value]]
+    :on {:focus [[:effects/save (utils/conjv (:state/path-prefix opts) :focus?) true]]
+         :blur [[:effects/save (utils/conjv (:state/path-prefix opts) :focus?) false]]
+         :input [[:effects/save (utils/conjv (:state/path-prefix opts) :value) [:event.target/value]]
                  #_(do
                      (reset! !text (-> % .-currentTarget .-value))
                      (reset! !selected nil)
@@ -56,14 +85,25 @@
 
                           nil))]}}])
 
+#?(:cljs (defscene input-scene []
+           (input {})))
 
 (defn popover [opts]
-  [:div "popover"])
+  [:div
+   (when-let [filter-to-add (:filter-to-add opts)]
+     (:label filter-to-add))])
+
+(defn build-state [state]
+  (let [{:keys [focus? value]} (::input state)]
+    (cond-> (assoc state :popover-visible? (boolean focus?))
+      (not (str/blank? value))
+      (assoc :filter-to-add (filters/text->filter value)))))
 
 (defn omnibox [opts]
-  (prn opts)
-  [:div
-   (input (utils/substate opts [::input]))
-   (when (:popover-visible opts)
-     (popover opts))
-   (pr-str opts)])
+  (let [opts' (build-state opts)]
+    [:div
+     (input (utils/substate opts [::input]))
+     (when (:popover-visible? opts')
+       (popover opts'))
+     (pr-str opts')]))
+

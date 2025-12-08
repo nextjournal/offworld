@@ -1,6 +1,6 @@
 (ns nextjournal.table.filters
   (:require [clojure.string :as str])
-  #?(:cljs (:refer-global :only '[Error] :rename '{Error Exception})))
+  #?(:cljs (:refer-global :only [Error] :rename {Error Exception})))
 
 (defn substring? [needle s]
   (assert (string? needle))
