@@ -46,8 +46,9 @@
       (str/replace % "?" ".")
       (str "^" % "$")
       #?(:clj (re-pattern %)
-         :cljs (js/RegEx % "u")))
+         :cljs (js/RegExp % "u")))
     (catch Exception e
+      #?(:cljs (js/console.log e))
       nil)))
 
 (comment

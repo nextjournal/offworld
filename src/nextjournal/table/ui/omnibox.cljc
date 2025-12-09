@@ -91,7 +91,9 @@
 (defn popover [opts]
   [:div
    (when-let [filter-to-add (:filter-to-add opts)]
-     (:label filter-to-add))])
+     [:li.flex
+      [:span.flex.mt-1 [:div.w-4.h-4.text-slate-400 icon-filter]]
+      (:label filter-to-add)])])
 
 (defn build-state [state]
   (let [{:keys [focus? value]} (::input state)]
@@ -102,7 +104,7 @@
 (defn omnibox [opts]
   (let [opts' (build-state opts)]
     [:div
-     (input (utils/substate opts [::input]))
+     (input (utils/substate opts' [::input]))
      (when (:popover-visible? opts')
        (popover opts'))
      (pr-str opts')]))
