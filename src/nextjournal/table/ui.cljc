@@ -3,8 +3,7 @@
             [nextjournal.table.ui.utils :as utils]))
 
 (defn render [state]
-  (into
-   [:div
-    [:pre (pr-str state)]]
+  [:div
+   [:pre (pr-str state)]
    (for [col [:address/city :address/postcode]]
-     (omnibox-ui/omnibox (utils/substate state [col])))))
+     (omnibox-ui/omnibox (utils/substate state [col])))])
