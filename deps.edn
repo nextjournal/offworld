@@ -7,4 +7,6 @@
                               no.cjohansen/dataspex {:mvn/version "2025.10.1"}
                               no.cjohansen/portfolio {:mvn/version "2025.08.29"}
                               thheller/shadow-cljs {:mvn/version "3.3.2"}
-                              io.github.nextjournal/clerk {:mvn/version "0.18.1158"}}}}}
+                              io.github.nextjournal/clerk {:mvn/version "0.18.1158"}}}
+           :local {:extra-deps {io.github.nextjournal/clerk {:local/root "../clerk"}}
+                   :jvm-opts ["-Dclerk.resource_manifest={\"/js/viewer.js\" \"http://localhost:7777/js/viewer.js\"}"]}}}
