@@ -1,6 +1,6 @@
 {:deps {no.cjohansen/replicant {:mvn/version "2025.06.21"}}
- :paths ["src"]
- :aliases {:dev {:exec-fn user/start-shadow!
+ :paths ["src" "resources"]
+ :aliases {:dev {:exec-fn user/start!
                  :main-opts ["-m" "shadow.cljs.devtools.cli"]
                  :extra-paths ["dev"]
                  :extra-deps {no.cjohansen/nexus {:mvn/version "2025.11.1"}
