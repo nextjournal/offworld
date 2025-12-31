@@ -4,6 +4,7 @@
    [replicant.string :as rstr]
    [nextjournal.table.ui :as ui]))
 
+;; # Sketches with replicant, datastar & tables
 ;; ## what does a full-featured dropdown (e.g. from ductile) look like when built from replicant?
 
 ;; ## Can we still use dom watchers like "Resize"?
@@ -51,6 +52,8 @@
 ;; ## Can Clerk's viewers be built with replicant/datastar?
 ;; ### Naive server-side rendering via the `:transform-fn`
 ;; Here we use replicant to render an html string on the JVM, then display it within a reagent component.
+;; So far, this only produces static html. There isn't any wiring in place for the component
+;; to communicate with your backend. No signals, events, commands, etc.
 
 (def replicant-ssr-viewer
   {:transform-fn (clerk/update-val (comp clerk/html rstr/render))})
