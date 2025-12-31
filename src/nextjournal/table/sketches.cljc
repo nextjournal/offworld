@@ -53,12 +53,7 @@
 ;; Here we use replicant to render an html string on the JVM, then display it within a reagent component.
 
 (def replicant-ssr-viewer
-  {:transform-fn (clerk/update-val rstr/render)
-   :render-fn    '(fn [html]
-                    (js/console.log html)
-                    [:div
-                     {:dangerouslySetInnerHTML
-                      (reagent.core/unsafe-html html)}])})
+  {:transform-fn (clerk/update-val (comp clerk/html rstr/render))})
 
 ^{::clerk/viewer replicant-ssr-viewer}
 [:div {:data-on-click (pr-str [[::alert "Clicked!"]])}
