@@ -19,7 +19,7 @@
   (shadow/watch :app)
   (shadow/watch :portfolio))
 
-(defn start! [opts]
+(defn start! [_opts]
   (start-shadow!)
   (start-clerk!))
 

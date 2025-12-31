@@ -35,16 +35,6 @@
 
 ;; ## How can datastar & replicant share responsibilities?
 
-(def d3-require
-  {:render-fn
-   '(fn [_]
-      [nextjournal.clerk.render/with-d3-require
-       {:package ["datastar@1.0.0-beta.11/dist/datastar.js"]}
-       [:div "hi"]])})
-
-^{::clerk/viewer d3-require}
-[]
-
 (clerk/html "<button data-on:click=\"alert('I’m sorry, Dave. I’m afraid I can’t do that.')\">
     Open the pod bay doors, HAL.
 </button>")
