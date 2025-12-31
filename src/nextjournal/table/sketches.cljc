@@ -2,7 +2,8 @@
   (:require
    [nextjournal.clerk :as clerk]
    [replicant.string :as rstr]
-   [nextjournal.table.ui :as ui]))
+   [nextjournal.table.ui :as ui]
+   [nextjournal.table.clerk-viewers :as viewers]))
 
 ;; # Sketches with replicant, datastar & tables
 ;; ## what does a full-featured dropdown (e.g. from ductile) look like when built from replicant?
@@ -52,24 +53,27 @@
 ;; - Limited effects.
 ;; - Local-store persistence?
 ;; ### Replicant on SCI.
-;; Replicant can run within clerk's SCI environment. Maybe the user's "backend" could run within SCI, alongside it.
+;; Replicant can run within clerk's SCI environment.
+;; Maybe the user's "backend" could run within SCI, alongside it.
 
 (clerk/eval-cljs '(do
                     (js/console.log "running in the browser")
                     (replicant.string/render [:h1 "Hello from SCI"])))
 
 ;; ## Can Clerk's viewers be built with replicant/datastar?
-;; ### Naive server-side rendering via the `:transform-fn`
+;; ### Server-side rendering via the `:transform-fn`
 ;; Here we use replicant to render an html string on the JVM, then display it within a reagent component.
 ;; So far, this only produces static html. There isn't any wiring in place for the component
 ;; to communicate with your backend. No signals, events, commands, etc.
 
-(def replicant-ssr-viewer
-  {:transform-fn (clerk/update-val (comp clerk/html rstr/render))})
+^{::clerk/viewer viewers/replicant-ssr}
+[:div "Hello from Replicant!"]
 
-^{::clerk/viewer replicant-ssr-viewer}
-[:div {:data-on-click (pr-str [[::alert "Clicked!"]])}
- "Hello from Replicant!"]
+;; Replicant naively passes on any keys in your hiccup as html attributes.
+;; That makes it straightforward to express datastar html using hiccup.
+
+^{::clerk/viewer viewers/replicant-ssr}
+[:button {:data-on:click "alert('Datastar, via replicant!')"} "Hello from Replicant!"]
 
 ;; ## [#B] `nested-grid` reagent component - can we use in clerk?
 
@@ -79,6 +83,8 @@
 ;; - replicant or datastar?
 
 ;; ## What do we name this project?
+
+- [off-world](https://bladerunner.fandom.com/wiki/Off-world_colonies)
 
 ;; ## What are our inspirations?
 ;; - https://www.inkandswitch.com/
