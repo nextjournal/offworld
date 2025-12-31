@@ -20,10 +20,17 @@
 
 ;; ## Can we design an API for data grids in clerk & ductile?
 
-;; ## Replicant virtual grid demo - standalone
+;; ## Replicant virtual grid demo
 ;; - stress test for top-down rendering?
 
-;; ## Datastar "morphing" grid demo - standalone repo
+;; ## Datastar "morphing" grid demo
+;; We modified clerk to include datastar in the browser runtime
+;; ([72eb20d1](https://github.com/nextjournal/tabla/commit/72eb20d1cd98097ef31fe52752beac2084b7e224)).
+;; Here's datastar's "hello world" running in clerk:
+
+(clerk/html "<button data-on:click=\"alert('I’m sorry, Dave. I’m afraid I can’t do that.')\">
+    Open the pod bay doors, HAL.
+</button>")
 
 ;; ## What grid features can we offer the user?
 ;; - ordering?
@@ -32,13 +39,9 @@
 ;; - labels
 ;; - show-header?
 ;; - similar to `re-com.table-filter`
-;; - Summary cells (powered by SSR) [[https://observablehq.com/d/6d8a31a315f4ad94][e.g.]]
+;; - Summary cells (powered by SSR) ([e.g.](https://observablehq.com/d/6d8a31a315f4ad94))
 
 ;; ## How can datastar & replicant share responsibilities?
-
-(clerk/html "<button data-on:click=\"alert('I’m sorry, Dave. I’m afraid I can’t do that.')\">
-    Open the pod bay doors, HAL.
-</button>")
 
 ;; ## Can we render some parts on client, some on server?
 ;; fast initial page load with SSR
@@ -48,6 +51,12 @@
 ;; For instance, if we provide a backend.js artifact, which executes these in SCI or CLJS.
 ;; - Limited effects.
 ;; - Local-store persistence?
+;; ### Replicant on SCI.
+;; Replicant can run within clerk's SCI environment. Maybe the user's "backend" could run within SCI, alongside it.
+
+(clerk/eval-cljs '(do
+                    (js/console.log "running in the browser")
+                    (replicant.string/render [:h1 "Hello from SCI"])))
 
 ;; ## Can Clerk's viewers be built with replicant/datastar?
 ;; ### Naive server-side rendering via the `:transform-fn`
@@ -61,10 +70,6 @@
 ^{::clerk/viewer replicant-ssr-viewer}
 [:div {:data-on-click (pr-str [[::alert "Clicked!"]])}
  "Hello from Replicant!"]
-
-(clerk/eval-cljs '(do
-                    (js/console.log "running in the browser")
-                    (replicant.string/render [:h1 "Hello from SCI"])))
 
 ;; ## [#B] `nested-grid` reagent component - can we use in clerk?
 
