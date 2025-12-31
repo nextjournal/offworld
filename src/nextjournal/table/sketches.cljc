@@ -62,6 +62,10 @@
 [:div {:data-on-click (pr-str [[::alert "Clicked!"]])}
  "Hello from Replicant!"]
 
+(clerk/eval-cljs '(do
+                    (js/console.log "running in the browser")
+                    (replicant.string/render [:h1 "Hello from SCI"])))
+
 ;; ## [#B] `nested-grid` reagent component - can we use in clerk?
 
 ;; ## [#B] `nested-grid` reagent component - use in ductile?
