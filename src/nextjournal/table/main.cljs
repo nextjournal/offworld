@@ -3,7 +3,7 @@
             [nextjournal.table.ui :as ui]
             [replicant.dom :as r]))
 
-(def !state
+(defonce !state
   (atom {}))
 
 (def nexus
@@ -26,8 +26,8 @@
 
 (defn main []
   (add-watch !state ::render (fn [_ _ _ new-state]
-                               (r/render root-el (ui/render new-state))))
+                               (r/render root-el (ui/render new-state)))))
 
-  ;; Trigger the initial render
-  (reset! !state {}))
-
+(defn ^:dev/after-load on-reload []
+  (js/console.log "reloaded")
+  (swap! !state update :dev/load inc))
