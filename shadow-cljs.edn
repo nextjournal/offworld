@@ -1,10 +1,10 @@
-{:deps {:aliases [:dev]}
- #_#_:dev-http {8000 ["public" "classpath:public"]}
- :builds {:app {:target :browser
-                :modules {:main {:init-fn nextjournal.table.main/main}}
+{:deps   {:aliases [:dev]}
+ :builds {:app {:target      :browser
+                :modules     {:main {:init-fn nextjournal.table.main/main}}
                 :build-hooks [(shadow.cljs.build-report/hook)]
-                :release {:compiler-options {:portfolio/enabled? false}}}
+                :dev         {:output-dir "resources/public/js"}
+                :release     {:compiler-options {:portfolio/enabled? false}}}
           :portfolio
-          {:target :browser
+          {:target  :browser
            :modules {:main {:init-fn nextjournal.table.scenes/main}}
-           :dev {:output-dir "public/portfolio-js"}}}}
+           :dev     {:output-dir "resources/public/portfolio-js"}}}}

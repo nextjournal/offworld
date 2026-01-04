@@ -29,6 +29,6 @@
   (swap! !state update :dev/load inc))
 
 (defn main []
-  (add-watch !state ::render (fn [_ _ _ new-state]
-                               (r/render root-el (ui/render new-state))))
-  (after-load))
+  #_(add-watch !state ::render (fn [_ _ _ new-state]
+                                 (r/render root-el (ui/render new-state))))
+  #_(after-load))

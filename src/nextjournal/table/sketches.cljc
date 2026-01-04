@@ -84,10 +84,12 @@
 
 ;; ## What do we name this project?
 
-- [off-world](https://bladerunner.fandom.com/wiki/Off-world_colonies)
+;; - [off-world](https://bladerunner.fandom.com/wiki/Off-world_colonies)
 
 ;; ## What are our inspirations?
 ;; - https://www.inkandswitch.com/
 ;; - https://mas.to/@scottjenson@social.coop/115707072046013892
 ;; - https://observablehq.com/d/6d8a31a315f4ad94
-
+;; - https://krcah.com/building-sse-endpoint-in-clojure-ring-core-async
+;; - https://medium.com/@ianster/the-microlith-and-a-simple-plan-e8b168dafd9e
+;; - https://github.com/starfederation/datastar/issues/482
