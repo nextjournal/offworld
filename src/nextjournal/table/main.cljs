@@ -24,10 +24,11 @@
 (defonce root-el
   (js/document.getElementById "app"))
 
-(defn main []
-  (add-watch !state ::render (fn [_ _ _ new-state]
-                               (r/render root-el (ui/render new-state)))))
-
-(defn ^:dev/after-load on-reload []
+(defn ^:dev/after-load after-load []
   (js/console.log "reloaded")
   (swap! !state update :dev/load inc))
+
+(defn main []
+  (add-watch !state ::render (fn [_ _ _ new-state]
+                               (r/render root-el (ui/render new-state))))
+  (after-load))

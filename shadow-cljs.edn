@@ -1,5 +1,5 @@
 {:deps {:aliases [:dev]}
- :dev-http {8000 ["public" "classpath:public"]}
+ #_#_:dev-http {8000 ["public" "classpath:public"]}
  :builds {:app {:target :browser
                 :modules {:main {:init-fn nextjournal.table.main/main}}
                 :build-hooks [(shadow.cljs.build-report/hook)]
