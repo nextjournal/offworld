@@ -1,5 +1,6 @@
 (ns nextjournal.table.main
   (:require
+   [clojure.string :as str]
    [nexus.core :as nexus]
    [nextjournal.table.ui :as ui]
    [replicant.dom :as r]))
@@ -28,6 +29,7 @@
   (swap! !store update :dev/load inc))
 
 (defn main []
-  #_(add-watch !store ::render (fn [_ _ _ new-state]
+  (when-not (str/includes? (:query-string js/document.location.search "") "ssr=true")
+    (add-watch !store ::render (fn [_ _ _ new-state]
                                  (r/render root-el (ui/render new-state))))
-  #_(after-load))
+    (after-load)))

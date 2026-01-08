@@ -51,15 +51,19 @@
              "Cache-Control" "no-cache, no-store"}
    :body    sse-chan})
 
-(defn index-handler [_]
-  {:status  200
-   :headers {"Content-Type" "text/html; charset=utf-8"}
-   :body
-   (str/replace (slurp "resources/public/index.html")
-                #"<main id=\"app\" class=\"p-4\">Loading...</main>"
-                (rstr/render
-                 (u/replicant->d*
-                  (ui/render @!store))))})
+(defn index-handler [req]
+  (let [ssr?        (some-> req :query-string (str/includes? "ssr=true"))
+        body-tag-rx #"<body>"
+        main-el-rx  #"<main id=\"app\" class=\"p-4\">Loading...</main>"
+        html        (cond-> (ui/render @!store)
+                      ssr? u/replicant->d*
+                      :do  rstr/render)]
+    {:status  200
+     :headers {"Content-Type" "text/html; charset=utf-8"}
+     :body
+     (cond-> (slurp "resources/public/index.html")
+       :do  (str/replace main-el-rx html)
+       ssr? (str/replace #"<body>" "<body data-init=\"@get('session')\">"))}))
 
 (defn read-dispatch [req]
   (some-> req
