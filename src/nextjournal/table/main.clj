@@ -13,19 +13,15 @@
    [nextjournal.table.util :as u]
    [ring.middleware.resource :as resource]))
 
-(defonce !store (atom {:color :black}))
-
-(def colors [:red :orange :yellow :green :blue :purple])
+(defonce !store (atom {}))
 
 (def nexus
   {:nexus/system->state deref
    :nexus/effects       {:effects/save (fn save [_ store path value]
                                          (swap! store assoc-in path value))}
    :nexus/actions       {:actions/inc  (fn inc [state path]
-                                         [[:effects/save path (+ (:step state) (get-in state path))]])
-                         :change-color (fn [& args] [[:effects/save [:color] (rand-nth colors)]])}
-   :nexus/placeholders  {:event.target/value :value #_(fn event-target-value [{:replicant/keys [dom-event]}]
-                                                        (some-> dom-event .-target .-value))
+                                         [[:effects/save path (+ (:step state) (get-in state path))]])}
+   :nexus/placeholders  {:event.target/value :value
                          :fmt/as-long        (fn fmt-as-long [_ value]
                                                (or (some-> value parse-long) 0))
                          :fmt/as-double      (fn fmt-as-double [_ value]
