@@ -5,3 +5,7 @@
 /node_modules/
 /public/js/
 /public/portfolio-js/
+/.clerk/
+/.clj-kondo/
+/.lsp/
+/resources/public/
