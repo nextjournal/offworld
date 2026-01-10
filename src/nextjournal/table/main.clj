@@ -51,18 +51,19 @@
              "Cache-Control" "no-cache, no-store"}
    :body    sse-chan})
 
+(def datastar-script
+  "<script type=\"module\" src=\"https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js\"></script>")
+
 (defn index-handler [req]
   (let [ssr?        (some-> req :query-string (str/includes? "ssr=true"))
         body-tag-rx #"<body>"
-        main-el-rx  #"<main id=\"app\" class=\"p-4\">Loading...</main>"
-        html        (cond-> (ui/render @!store)
-                      ssr? u/replicant->d*
-                      :do  rstr/render)]
+        main-el-rx  #"<main id=\"app\" class=\"p-4\">Loading...</main>"]
     {:status  200
      :headers {"Content-Type" "text/html; charset=utf-8"}
      :body
      (cond-> (slurp "resources/public/index.html")
-       :do  (str/replace main-el-rx html)
+       ssr? (str/replace #"</head>" (str datastar-script "\n</head>"))
+       ssr? (str/replace main-el-rx (rstr/render (u/replicant->d* (ui/render @!store))))
        ssr? (str/replace #"<body>" "<body data-init=\"@get('session')\">"))}))
 
 (defn read-dispatch [req]
