@@ -36,7 +36,10 @@
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: '"
        (pr-str actions)
-       "', dispatch_data: {value: evt.target.value}}})"))
+       "', "
+       "dispatch_data: {value: evt.target.value, "
+       "scroll_top: evt.target.scrollTop, "
+       "scroll_left: evt.target.scrollLeft}}})"))
 
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
@@ -46,8 +49,10 @@
   {:data-on:click \"@get('/replicant-dispatch', {payload: '[[:my-action]]'})\"}"
   [props]
   (into (dissoc props :on)
-        (for [[k v] (:on props)]
-          [(keyword (str "data-on" k))
+        (for [[k v] (:on props)
+              :let  [{:datastar/keys [modifiers]} (meta v)]]
+          [(keyword (apply str "data-on" k (interleave (repeat "__")
+                                                       (map name modifiers))))
            (d*-dispatch v)])))
 
 (defn replicant->d* [hiccup]

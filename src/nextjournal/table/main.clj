@@ -11,21 +11,29 @@
    [ring.util.codec :as codec]
    [clojure.edn :as edn]
    [nextjournal.table.util :as u]
-   [ring.middleware.resource :as resource]))
+   [ring.middleware.resource :as resource]
+   [nextjournal.table.ui.nested-grid :as-alias ng]))
 
-(defonce !store (atom {}))
+(defonce !store (atom {:grid {:row-tree    (into [] (map #(keyword (str "r" %1))) (range 500))
+                              :column-tree (into [] (map #(keyword (str "c" %1))) (range 500))
+                              :size-cache  (volatile! {})}}))
 
 (def nexus
   {:nexus/system->state deref
    :nexus/effects       {:effects/save (fn save [_ store path value]
                                          (swap! store assoc-in path value))}
-   :nexus/actions       {:actions/inc  (fn inc [state path]
-                                         [[:effects/save path (+ (:step state) (get-in state path))]])}
-   :nexus/placeholders  {:event.target/value :value
-                         :fmt/as-long        (fn fmt-as-long [_ value]
-                                               (or (some-> value parse-long) 0))
-                         :fmt/as-double      (fn fmt-as-double [_ value]
-                                               (or (some-> value parse-double) 0.0))}})
+   :nexus/actions       {:actions/inc (fn inc [state path]
+                                        [[:effects/save path (+ (:step state) (get-in state path))]])
+                         ::ng/scroll  (fn [_]
+                                        [[:effects/save [:grid :scroll-top] [:event.target/scroll-top]]
+                                         [:effects/save [:grid :scroll-left] [:event.target/scroll-left]]])}
+   :nexus/placeholders  {:event.target/value       :value
+                         :event.target/scroll-top  :scroll_top
+                         :event.target/scroll-left :scroll_left
+                         :fmt/as-long              (fn fmt-as-long [_ value]
+                                                     (or (some-> value parse-long) 0))
+                         :fmt/as-double            (fn fmt-as-double [_ value]
+                                                     (or (some-> value parse-double) 0.0))}})
 
 (defn dispatch! [actions dispatch-data]
   (nexus/dispatch nexus !store dispatch-data actions))

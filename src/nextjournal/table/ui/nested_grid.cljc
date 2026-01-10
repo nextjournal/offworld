@@ -26,13 +26,15 @@
                                      :window-end   (+ scroll-left width overscan)
                                      :size-cache   size-cache})
         showing?                   (comp (some-fn :show? :leaf?) meta)]
-    [:div {:on    {:scroll [[::ng/scroll]]}
+    [:div {:on    {:scroll ^{:datastar/modifiers [:debounce.500ms]}
+                   [[::ng/scroll]]}
            :style {:height   height
                    :width    width
                    :overflow :auto}}
      [:div {:style {:width                 col-sum-size
                     :height                row-sum-size
                     :display               :grid
+                    :overflow-anchor       :none
                     :grid-template-rows    (ngu/grid-template row-traversal)
                     :grid-template-columns (ngu/grid-template col-traversal)}}
       (for [ri    (range (count row-paths))
@@ -45,8 +47,7 @@
                    col-grid-name (nth col-grid-names ci)]
             :when (and (showing? row-path)
                        (showing? col-path))]
-        [:div {:replicant/key [row-keypath col-keypath]
-               :style         {:border-right      "1px solid grey"
+        [:div {:style         {:border-right      "1px solid grey"
                                :border-bottom     "1px solid grey"
                                :font-size         7
                                :grid-row-start    row-grid-name
