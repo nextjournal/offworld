@@ -6,12 +6,18 @@
    [nextjournal.table.clerk-viewers :as viewers]))
 
 ;; # Sketches with replicant, datastar & tables
-;; ## what does a full-featured dropdown (e.g. from ductile) look like when built from replicant?
+;; Some research questions follow, along with our findings.
+;; To demonstrate our findings, this project includes a clj webserver and a cljs client.
+;; To launch the server and build the client, run `user/start!`.
+;; Then, visit `http://localhost:8000`.
+;; Some demos implement server-side rendering. In that case, visit `http://localhost:8000?ssr=true`.
+
+;; ## What does a full-featured dropdown (e.g. from ductile) look like when built from replicant?
 
 ;; ## Can we still use dom watchers like "Resize"?
 ;; replace the react functional ref pattern with replicant's :remember
 
-;; ## how do we organize the "path" of a UI component?
+;; ## How do we organize the "path" of a UI component?
 ;; - Need to pass down values and their conj'ed up paths
 ;; - "I just want some component local state" - now all of my parents must take care to build up a path
 ;; - Every value that might be changed needs its corresponding path passed down as well
@@ -21,8 +27,30 @@
 
 ;; ## Can we design an API for data grids in clerk & ductile?
 
-;; ## Replicant virtual grid demo
-;; - stress test for top-down rendering?
+;; ## Can we build a `nested-grid` in cljs using replicant's "top-down" UI model?
+
+;; Commit [7ecd60b](https://github.com/nextjournal/tabla/commit/7ecd60b/)
+;; adds a component based on re-com's [`nested-grid`](https://re-com.day8.com.au/#/nested-grid).
+;; `nested-grid` helps users explore large datasets by rendering a scrollable rectangular "window" of the data.
+;; The search algorithm is the same, and the render-fn is stripped down and converted to
+;; use replicant-flavored hiccup.
+;;
+;; Here's a picture of the worst-case performance of this stripped-down component:
+
+(clerk/image "http://localhost:8000/img/7ecd60b-nested-grid-replicant-performance.png")
+
+;; It's rendering a "window" of 8000 cells, out of a dataset of 2.5 million cells.
+;; The render-fn, including nested-grid's search algorithm, takes 16ms.
+;; Once replicant gets the hiccup from the render-fn, it mutates the DOM, adding 8000
+;; totally new elements (no shared keys), recalculating the layout and drawing.
+;; All that takes 4 seconds.
+;;
+;; In one sense, that's a long time to wait. In practice, it might not be so bad.
+;; Those 4 seconds of work block most of the UI, but not scrollbars.
+;; The user can keep scrolling around, and might not notice that interactivity is blocked
+;; in other components (like the "omnibox" filter above).
+;;
+;; Rendering the same scenario using reagent & re-com takes 400ms.
 
 ;; ## Datastar "morphing" grid demo
 ;; We modified clerk to include datastar in the browser runtime
