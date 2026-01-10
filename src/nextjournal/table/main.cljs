@@ -40,7 +40,7 @@
   (swap! !store update :dev/load inc))
 
 (defn main []
-  (when-not (str/includes? (:query-string js/document.location.search "") "ssr=true")
+  (when-not (str/includes? js/document.location.search "?ssr=true")
     (add-watch !store ::render (fn [_ _ _ new-state]
                                  (r/render root-el (ui/render new-state))))
     (after-load)))
