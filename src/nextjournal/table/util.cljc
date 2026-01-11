@@ -59,3 +59,8 @@
   (walk/postwalk
    #(cond-> % (map? %) on-hooks-replicant->d*)
    hiccup))
+
+(defn init-store []
+  {:grid {:row-tree    (into [] (map #(keyword (str "r" %1))) (range 500))
+          :column-tree (into [] (map #(keyword (str "c" %1))) (range 500))
+          :size-cache  (volatile! {})}})

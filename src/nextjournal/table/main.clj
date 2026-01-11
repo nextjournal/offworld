@@ -14,9 +14,7 @@
    [ring.middleware.resource :as resource]
    [nextjournal.table.ui.nested-grid :as-alias ng]))
 
-(defonce !store (atom {:grid {:row-tree    (into [] (map #(keyword (str "r" %1))) (range 500))
-                              :column-tree (into [] (map #(keyword (str "c" %1))) (range 500))
-                              :size-cache  (volatile! {})}}))
+(defonce !store (atom (u/init-store)))
 
 (def nexus
   {:nexus/system->state deref

@@ -4,12 +4,11 @@
    [nexus.core :as nexus]
    [nextjournal.table.ui :as ui]
    [replicant.dom :as r]
+   [nextjournal.table.util :as u]
    [nextjournal.table.ui.nested-grid :as-alias ng]))
 
 (defonce !store
-  (atom {:grid {:row-tree    (vec (take 500 (repeatedly #(keyword (gensym "r")))))
-                :column-tree (vec (take 500 (repeatedly #(keyword (gensym "c")))))
-                :size-cache  (volatile! {})}}))
+  (atom (u/init-store)))
 
 (def nexus
   {:nexus/system->state deref
