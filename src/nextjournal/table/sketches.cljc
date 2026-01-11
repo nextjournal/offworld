@@ -37,30 +37,26 @@
 ;;
 ;; Here's a picture of the worst-case performance of this stripped-down component:
 
-(clerk/image "http://localhost:8000/img/7ecd60b-nested-grid-replicant-performance.png")
+(clerk/image "http://localhost:8000/img/d6f5737-cljs-render-perf.png")
 
-;; It's rendering a "window" of 8000 cells, out of a dataset of 2.5 million cells.
-;; The render-fn, including nested-grid's search algorithm, takes 16ms.
-;; Once replicant gets the hiccup from the render-fn, it mutates the DOM, adding 8000
-;; totally new elements (no shared keys), recalculating the layout and drawing.
-;; All that takes 4 seconds.
+;; It's rendering a "window" of 4,000 cells, out of a dataset of 250,000.
+;; The render-fn, including nested-grid's search algorithm, takes 30ms.
 ;;
-;; In one sense, that's a long time to wait. In practice, it might not be so bad.
-;; Those 4 seconds of work block most of the UI, but not scrollbars.
-;; The user can keep scrolling around, and might not notice that interactivity is blocked
-;; in other components (like the "omnibox" filter above).
+;; Once replicant gets the hiccup from the render-fn, it mutates the DOM, adding 4,000
+;; totally new elements. Replicant takes 500ms. Then the browser takes over, taking 200ms
+;; to draw the new DOM.
 ;;
-;; Rendering the same scenario using reagent & re-com takes 400ms.
-
+;; Notes:
+;;
+;; - With replicant we control the render call explicitly, so it's easy to set up profiling scenarios like this one.
+;; - For a while, the render-fn was getting called twice. I didn't realize that returning two effect-vectors from
+;;   the action handler caused two separate swaps and two render calls ([a40100a](https://github.com/nextjournal/tabla/commit/a40100a/)).
+;; - So far, this doesn't seem much slower than the original reagent version.
+;;
 ;; ## Datastar "morphing" grid demo
-;; We modified clerk to include datastar in the browser runtime
-;; ([72eb20d1](https://github.com/nextjournal/tabla/commit/72eb20d1cd98097ef31fe52752beac2084b7e224)).
-;; Here's datastar's "hello world" running in clerk:
-
-(clerk/html "<button data-on:click=\"alert('I’m sorry, Dave. I’m afraid I can’t do that.')\">
-    Open the pod bay doors, HAL.
-</button>")
-
+;; Visit `localhost:8000?ssr=true` to run nested-grid with server-side rendering. Still evaluating this,
+;; but it seems to work nicely so far.
+;;
 ;; ## What grid features can we offer the user?
 ;; - ordering?
 ;; - "computed" columns?
@@ -89,6 +85,15 @@
                     (replicant.string/render [:h1 "Hello from SCI"])))
 
 ;; ## Can Clerk's viewers be built with replicant/datastar?
+;; ### "Hello world" in datastar
+;; We modified clerk to include datastar in the browser runtime
+;; ([72eb20d1](https://github.com/nextjournal/tabla/commit/72eb20d1cd98097ef31fe52752beac2084b7e224)).
+;; Here's datastar's "hello world" running in clerk:
+
+(clerk/html "<button data-on:click=\"alert('I’m sorry, Dave. I’m afraid I can’t do that.')\">
+    Open the pod bay doors, HAL.
+</button>")
+
 ;; ### Server-side rendering via the `:transform-fn`
 ;; Here we use replicant to render an html string on the JVM, then display it within a reagent component.
 ;; So far, this only produces static html. There isn't any wiring in place for the component
