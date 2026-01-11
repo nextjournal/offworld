@@ -22,9 +22,10 @@
                                          (swap! store assoc-in path value))}
    :nexus/actions       {:actions/inc (fn inc [state path]
                                         [[:effects/save path (+ (:step state) (get-in state path))]])
-                         ::ng/scroll  (fn [_]
-                                        [[:effects/save [:grid :scroll-top] [:event.target/scroll-top]]
-                                         [:effects/save [:grid :scroll-left] [:event.target/scroll-left]]])}
+                         ::ng/scroll  (fn [{:keys [grid]}]
+                                        [[:effects/save [:grid]
+                                          (merge grid {:scroll-top [:event.target/scroll-top]
+                                                       :scroll-left [:event.target/scroll-left]})]])}
    :nexus/placeholders  {:event.target/value       :value
                          :event.target/scroll-top  :scroll_top
                          :event.target/scroll-left :scroll_left
