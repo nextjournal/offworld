@@ -60,11 +60,24 @@
    #(cond-> % (map? %) on-hooks-replicant->d*)
    hiccup))
 
-(defn init-store []
+(defn init-store
+  []
   {:grid {:row-tree    (into [:root]
-                             (map (fn [a] (into [] (map (fn [b] (keyword (str "r" a b)))) (range 10))))
+                             (map (fn [a]
+                                    (into []
+                                          (map (fn [b]
+                                                 {:id   (keyword (str "r" a b))
+                                                  :size (rand-nth [20 25 30 35
+                                                                   40])}))
+                                          (range 10))))
                              (range 50))
           :column-tree (into [:root]
-                             (map (fn [a] (into [] (map (fn [b] (keyword (str "c" a b)))) (range 10))))
+                             (map (fn [a]
+                                    (into []
+                                          (map (fn [b]
+                                                 {:id   (keyword (str "c" a b))
+                                                  :size (rand-nth [20 25 30 35
+                                                                   40])}))
+                                          (range 10))))
                              (range 50))
           :size-cache  (volatile! {})}})

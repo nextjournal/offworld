@@ -27,7 +27,7 @@
                                      :size-cache   size-cache})
         showing?                   (comp (some-fn :show? :leaf?) meta)]
     [:div {:id    :grid
-           :on    {:scroll ^{:datastar/modifiers [:debounce.500ms]}
+           :on    {:scroll ^{:datastar/modifiers [:throttle.100ms]}
                    [[::ng/scroll]]}
            :style {:height   height
                    :width    width
@@ -52,4 +52,5 @@
                                     :font-size         7
                                     :grid-row-start    row-grid-name
                                     :grid-column-start col-grid-name}}
-              (last row-path) " " (last col-path)]))]))
+              (:id (last row-path)) " "
+              (:id (last col-path))]))]))
