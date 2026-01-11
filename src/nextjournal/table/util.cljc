@@ -61,6 +61,10 @@
    hiccup))
 
 (defn init-store []
-  {:grid {:row-tree    (into [] (map #(keyword (str "r" %1))) (range 500))
-          :column-tree (into [] (map #(keyword (str "c" %1))) (range 500))
+  {:grid {:row-tree    (into [:root]
+                             (map (fn [a] (into [] (map (fn [b] (keyword (str "r" a b)))) (range 10))))
+                             (range 50))
+          :column-tree (into [:root]
+                             (map (fn [a] (into [] (map (fn [b] (keyword (str "c" a b)))) (range 10))))
+                             (range 50))
           :size-cache  (volatile! {})}})
