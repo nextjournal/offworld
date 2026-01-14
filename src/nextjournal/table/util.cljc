@@ -1,6 +1,7 @@
 (ns nextjournal.table.util
   (:require
    [clojure.walk :as walk]
+   [clojure.edn :as edn]
    [clojure.core.async :as a]
    [nextjournal.table.ui.utils :as ui.utils]
    #?(:clj [clojure.java.io :as io])
@@ -32,33 +33,6 @@
         :headers {"Content-Type"  "text/event-stream"
                   "Cache-Control" "no-cache, no-store"},
         :body    sse-chan})))
-
-(defn d*-dispatch [actions]
-  (str "@get('/replicant-dispatch', {payload: {actions: '"
-       (pr-str actions)
-       "', "
-       "dispatch_data: {value: evt.target.value, "
-       "scroll_top: evt.target.scrollTop, "
-       "scroll_left: evt.target.scrollLeft}}})"))
-
-(defn on-hooks-replicant->d*
-  "Converts a map containing replicant-style :on attributes to
-  a map containing datastar expressions. E.g.:
-
-  {:on {:click [[:my-action]]}}
-  {:data-on:click \"@get('/replicant-dispatch', {payload: '[[:my-action]]'})\"}"
-  [props]
-  (into (dissoc props :on)
-        (for [[k v] (:on props)
-              :let  [{:datastar/keys [modifiers]} (meta v)]]
-          [(keyword (apply str "data-on" k (interleave (repeat "__")
-                                                       (map name modifiers))))
-           (d*-dispatch v)])))
-
-(defn replicant->d* [hiccup]
-  (walk/postwalk
-   #(cond-> % (map? %) on-hooks-replicant->d*)
-   hiccup))
 
 (defn init-store
   []

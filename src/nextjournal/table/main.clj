@@ -4,6 +4,7 @@
    [clojure.core.async :as a]
    [clojure.walk :as walk]
    [nexus.core :as nexus]
+   nextjournal.table.nexus
    [cheshire.core :as cheshire]
    [nextjournal.table.ui :as ui]
    [replicant.string :as rstr]
@@ -12,30 +13,13 @@
    [clojure.edn :as edn]
    [nextjournal.table.util :as u]
    [ring.middleware.resource :as resource]
-   [nextjournal.table.ui.nested-grid :as-alias ng]))
+   [nextjournal.table.ui.nested-grid :as-alias ng]
+   [nextjournal.offworld :as 🪐]))
 
-(defonce !store (atom (u/init-store)))
-
-(def nexus
-  {:nexus/system->state deref
-   :nexus/effects       {:effects/save (fn save [_ store path value]
-                                         (swap! store assoc-in path value))}
-   :nexus/actions       {:actions/inc (fn inc [state path]
-                                        [[:effects/save path (+ (:step state) (get-in state path))]])
-                         ::ng/scroll  (fn [{:keys [grid]}]
-                                        [[:effects/save [:grid]
-                                          (merge grid {:scroll-top [:event.target/scroll-top]
-                                                       :scroll-left [:event.target/scroll-left]})]])}
-   :nexus/placeholders  {:event.target/value       :value
-                         :event.target/scroll-top  :scroll_top
-                         :event.target/scroll-left :scroll_left
-                         :fmt/as-long              (fn fmt-as-long [_ value]
-                                                     (or (some-> value parse-long) 0))
-                         :fmt/as-double            (fn fmt-as-double [_ value]
-                                                     (or (some-> value parse-double) 0.0))}})
+(def !store (atom (u/init-store)))
 
 (defn dispatch! [actions dispatch-data]
-  (nexus/dispatch nexus !store dispatch-data actions))
+  (nexus/dispatch nextjournal.table.nexus/nexus !store dispatch-data actions))
 
 (defn sse-message [{:keys [event data prefix]}]
   (str "event: " event "\ndata: " prefix (when prefix " ") data "\n\n"))
@@ -49,7 +33,7 @@
                      (sse-message {:event "datastar-patch-elements"
                                    :prefix "elements"
                                    :data (rstr/render
-                                          (u/replicant->d*
+                                          (🪐/replicant->d*
                                            (ui/render new-value)))}))))
 
 (defn sse-handler [_]
@@ -59,18 +43,19 @@
    :body    sse-chan})
 
 (def datastar-script
-  "<script type=\"module\" src=\"https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js\"></script>")
+  (str "<script type=\"module\" "
+       "src=\"https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js\""
+       "></script>"))
 
 (defn index-handler [req]
   (let [ssr?        (some-> req :query-string (str/includes? "ssr=true"))
-        body-tag-rx #"<body>"
         main-el-rx  #"<main id=\"app\" class=\"p-4\">Loading...</main>"]
     {:status  200
      :headers {"Content-Type" "text/html; charset=utf-8"}
      :body
      (cond-> (slurp "resources/public/index.html")
        ssr? (str/replace #"</head>" (str datastar-script "\n</head>"))
-       ssr? (str/replace main-el-rx (rstr/render (u/replicant->d* (ui/render @!store))))
+       ssr? (str/replace main-el-rx (rstr/render (🪐/replicant->d* (ui/render @!store))))
        ssr? (str/replace #"<body>" "<body data-init=\"@get('session')\">"))}))
 
 (defn read-dispatch [req]

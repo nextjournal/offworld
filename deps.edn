@@ -1,14 +1,14 @@
-{:deps    {no.cjohansen/replicant  {:mvn/version "2025.06.21"}
+{:deps    {no.cjohansen/replicant  {:mvn/version "2025.12.1"}
            metosin/reitit          {:mvn/version "0.9.2"}
            ring/ring-core          {:mvn/version "1.15.3"}
            ring/ring-jetty-adapter {:mvn/version "1.15.3"}
-           cheshire/cheshire       {:mvn/version "6.1.0"}}
+           cheshire/cheshire       {:mvn/version "6.1.0"}
+           no.cjohansen/nexus      {:mvn/version "2025.11.1"}}
  :paths   ["src" "resources"]
  :aliases {:dev {:exec-fn     user/start!
                  :main-opts   ["-m" "shadow.cljs.devtools.cli"]
                  :extra-paths ["dev"]
-                 :extra-deps  {no.cjohansen/nexus          {:mvn/version "2025.11.1"}
-                               no.cjohansen/dataspex       {:mvn/version "2025.10.1"}
+                 :extra-deps  {no.cjohansen/dataspex       {:mvn/version "2025.10.1"}
                                no.cjohansen/portfolio      {:mvn/version "2025.08.29"}
                                thheller/shadow-cljs        {:mvn/version "3.3.2"}
                                ;; clerk + replicant in sci env, from https://github.com/nextjournal/clerk/pull/794

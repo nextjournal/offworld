@@ -10,4 +10,3 @@
      (omnibox-ui/omnibox (utils/substate state [col])))
    (nested-grid-ui/nested-grid
     (utils/substate state [:grid]))])
-

@@ -5,39 +5,22 @@
    [nextjournal.table.ui :as ui]
    [replicant.dom :as r]
    [nextjournal.table.util :as u]
-   [nextjournal.table.ui.nested-grid :as-alias ng]))
+   nextjournal.table.nexus
+   [nextjournal.table.ui.nested-grid :as-alias ng]
+   [nextjournal.offworld :as 🪐]))
 
 (defonce !store
   (atom (u/init-store)))
 
-(def nexus
-  {:nexus/system->state deref
-   :nexus/effects       {:effects/save (fn save [_ store path value]
-                                         (swap! store assoc-in path value))}
-   :nexus/actions       {:actions/inc (fn inc [state path]
-                                        [[:effects/save path (+ (:step state) (get-in state path))]])
-                         ::ng/scroll  (fn [{:keys [grid]}]
-                                        [[:effects/save [:grid]
-                                          (merge grid {:scroll-top  [:event.target/scroll-top]
-                                                       :scroll-left [:event.target/scroll-left]})]])}
-   :nexus/placeholders  {:event.target/value       (fn event-target-value [{:replicant/keys [dom-event]}]
-                                                     (some-> dom-event .-target .-value))
-                         :event.target/scroll-top  (fn event-target-value [{:replicant/keys [dom-event]}]
-                                                     (some-> dom-event .-target .-scrollTop))
-                         :event.target/scroll-left (fn event-target-value [{:replicant/keys [dom-event]}]
-                                                     (some-> dom-event .-target .-scrollLeft))
-                         :fmt/as-long              (fn fmt-as-long [_ value]
-                                                     (or (some-> value parse-long) 0))
-                         :fmt/as-double            (fn fmt-as-double [_ value]
-                                                     (or (some-> value parse-double) 0.0))}})
-
-(r/set-dispatch! #(nexus/dispatch nexus !store %1 %2))
+(r/set-dispatch! #(nexus/dispatch nextjournal.table.nexus/nexus !store %1 %2))
 
 (defonce root-el
   (js/document.getElementById "app"))
 
 (defn ^:dev/after-load after-load []
   (swap! !store update :dev/load inc))
+
+(🪐/register-nexus! nextjournal.table.nexus/nexus)
 
 (defn main []
   (when-not (str/includes? js/document.location.search "?ssr=true")

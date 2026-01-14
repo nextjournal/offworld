@@ -9,7 +9,6 @@
         width                      1200
         {:as            row-traversal
          row-paths      :header-paths
-         row-keypaths   :keypaths
          row-grid-names :grid-names
          row-sum-size   :sum-size} (ngu/window
                                     {:header-tree  row-tree
@@ -18,7 +17,6 @@
                                      :size-cache   size-cache})
         {:as            col-traversal
          col-paths      :header-paths
-         col-keypaths   :keypaths
          col-grid-names :grid-names
          col-sum-size   :sum-size} (ngu/window
                                     {:header-tree  column-tree
@@ -27,10 +25,14 @@
                                      :size-cache   size-cache})
         showing?                   (comp (some-fn :show? :leaf?) meta)]
     [:div {:id    :grid
-           :on    {:scroll ^{:datastar/modifiers [:throttle.100ms]}
-                   [[::ng/scroll]]}
+           :on    {:scroll
+                   ^{:datastar/modifiers [:throttle.100ms]}
+                   [[::ng/scroll
+                     [:event.target/scroll-top]
+                     [:event.target/scroll-left]]]}
            :style {:height   height
                    :width    width
+                   :resize   :both
                    :overflow :auto}}
      (into [:div {:style {:width                 col-sum-size
                           :height                row-sum-size
