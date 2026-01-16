@@ -224,10 +224,11 @@
 ;; In effect, we have added a few new steps to our event/render loop:
 ;;
 ;; 0.1. Dispatch client-actions:         nexus    (within a datastar expression on the client)
+
 ;; 0.2. Pre-interpolate server-actions:  nexus    (within a datastar expression on the client)
-;; 1 Dispatch actions:                  datastar (via GET request)
-;; 2 Interpolation, expansion, render:  nexus    (on the server)
-;; 3 Mutate DOM:                        datastar (via SSE handler)
+;; 1. Dispatch actions:                  datastar (via GET request)
+;; 2. Interpolation, expansion, render:  nexus    (on the server)
+;; 3. Mutate DOM:                        datastar (via SSE handler)
 ;;
 ;; Open questions:
 ;; - What about clientside async effects?
