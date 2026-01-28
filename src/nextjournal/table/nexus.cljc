@@ -5,19 +5,25 @@
 
 (def nexus
   {:nexus/system->state deref
-   :nexus/effects       {:effects/save (fn [_ store path value]
-                                         (swap! store assoc-in path value))
+   :nexus/effects       {:effects/save
+                         ^:nexus/batch
+                         (fn [_ store path-vs]
+                           (swap! store
+                                  (fn [state]
+                                    (reduce (fn [acc [path v]]
+                                              (assoc-in acc path v))
+                                            state path-vs))))
                          :event/prevent-default
                          ^:🪐/client (fn [{{:replicant/keys [dom-event]} :dispatch-data}]
                                        (.preventDefault dom-event))}
    :nexus/actions       {:actions/inc (fn [state path]
                                         [[:effects/save path (+ (:step state) (get-in state path))]])
-                         ::ng/scroll  (fn [{:keys [grid]} top left]
-                                        [[:effects/save [:grid] (merge grid {:scroll-top  top
-                                                                             :scroll-left left})]])
-                         ::ng/resize  (fn [{:keys [grid]} width height]
-                                        [[:effects/save [:grid] (merge grid {:width  width
-                                                                             :height height})]])}
+                         ::ng/scroll  (fn [_ top left]
+                                        [[:effects/save [:grid :scroll-top] top]
+                                         [:effects/save [:grid :scroll-left] left]])
+                         ::ng/resize  (fn [_ width height]
+                                        [[:effects/save [:grid :width] width]
+                                         [:effects/save [:grid :height] height]])}
    :nexus/placeholders  {:event.target/value
                          ^:🪐/client (fn [{:replicant/keys [dom-event]}]
                                        (some-> dom-event .-target .-value))
