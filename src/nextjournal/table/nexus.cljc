@@ -1,6 +1,7 @@
 (ns nextjournal.table.nexus
   (:require
    [nextjournal.table.ui.nested-grid :as-alias ng]
+   [nextjournal.table.ui.omnibox :as-alias ob]
    [nextjournal.offworld :as-alias 🪐]))
 
 (def nexus
@@ -15,7 +16,12 @@
                                             state path-vs))))
                          :event/prevent-default
                          ^:🪐/client (fn [{{:replicant/keys [dom-event]} :dispatch-data}]
-                                       (.preventDefault dom-event))}
+                                       (.preventDefault dom-event))
+                         :dom-node/blur
+                         #?(:clj (fn [])
+                            :cljs
+                            ^:🪐/client (fn [{{:replicant/keys [node]} :dispatch-data}]
+                                          (.blur node)))}
    :nexus/actions       {:actions/inc (fn [state path]
                                         [[:effects/save path (+ (:step state) (get-in state path))]])
                          ::ng/scroll  (fn [_ top left]
@@ -23,7 +29,19 @@
                                          [:effects/save [:grid :scroll-left] left]])
                          ::ng/resize  (fn [_ width height]
                                         [[:effects/save [:grid :width] width]
-                                         [:effects/save [:grid :height] height]])}
+                                         [:effects/save [:grid :height] height]])
+                         ::ob/keydown
+                         (fn [_ path s]
+                           (case s
+                             "Escape" [[:effects/save (conj path :value) ""]
+                                       [:effects/save (conj path :focus?) false]]
+                             nil))
+                         ::ob/keydown-client
+                         ^:🪐/client (fn [_ s]
+                                       (case s
+                                         "Escape" [[:event/prevent-default]
+                                                   [:dom-node/blur]]
+                                         nil))}
    :nexus/placeholders  {:event.target/value
                          ^:🪐/client (fn [{:replicant/keys [dom-event]}]
                                        (some-> dom-event .-target .-value))
@@ -34,11 +52,14 @@
                          ^:🪐/client (fn [{:replicant/keys [dom-event]}]
                                        (some-> dom-event .-target .-scrollLeft))
                          :event/content-width
-                         ^:🪐/client (fn [{:replicant/keys [dom-node]}]
-                                       (some-> dom-node .-contentRect .-width))
+                         ^:🪐/client (fn [{:replicant/keys [node]}]
+                                       (some-> node .-contentRect .-width))
                          :event/content-height
-                         ^:🪐/client (fn [{:replicant/keys [dom-node]}]
-                                       (some-> dom-node .-contentRect .-height))
+                         ^:🪐/client (fn [{:replicant/keys [node]}]
+                                       (some-> node .-contentRect .-height))
+                         :event/key
+                         ^:🪐/client (fn [{:replicant/keys [dom-event]}]
+                                       (.-key dom-event))
                          :fmt/as-long
                          ^:🪐/client (fn [_ value]
                                        (or (some-> value parse-long) 0))

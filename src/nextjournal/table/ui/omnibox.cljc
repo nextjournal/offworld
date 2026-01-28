@@ -45,7 +45,9 @@
                      (reset! !text (-> % .-currentTarget .-value))
                      (reset! !selected nil)
                      (compare-and-set! !expanded false true))]
-         :key-down [#_(fn [e]
+         :keydown [[::keydown-client [:event/key]]
+                   [::keydown (:state/path-prefix opts) [:event/key]]
+                    #_(fn [e]
                         (case (.-key e)
                           "Enter"
                           (if-some [selected @!selected]
