@@ -18,10 +18,21 @@
                          ^:🪐/client (fn [{{:replicant/keys [dom-event]} :dispatch-data}]
                                        (.preventDefault dom-event))
                          :dom-node/blur
+                         ^:🪐/client
                          #?(:clj (fn [])
                             :cljs
-                            ^:🪐/client (fn [{{:replicant/keys [node]} :dispatch-data}]
-                                          (.blur node)))}
+                            (fn [{{:replicant/keys [node]} :dispatch-data}]
+                              (.blur node)))
+                         :dom-node/show-popover
+                         ^:🪐/client
+                         #?(:clj (fn [])
+                            :cljs (fn [_ _ id]
+                                    (.showPopover (js/document.getElementById (name id)))))
+                         :dom-node/hide-popover
+                         ^:🪐/client
+                         #?(:clj (fn [])
+                            :cljs (fn [_ _ id]
+                                    (.hidePopover (js/document.getElementById (name id)))))}
    :nexus/actions       {:actions/inc (fn [state path]
                                         [[:effects/save path (+ (:step state) (get-in state path))]])
                          ::ng/scroll  (fn [_ top left]

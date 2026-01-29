@@ -6,7 +6,9 @@
 
 (defn render [state]
   [:main {:id "app"}
-   (for [col [:address/city :address/postcode]]
-     (omnibox-ui/omnibox (utils/substate state [col])))
+   [:div.flex
+   (for [col [[:transport/destination :address/city]
+              [:transport/destination :address/postcode]]]
+     (omnibox-ui/omnibox (utils/substate state [:omnibox col])))]
    (nested-grid-ui/nested-grid
     (utils/substate state [:grid]))])

@@ -1,9 +1,11 @@
 (ns nextjournal.table.util
   (:require
+   [clojure.set :as set]
    [clojure.walk :as walk]
    [clojure.edn :as edn]
    [clojure.core.async :as a]
    [nextjournal.table.ui.utils :as ui.utils]
+   [nextjournal.ductile.load-builder :as load-builder]
    #?(:clj [clojure.java.io :as io])
    #?(:clj [ring.core.protocols :refer [StreamableResponseBody]]))
   #?(:clj
@@ -54,4 +56,17 @@
                                                                    40])}))
                                           (range 10))))
                              (range 50))
-          :size-cache  (volatile! {})}})
+          :size-cache  (volatile! {})}
+   :omnibox
+   {[:transport/destination :address/city]
+    {:id          [:transport/destination :address/city]
+     :tick        1
+     :choices     (get-in load-builder/filters [[:transport/destination :address/city] 1])
+     :filters     #{}
+     :set-filters (fn [])}
+    [:transport/destination :address/postcode]
+    {:id          [:transport/destination :address/postcode]
+     :tick        1
+     :choices     (get-in load-builder/filters [[:transport/destination :address/postcode] 1])
+     :filters     #{}
+     :set-filters (fn [])}}})
