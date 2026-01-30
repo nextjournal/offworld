@@ -2,8 +2,7 @@
   (:require
    [clojure.walk :as walk]
    #?@(:cljs
-       [[clojure.edn :as edn]
-        [replicant.core :as replicant]
+       [[replicant.core :as replicant]
         [nexus.core :as nexus]
         [nextjournal.offworld :as-alias 🪐]])))
 

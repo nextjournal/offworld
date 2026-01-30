@@ -2,6 +2,7 @@
   (:require
    [clojure.string :as str]
    [clojure.core.async :as a]
+   [clojure.java.io :as io]
    [clojure.walk :as walk]
    [nexus.core :as nexus]
    nextjournal.table.nexus
@@ -14,7 +15,10 @@
    [nextjournal.table.util :as u]
    [ring.middleware.resource :as resource]
    [nextjournal.table.ui.nested-grid :as-alias ng]
-   [nextjournal.offworld :as 🪐]))
+   [ring.core.protocols :refer [StreamableResponseBody]]
+   [nextjournal.offworld :as 🪐])
+  (:import
+   (clojure.core.async.impl.channels ManyToManyChannel)))
 
 (def !store (atom (u/init-store)))
 
@@ -24,7 +28,20 @@
 (defn sse-message [{:keys [event data prefix]}]
   (str "event: " event "\ndata: " prefix (when prefix " ") data "\n\n"))
 
-(def sse-chan (a/chan))
+(defn channel->output-stream [channel output-stream]
+     (with-open [out    output-stream
+                 writer (io/writer out)]
+       (loop []
+         (when-let [^String msg (a/<!! channel)]
+           (doto writer (.write msg) (.flush))
+           (recur)))))
+
+(extend-type ManyToManyChannel
+     StreamableResponseBody
+     (write-body-to-stream [ch _response output-stream]
+       (channel->output-stream ch output-stream)))
+
+ (def sse-chan (a/chan))
 
 (add-watch !store
            ::ui/render
@@ -35,6 +52,8 @@
                                    :data (rstr/render
                                           (🪐/replicant->d*
                                            (ui/render new-value)))}))))
+
+
 
 (defn sse-handler [_]
   {:status  200

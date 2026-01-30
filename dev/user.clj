@@ -1,15 +1,11 @@
 (ns user
   (:require
-   [clojure.core.async :as a]
    [shadow.cljs.devtools.api :as shadow]
    [shadow.cljs.devtools.server :as shadow-server]
    [nextjournal.clerk :as clerk]
    [nextjournal.clerk.view :as clerk-view]
    [ring.adapter.jetty :refer [run-jetty]]
-   [ring.util.response :as res]
-   [nextjournal.table.main :as main]
-   [replicant.string :as rstr]
-   [nextjournal.table.ui :as ui]))
+   [nextjournal.table.main :as main]))
 
 (defonce add-datastar-js-include
   (alter-var-root

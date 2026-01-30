@@ -1,0 +1,3 @@
+{:extra-indents {nextjournal.baseline/register! [[:inner 0]]
+                 nexus.registry/register-action! [[:inner 0]]
+                 nexus.registry/register-effect! [[:inner 0]]}}
