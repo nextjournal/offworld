@@ -1,5 +1,7 @@
 (ns nextjournal.offworld
   (:require
+   [clojure.edn :as edn]
+   [clojure.string :as str]
    [clojure.walk :as walk]
    #?@(:cljs
        [[replicant.core :as replicant]
@@ -10,12 +12,21 @@
 
 #?(:cljs (def register-nexus! #(set! user-nexus %)))
 
+(defn serialize [actions]
+  (-> (pr-str actions)
+      (str/replace  "\"" "%20")))
+
+(defn deserialize [s]
+  (-> s
+      (str/replace  "%20" "\"")
+      edn/read-string))
+
 #?(:cljs
    (defn divert
      ([dom-event actions-str]
       (divert user-nexus dom-event actions-str))
      ([nexus dom-event actions-str]
-      (let [actions        (edn/read-string actions-str)
+      (let [actions        (deserialize actions-str)
             dispatch-data  (replicant/build-event-map dom-event)
             select-client  #(into {} (filter (comp :🪐/client meta val)) %)
             client-action? (select-client
@@ -25,13 +36,13 @@
             server-actions (vec (remove (comp client-action? first) actions))
             client-actions (vec (filter (comp client-action? first) actions))]
         (nexus/dispatch client-nexus (atom {}) dispatch-data client-actions)
-        (pr-str (nexus/interpolate client-nexus dispatch-data server-actions))))))
+        (serialize (nexus/interpolate client-nexus dispatch-data server-actions))))))
 
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: "
        "nextjournal.offworld.divert("
        "evt, '"
-       (pr-str actions)
+       (serialize actions)
        "')}})"))
 
 (defn on-hooks-replicant->d*

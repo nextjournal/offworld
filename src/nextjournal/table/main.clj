@@ -11,7 +11,6 @@
    [replicant.string :as rstr]
    [reitit.ring :as ring]
    [ring.util.codec :as codec]
-   [clojure.edn :as edn]
    [nextjournal.table.util :as u]
    [ring.middleware.resource :as resource]
    [nextjournal.table.ui.nested-grid :as-alias ng]
@@ -84,7 +83,7 @@
           (get "datastar")
           cheshire/parse-string
           walk/keywordize-keys
-          (update :actions edn/read-string)))
+          (update :actions 🪐/deserialize)))
 
 (def handler
   (resource/wrap-resource

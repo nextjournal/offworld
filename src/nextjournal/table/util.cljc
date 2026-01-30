@@ -1,5 +1,6 @@
 (ns nextjournal.table.util
   (:require
+   [clojure.string :as str]
    [nextjournal.ductile.load-builder :as load-builder]))
 
 (defn init-store
@@ -29,4 +30,4 @@
      :choices     (get-in load-builder/filters [[:transport/destination :address/city] 1])}
     [:transport/destination :address/postcode]
     {:id          [:transport/destination :address/postcode]
-     :choices     (get-in load-builder/filters [[:transport/destination :address/postcode] 1])}}})
+     :choices      (get-in load-builder/filters [[:transport/destination :address/postcode] 1])}}})

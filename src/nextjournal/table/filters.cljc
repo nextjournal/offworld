@@ -21,7 +21,7 @@
 
 (defn build-equals-filter [x]
   {:value x
-   :label (str "Is " (pr-str x))
+   :label (str "Is " x)
    :kind ::equals})
 
 (comment
@@ -30,7 +30,7 @@
 (defn build-substring-filter [needle]
   (assert (string? needle))
   {:value needle
-   :label (str "Contains " (pr-str needle))
+   :label (str "Contains " #_(pr-str needle) needle)
    :kind ::substring})
 
 (comment
@@ -45,8 +45,8 @@
       (str/replace % "*" ".*")
       (str/replace % "?" ".")
       (str "^" % "$")
-      #?(:clj (re-pattern %)
-         :cljs (js/RegExp % "u")))
+      #_#?(:clj (re-pattern %) ;; disabled to make this serializable.
+           :cljs (js/RegExp % "u")))
     (catch Exception e
       #?(:cljs (js/console.log e))
       nil)))
@@ -59,7 +59,7 @@
   (assert (string? glob))
   (when-let [regex (glob-regex glob)]
     {:value regex
-     :label (str "Matches " (pr-str glob))
+     :label (str "Matches " #_(pr-str glob) glob)
      :kind ::matches}))
 
 (comment
