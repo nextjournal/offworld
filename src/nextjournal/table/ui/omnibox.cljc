@@ -1,8 +1,10 @@
 (ns nextjournal.table.ui.omnibox
   (:require [clojure.string :as str]
+            [nextjournal.baseline :as k]
             [nextjournal.table.util :as u]
             [nextjournal.table.ui.utils :as utils]
             [nextjournal.table.filters :as filters]
+            [nextjournal.table.ui.holiday :as 🎄]
             [portfolio.replicant :refer [defscene]]))
 
 (def icon-filter
@@ -30,7 +32,7 @@
            (filter-button {:value ""})))
 
 (defn id [state & suffixes]
-  (->> (concat (:state/path-prefix state) suffixes)
+  (->> (concat (::k/path-prefix state) suffixes)
        flatten
        (map name)
        (interpose "-")
@@ -48,11 +50,11 @@
                   "focus:outline-none" "focus:ring-2" "focus:ring-blue-500" "sm:leading-6"
                   "bg-white"]
     :style       {:anchor-name anchor-name}
-    :placeholder "Filter..."
+    :placeholder (str "Filter..." (k/q state ::🎄/icon))
     :value       (:value state)
     :on          {:focus   [[:dom-node/show-popover {:node [:document/element-by-id popover-id]}]]
                   :input   [[:effects/save
-                             (utils/conjv (:state/path-prefix state) :value)
+                             (k/conjv (:state/path-prefix state) :value)
                              [:event.target/value]]]
                   :keydown [[::keydown-input-client
                              {:key           [:event/key]

@@ -1,9 +1,12 @@
 (ns nextjournal.table.ui.nested-grid
   (:require
+   [nextjournal.baseline :as k]
    [nextjournal.table.ui.nested-grid :as-alias ng]
-   [nextjournal.table.ui.nested-grid.util :as ngu]))
+   [nextjournal.table.ui.nested-grid.util :as ngu]
+   [nextjournal.table.ui.holiday :as 🎄]))
 
-(defn nested-grid [{:keys [row-tree column-tree scroll-top scroll-left overscan size-cache]
+(defn nested-grid [{:as   state
+                    :keys [row-tree column-tree scroll-top scroll-left overscan size-cache]
                     :or   {scroll-top 0 scroll-left 0 overscan 100}}]
   (let [height                     800
         width                      1200
@@ -55,4 +58,5 @@
                                     :grid-row-start    row-grid-name
                                     :grid-column-start col-grid-name}}
               (:id (last row-path)) " "
-              (:id (last col-path))]))]))
+              (:id (last col-path))
+              (k/q state ::🎄/icon)]))]))
