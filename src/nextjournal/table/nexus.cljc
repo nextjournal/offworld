@@ -1,5 +1,6 @@
 (ns nextjournal.table.nexus
   (:require
+   [nexus.registry :as nxr]
    [nextjournal.table.ui.nested-grid :as-alias ng]
    [nextjournal.table.ui.omnibox :as-alias ob]
    [nextjournal.offworld :as-alias 🪐]))
@@ -149,3 +150,5 @@
                          ^:🪐/client #?(:clj (fn [])
                                         :cljs (fn [_ id]
                                                 (js/document.getElementById id)))}})
+
+(def nexus+registry (merge-with merge nexus (nxr/get-registry)))

@@ -2,6 +2,7 @@
   (:require
    [clojure.string :as str]
    [nexus.core :as nexus]
+   [nexus.registry :as nxr]
    [nextjournal.table.ui :as ui]
    [replicant.dom :as r]
    [nextjournal.table.util :as u]
@@ -12,7 +13,8 @@
 (defonce !store
   (atom (u/init-store)))
 
-(r/set-dispatch! #(nexus/dispatch nextjournal.table.nexus/nexus !store %1 %2))
+(r/set-dispatch!
+ #(nexus/dispatch nextjournal.table.nexus/nexus+registry !store %1 %2))
 
 (defonce root-el
   (js/document.getElementById "app"))
@@ -20,7 +22,7 @@
 (defn ^:dev/after-load after-load []
   (swap! !store update :dev/load inc))
 
-(🪐/register-nexus! nextjournal.table.nexus/nexus)
+(🪐/register-nexus! nextjournal.table.nexus/nexus+registry)
 
 (defn main []
   (when-not (str/includes? js/document.location.search "?ssr=true")

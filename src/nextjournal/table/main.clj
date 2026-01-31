@@ -22,7 +22,7 @@
 (def !store (atom (u/init-store)))
 
 (defn dispatch! [actions dispatch-data]
-  (nexus/dispatch nextjournal.table.nexus/nexus !store dispatch-data actions))
+  (nexus/dispatch nextjournal.table.nexus/nexus+registry !store dispatch-data actions))
 
 (defn sse-message [{:keys [event data prefix]}]
   (str "event: " event "\ndata: " prefix (when prefix " ") data "\n\n"))
