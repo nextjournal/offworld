@@ -29,3 +29,8 @@
     (add-watch !store ::render (fn [_ _ _ new-state]
                                  (r/render root-el (ui/render new-state))))
     (after-load)))
+
+(comment
+  (require '[dataspex.core :as dataspex])
+  (dataspex/inspect "App state" !store)
+  nil)

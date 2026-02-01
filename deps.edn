@@ -8,7 +8,7 @@
  :aliases {:dev {:exec-fn     user/start!
                  :main-opts   ["-m" "shadow.cljs.devtools.cli"]
                  :extra-paths ["dev"]
-                 :extra-deps  {no.cjohansen/dataspex       {:mvn/version "2025.10.1"}
+                 :extra-deps  {no.cjohansen/dataspex       {:mvn/version "2026.01.1"}
                                no.cjohansen/portfolio      {:mvn/version "2025.08.29"}
                                thheller/shadow-cljs        {:mvn/version "3.3.2"}
                                ;; clerk + replicant in sci env, from https://github.com/nextjournal/clerk/pull/794
