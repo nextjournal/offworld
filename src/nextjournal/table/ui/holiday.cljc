@@ -16,29 +16,30 @@
    :winter :gift-day})
 
 (k/register! ::holiday-mode?
-  (fn [db] (get-in db [::path :to :holiday-mode?])))
-
-(nxr/register-action! ::begin
-  #(do [[:effects/save [::path :to :holiday-mode?] true]]))
-
-(nxr/register-action! ::cancel
-  #(do [[:effects/save [::path :to :holiday-mode?] false]]))
+  #(get-in % [::path :to :holiday-mode?]))
 
 (nxr/register-action! ::toggle
-  (fn [_ ?] [(if ? [::begin] [::cancel])]))
+  (fn [_ ?] [[:effects/save [::k/domain ::path :to :holiday-mode?] ?]]))
 
 (k/register! ::season
-  (fn [db] (get-in db [::path :to :season] :spring)))
+  #(get-in % [::path :to :season] :spring))
 
 (nxr/register-action! ::season
-  (fn [_ s] [[:effects/save [::path :to :season] (keyword s)]]))
+  (fn [_ s] [[:effects/save [::k/domain ::path :to :season] (keyword s)]]))
 
 (k/register! ::day
-  (fn [db] (season->holiday (k/q db ::season))))
+  ^{::k/deps #{::season}}
+  #(season->holiday (k/q % ::season)))
 
 (k/register! ::icon
-  (fn [db] (when (k/q db ::holiday-mode?)
-             (day->icon (k/q db ::day)))))
+  ^{::k/deps #{::day ::holiday-mode?}}
+  #(when (k/q % ::holiday-mode?)
+     (day->icon (k/q % ::day))))
+
+(k/register! ::icon-error
+  ^{::k/deps #{::day ::holiday-mode?}}
+  #(when (k/q % ::holiday-mode?)
+     (day->icon (k/q % ::day-error))))
 
 (defn switch [state]
   [:input {:id     ::mode-switch
@@ -67,3 +68,10 @@
     (switch state)]
    (when-let [day (k/q state ::day)]
      [:div "It's " (name day) "."])])
+
+(comment
+  (k/q {} ::season)
+  (k/q {::k/domain {::path {:to {:holiday-mode? true}}}} ::icon)
+  (k/trace {::k/domain {::path {:to {:holiday-mode? true}}}} ::icon)
+  (k/trace {::path {:to {:holiday-mode? true}}} ::icon)
+  (k/trace {::path {:to {:holiday-mode? true}}} ::icon-error))

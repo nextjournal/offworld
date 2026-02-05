@@ -1,11 +1,9 @@
 (ns nextjournal.table.ui.omnibox
   (:require [clojure.string :as str]
             [nextjournal.baseline :as k]
-            [nextjournal.table.util :as u]
-            [nextjournal.table.ui.utils :as utils]
             [nextjournal.table.filters :as filters]
             [nextjournal.table.ui.holiday :as 🎄]
-            [portfolio.replicant :refer [defscene]]))
+            #?(:cljs [portfolio.replicant :refer [defscene]])))
 
 (def icon-filter
   [:svg {:viewBox "0 0 20 20"
@@ -32,7 +30,7 @@
            (filter-button {:value ""})))
 
 (defn id [state & suffixes]
-  (->> (concat (::k/path-prefix state) suffixes)
+  (->> (concat (::k/path state) suffixes)
        flatten
        (map name)
        (interpose "-")
@@ -41,7 +39,9 @@
 (defn choice-id [{:keys [parent-id index]}]
   (str parent-id index))
 
-(defn input [{:as state :keys [input-id popover-id anchor-name]}]
+(defn input [{:as      state
+              :keys    [input-id popover-id anchor-name]
+              ::k/keys [path]}]
   [:input
    {:id          input-id
     :type        "text"
@@ -53,8 +53,7 @@
     :placeholder (str "Filter..." (k/q state ::🎄/icon))
     :value       (:value state)
     :on          {:focus   [[:dom-node/show-popover {:node [:document/element-by-id popover-id]}]]
-                  :input   [[:effects/save
-                             (k/conjv (:state/path-prefix state) :value)
+                  :input   [[:effects/save (conj path :value)
                              [:event.target/value]]]
                   :keydown [[::keydown-input-client
                              {:key           [:event/key]
@@ -64,7 +63,7 @@
                             [::keydown-input
                              {:key           [:event/key]
                               :key-modifiers [:event/key-modifiers]
-                              :path          (:state/path-prefix state)}]
+                              :path          path}]
                             #_(fn [e]
                                 (case (.-key e)
                                   "Enter"
@@ -86,8 +85,8 @@
 #?(:cljs (defscene input-scene []
            (input {})))
 
-(defn popover [{:as   state
-                :keys [model choices filters-to-add anchor-name input-id popover-id filters]}]
+(defn popover [{::k/keys [path]
+                :keys    [choices filters-to-add anchor-name input-id popover-id filters]}]
   (let [child-indices (vec (range (count (concat filters-to-add choices))))]
     [:div.w-full.p-1
      {:id      popover-id
@@ -103,8 +102,7 @@
                  id      (choice-id {:parent-id popover-id :index i})
                  next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
                  prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))
-                 add     [::add-filter (:state/path-prefix state)
-                          (first filters-to-add)]]]
+                 add     [::add-filter path (first filters-to-add)]]]
        [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
         {:on {:click [add]}}
         [:span.flex.mt-1.focus:outline-none
@@ -131,8 +129,8 @@
                  value   (contains? (set filters) filter)]]
        [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
         {:on {:change  [(if value
-                          [::remove-filter (:state/path-prefix state) filter]
-                          [::add-filter (:state/path-prefix state) filter])]
+                          [::remove-filter path filter]
+                          [::add-filter path filter])]
               :value   value
               :keydown [[::keydown-choice-item-client
                          {:key        [:event/key]
@@ -147,17 +145,18 @@
                  :style {:user-select :none}}
          choice]])]))
 
-(defn filter-pill [state {:keys [label] :as filter}]
+(defn filter-pill [{::k/keys [path]} {:keys [label] :as filter}]
    [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400.text-xs
     [:span.flex.mt-1.focus:outline-none
      [:div.w-3.h-3.text-slate-400 icon-filter]]
     label
     [:span {:style {:cursor      :pointer
                     :margin-left 5}
-            :on    {:click [[::remove-filter (:state/path-prefix state) filter]]}}
+            :on    {:click [[::remove-filter path filter]]}}
      "X"]])
 
-(defn omnibox [{:keys [value filters] :as state}]
+(defn omnibox [{:as                     state
+                {:keys [filters value]} ::k/local}]
   (let [state' (merge state
                       {:popover-id  (id state :popover)
                        :input-id    (id state :input)

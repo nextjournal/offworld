@@ -2,13 +2,13 @@
   (:require
    [clojure.string :as str]
    [nexus.core :as nexus]
-   [nexus.registry :as nxr]
    [nextjournal.table.ui :as ui]
    [replicant.dom :as r]
    [nextjournal.table.util :as u]
    nextjournal.table.nexus
    [nextjournal.table.ui.nested-grid :as-alias ng]
-   [nextjournal.offworld :as 🪐]))
+   [nextjournal.offworld :as 🪐]
+   [nextjournal.baseline :as-alias k]))
 
 (defonce !store
   (atom (u/init-store)))

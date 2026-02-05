@@ -48,9 +48,9 @@
                                     (.hidePopover (or target-node node))))}
    :nexus/actions       {:actions/inc       (fn [state path]
                                               [[:effects/save path (+ (:step state) (get-in state path))]])
-                         ::ng/scroll        (fn [_ top left]
-                                              [[:effects/save [:grid :scroll-top] top]
-                                               [:effects/save [:grid :scroll-left] left]])
+                         ::ng/scroll        (fn [_ path top left]
+                                              [[:effects/save (concat path [:scroll-top]) top]
+                                               [:effects/save (concat path [:scroll-left]) left]])
                          ::ng/resize        (fn [_ width height]
                                               [[:effects/save [:grid :width] width]
                                                [:effects/save [:grid :height] height]])

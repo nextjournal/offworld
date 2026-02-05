@@ -5,9 +5,27 @@
    [nextjournal.table.ui.nested-grid.util :as ngu]
    [nextjournal.table.ui.holiday :as 🎄]))
 
-(defn nested-grid [{:as   state
-                    :keys [row-tree column-tree scroll-top scroll-left overscan size-cache]
-                    :or   {scroll-top 0 scroll-left 0 overscan 100}}]
+(defn demo-header-tree [direction]
+  (into [:root]
+        (map (fn [a]
+               (into []
+                     (map (fn [b]
+                            {:id   (keyword (str (case direction
+                                                   :row "r"
+                                                   (:column :col) "c") a b))
+                             :size (rand-nth [20 25 30 35 40])}))
+                     (range 10))))
+        (range 50)))
+
+(def demo-row-tree (demo-header-tree :row))
+(def demo-col-tree (demo-header-tree :row))
+
+(defn nested-grid [{:as                                  state
+                    {:keys [size-cache scroll-top scroll-left]
+                     :or   {scroll-top 0 scroll-left 0}} ::k/local
+                    path                                 ::k/path
+                    :keys                                [row-tree column-tree overscan]
+                    :or                                  {overscan 100}}]
   (let [height                     800
         width                      1200
         {:as            row-traversal
@@ -30,7 +48,7 @@
     [:div {:id    :grid
            :on    {:scroll
                    ^{:datastar/modifiers [:throttle.100ms]}
-                   [[::ng/scroll
+                   [[::ng/scroll path
                      [:event.target/scroll-top]
                      [:event.target/scroll-left]]]}
            :style {:height   height

@@ -1,6 +1,7 @@
 (ns nextjournal.ductile.load-builder
   (:require
-   [clojure.set :as set]))
+   [clojure.set :as set]
+   [nextjournal.baseline :as k]))
 
 (defn ->v [x] (if (vector? x) x [x]))
 
@@ -428,3 +429,15 @@
                 (:set? opts) (apply set/union (map get-in transports (repeat (->v k))))
                 :else        (into (sorted-set) (map get-in transports (repeat (->v k)))))
               opts]])))
+
+(k/register! ::header-fields #(::header-fields %1))
+
+(defn init-domain [domain]
+  (-> domain
+      (assoc ::header-fields
+             {[:transport/destination :address/city]
+              {:id      [:transport/destination :address/city]
+               :choices (get-in filters [[:transport/destination :address/city] 1])}
+              [:transport/destination :address/postcode]
+              {:id      [:transport/destination :address/postcode]
+               :choices (get-in filters [[:transport/destination :address/postcode] 1])}})))
