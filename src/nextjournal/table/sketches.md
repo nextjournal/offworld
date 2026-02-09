@@ -21,6 +21,39 @@ Then, visit `http://localhost:8000`.
 Some demos implement server-side rendering. In that case, visit `http://localhost:8000?ssr=true`.
 
 ## What does ductile's `omnibox` look like when built from replicant?
+### Web Standards
+Part of the replicant experience is stripping away our re-invented wheels and relying on modern web standards.
+Often, for the cost of some DOM-local state and a few imperative calls,
+we can refer our design to a very broad standard.
+This reduces cognitive overhead for developers, both human and AI.
+
+#### HTML Popover API ([baseline 2025](https://caniuse.com/wf-popover))
+Ductile's omnibox stored hide/show state in a local atom[^ductile-local-atom], passing it among child components.
+It used a global event listener[^ductile-listener] to close the popover when the user clicks outside it.
+The browser can handle the same hide/show state transition, along with the detailed click behavior, using the popover api.
+
+[^ductile-local-atom]: [omnibox.cljs#L47](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L47)
+[^ductile-listener]: [omnibox.cljs#L69](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L69)
+
+#### CSS Anchor Positioning ([baseline 2026](https://caniuse.com/css-anchor-positioning))
+Ductile's omnibox used dom walking, listeners and react hooks[^walking-listeners-hooks]
+to synchronize the popover's position as users scroll through its parent container(s).
+For the cost of passing an id around[^id-passing],
+anchor positioning lets us express all this behavior declaratively, with just a few
+css properties[^css-props].
+
+[^walking-listeners-hooks]: [omnibox.cljs#L72](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L72)
+[^id-passing]: [offworld/.../omnibox.cljc#L164](https://github.com/nextjournal/tabla/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/ui/omnibox.cljc#L164)
+[^css-props]: [offworld/.../omnibox.cljc#L97](https://github.com/nextjournal/tabla/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/ui/omnibox.cljc#L97)
+
+#### Lightweight focus management
+Ductile's omnibox modeled the state of a "selection"[^select-state], letting the user select different choices using the arrow keys[^select-arrows], and imperatively scrolling to the choice item[^scroll-into-view]. The browser can manage this UX for us[^nexus-focus], handling any scrolling automatically and complying with accessibility standards.
+
+[^select-state]: [ductile/.../omnibox.cljs#L513](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L513)
+[^select-arrows]: [ductile/.../omnibox.cljs#L394](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L394)
+[^scroll-into-view]: [ductile/.../omnibox.cljs#L321](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L321)
+[^nexus-focus]: [offworld/.../nexus.cljc#L105](https://github.com/nextjournal/offworld/blob/039bb36fe71bb900fb4d2986abb7462c3aaf4660/src/nextjournal/table/nexus.cljc#L105)
+
 ## Can we still use dom watchers like "Resize"?
 replace the react functional ref pattern with replicant's :remember
 
