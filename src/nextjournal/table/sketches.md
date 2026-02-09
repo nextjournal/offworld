@@ -43,8 +43,8 @@ anchor positioning lets us express all this behavior declaratively, with just a 
 css properties[^css-props].
 
 [^walking-listeners-hooks]: [omnibox.cljs#L72](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L72)
-[^id-passing]: [offworld/.../omnibox.cljc#L164](https://github.com/nextjournal/tabla/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/ui/omnibox.cljc#L164)
-[^css-props]: [offworld/.../omnibox.cljc#L97](https://github.com/nextjournal/tabla/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/ui/omnibox.cljc#L97)
+[^id-passing]: [offworld/.../omnibox.cljc#L164](https://github.com/nextjournal/offworld/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/ui/omnibox.cljc#L164)
+[^css-props]: [offworld/.../omnibox.cljc#L97](https://github.com/nextjournal/offworld/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/ui/omnibox.cljc#L97)
 
 #### Lightweight focus management
 Ductile's omnibox modeled the state of a "selection"[^select-state], letting the user select different choices using the arrow keys[^select-arrows], and imperatively scrolling to the choice item[^scroll-into-view]. The browser can manage this UX for us[^nexus-focus], handling any scrolling automatically and complying with accessibility standards.
@@ -52,7 +52,7 @@ Ductile's omnibox modeled the state of a "selection"[^select-state], letting the
 [^select-state]: [ductile/.../omnibox.cljs#L513](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L513)
 [^select-arrows]: [ductile/.../omnibox.cljs#L394](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L394)
 [^scroll-into-view]: [ductile/.../omnibox.cljs#L321](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L321)
-[^nexus-focus]: [offworld/.../nexus.cljc#L105](https://github.com/nextjournal/offworld/blob/039bb36fe71bb900fb4d2986abb7462c3aaf4660/src/nextjournal/table/nexus.cljc#L105)
+[^nexus-focus]: [offworld/.../nexus.cljc#L105](https://github.com/nextjournal/offworld/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/nexus.cljc#L105)
 
 ## Can we still use dom watchers like "Resize"?
 replace the react functional ref pattern with replicant's :remember
@@ -523,7 +523,7 @@ We might want to improve the concision with a macro, similar to deframe[^deframe
 
 ## Can we build a `nested-grid` in cljs using replicant's "top-down" UI model?
 
-Commit [7ecd60b](https://github.com/nextjournal/tabla/commit/7ecd60b/)
+Commit [7ecd60b](https://github.com/nextjournal/offworld/commit/7ecd60b/)
 adds a component based on re-com's [`nested-grid`](https://re-com.day8.com.au/#/nested-grid).
 `nested-grid` helps users explore large datasets by rendering a scrollable rectangular "window" of the data.
 The search algorithm is the same, and the render-fn is stripped down and converted to
@@ -542,7 +542,7 @@ to draw the new DOM.
 Notes:
 - With replicant we control the render call explicitly, so it's easy to set up profiling scenarios like this one.
 - For a while, the render-fn was getting called twice. I didn't realize that returning two effect-vectors from
-  the action handler caused two separate swaps and two render calls ([a40100a](https://github.com/nextjournal/tabla/commit/a40100a/)).
+  the action handler caused two separate swaps and two render calls ([a40100a](https://github.com/nextjournal/offworld/commit/a40100a/)).
 - So far, this doesn't seem much slower than the original reagent version.
 ## Datastar "morphing" grid demo
 Visit `localhost:8000?ssr=true` to run nested-grid with server-side rendering. Still evaluating this,
@@ -766,7 +766,7 @@ Maybe the user's "server" could run within SCI, alongside it.
 ## Can Clerk's viewers be built with replicant/datastar?
 ### "Hello world" in datastar
 We modified clerk to include datastar in the browser runtime
-([72eb20d1](https://github.com/nextjournal/tabla/commit/72eb20d1cd98097ef31fe52752beac2084b7e224)).
+([72eb20d1](https://github.com/nextjournal/offworld/commit/72eb20d1cd98097ef31fe52752beac2084b7e224)).
 Here's datastar's "hello world" running in clerk:
 
 ```clojure
