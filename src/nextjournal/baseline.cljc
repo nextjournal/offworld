@@ -10,7 +10,7 @@
 
 (def registry (atom {}))
 
-(defn register! [k f]
+(defn ^{:indent 1} register! [k f]
   (swap! registry
          #(let [{::k/keys [deps]} (meta f)]
             (cond-> %
