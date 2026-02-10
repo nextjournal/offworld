@@ -214,14 +214,7 @@ on this pattern with the re-frame paradigm. With re-frame, we tend to solve the 
 tooling. For instance, re-frame-10x returns us to "repl-friendliness" by providing a custom "visual repl".
 Although, 10x doesn't solve the issue of invisible dependencies. 
 
-Can we build obvservability tools that are more explicit and repl-friendly?
-
-Global state patterns also feel inadequate for modeling "component-local" state. You have to implement
-the locality yourself every time. At Day8 we sidestepped this problem by using a local reagent atom. When 
-we did need to store that value in our domain, we'd override the atom by passing in a subscription and a dispatch.
-Replicant doesn't have obvious support for local atoms, and replicant's philosophy seems to discourage it. XXXXXXX TODO: CHECK THIS.
-
-Can we support global 
+Can we build observability tools that are more explicit and repl-friendly?
 
 ### Solution: Drilling responsibly, with a "local" UI and a "global" domain.
 
@@ -235,6 +228,8 @@ passed down the call chain via three namespaced keys, `::k/domain`, `::k/local` 
 
 We prevent many of the above issues simply by putting each concern in a predictable place,
 with strong conventions for modeling change and locality.
+
+[^tar-pit]: [Out of the Tar Pit (Moseley & Marks, 2006)](https://www.semanticscholar.org/paper/Out-of-the-Tar-Pit-Moseley-Marks/41dc590506528e9f9d7650c235b718014836a39d)
 
 ### Receiving "local" state
 ```clojure
