@@ -1,7 +1,8 @@
 (ns nextjournal.table.ui.holiday
   (:require
    [nexus.registry :as nxr]
-   [nextjournal.baseline :as k]))
+   [nextjournal.baseline :as k]
+   [nextjournal.offworld :as 🪐]))
 
 (def day->icon
   {:gift-day   "🎁"
@@ -41,6 +42,18 @@
   #(when (k/q % ::holiday-mode?)
      (day->icon (k/q % ::day-error))))
 
+(nxr/register-action! ::randomize
+  ^::🪐/client
+  (fn [_ key-mods season]
+    (let [path        [::k/domain ::path :to :season]
+          randomize?  (contains? (set key-mods) :shift)
+          rand-season (first
+                       (rand-nth
+                        (seq
+                         (dissoc season->holiday season))))]
+      [^::🪐/server
+       [:effects/save path (if randomize? :spring rand-season)]])))
+
 (defn switch [state]
   [:input {:id     ::mode-switch
            :type   :checkbox
@@ -48,7 +61,7 @@
            :value  (k/q state ::day)
            :on     {:change [[::toggle [:event.target/checked]]]}}])
 
-(defn select [state]
+(defn select [_]
   [:select {:id ::season-select
             :on {:change [[::season [:event.target/value]]]}}
    [:option {:value :spring} "Spring"]
@@ -67,7 +80,9 @@
      "Holiday Mode: "]
     (switch state)]
    (when-let [day (k/q state ::day)]
-     [:div "It's " (name day) "."])])
+     [:div "It's " (name day) "."])
+   [:button {:on {:click [[::randomize [:event/key-modifiers] [::k/q ::season]]]}}
+    "Randomize (shift-click to reset)"]])
 
 (comment
   (k/q {} ::season)

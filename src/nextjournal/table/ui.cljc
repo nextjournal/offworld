@@ -8,7 +8,7 @@
 
 (defn render [state]
   [:main {:id "app"}
-   [:div.flex
+  [:div.flex
     (for [[_ {:keys [id choices]}] (k/q state ::load-builder/header-fields)]
       (omnibox-ui/omnibox
        (k/+ state [:header-fields id] {:choices choices})))]

@@ -134,7 +134,8 @@
                          ^::🪐/client (fn [{:replicant/keys [dom-event]}]
                                         (.-key dom-event))
                          :event/key-modifiers
-                         ^::🪐/client (fn [{:replicant/keys [dom-event]}]
+                         ^::🪐/client (fn [{:replicant/keys [dom-event] :as args}]
+                                        (println "EVENT" dom-event)
                                         (into #{}
                                               (filter some?)
                                               [(when (.-shiftKey dom-event) :shift)

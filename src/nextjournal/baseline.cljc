@@ -3,7 +3,8 @@
   (:require
    [clojure.string :as str]
    [nextjournal.baseline :as-alias k]
-   [nexus.registry :as nxr]))
+   [nexus.registry :as nxr]
+   [nextjournal.offworld :as-alias 🪐]))
 
 (def conjv (fnil conj []))
 
@@ -79,6 +80,11 @@
             (reduce (fn [acc [path v]]
                       (assoc-in acc (into [::domain] path) v))
                     state path-vs)))))
+
+(nxr/register-action! ::test-query
+  ^::🪐/client
+  (fn [_ & args]
+    (println "running action with query:" args)))
 
 (comment
   (-> {::k/local {:x {:a 1 :b {:c :d :e :f}}}

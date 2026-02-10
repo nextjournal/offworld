@@ -5,6 +5,7 @@
    [clojure.java.io :as io]
    [clojure.walk :as walk]
    [nexus.core :as nexus]
+   [nexus.registry :as nxr]
    nextjournal.table.nexus
    [cheshire.core :as cheshire]
    [nextjournal.table.ui :as ui]
@@ -15,17 +16,24 @@
    [ring.middleware.resource :as resource]
    [nextjournal.table.ui.nested-grid :as-alias ng]
    [ring.core.protocols :refer [StreamableResponseBody]]
-   [nextjournal.offworld :as 🪐])
+   [nextjournal.offworld :as 🪐]
+   [nextjournal.baseline :as k])
   (:import
    (clojure.core.async.impl.channels ManyToManyChannel)))
 
 (def system (atom (u/init-state)))
 
-(defn dispatch! [actions dispatch-data]
-  (nexus/dispatch nextjournal.table.nexus/nexus+registry system dispatch-data actions))
+(def nexus+registry (merge-with merge nextjournal.table.nexus/nexus (nxr/get-registry)))
 
-(defn sse-message [{:keys [event data prefix]}]
-  (str "event: " event "\ndata: " prefix (when prefix " ") data "\n\n"))
+(defn dispatch! [actions dispatch-data]
+  (nexus/dispatch nexus+registry system dispatch-data actions))
+
+(defn sse-message [{:keys [event lines]}]
+  (str "event: " event "\n"
+       (str/join "\n"
+                 (for [[k v] lines]
+                    (str "data: " k " " v)))
+        "\n\n"))
 
 (defn channel->output-stream [channel output-stream]
      (with-open [out    output-stream
@@ -42,17 +50,30 @@
 
  (def sse-chan (a/chan))
 
-(add-watch system
-           ::ui/render
-           (fn [_ _ _ new-value]
-             (a/put! sse-chan
-                     (sse-message {:event "datastar-patch-elements"
-                                   :prefix "elements"
-                                   :data (rstr/render
-                                          (🪐/replicant->d*
-                                           (ui/render new-value)))}))))
+(defn signals-object [q->value]
+  (str "{" "queries: " "\"" (pr-str q->value) "\"" "}"))
 
-
+(add-watch
+ system
+ ::ui/render
+ (fn [_ _ _ new-state]
+   (let [d*-hiccup                       (🪐/replicant->d*
+                                          (ui/render new-state))
+         {::k/keys [query-placeholders]} (meta d*-hiccup)
+         query-results                   (into {}
+                                               (map (fn [[_ k & args :as q]]
+                                                      [q (apply k/q new-state k args)]))
+                                               query-placeholders)
+         _                               (reset! 🪐/query-results query-results)]
+     (a/put! sse-chan
+             (sse-message
+              {:event "datastar-patch-signals"
+               :lines [["signals" (signals-object query-results)]]}))
+     (a/put!
+      sse-chan
+      (sse-message
+       {:event "datastar-patch-elements"
+        :lines [["elements" (rstr/render d*-hiccup)]]})))))
 
 (defn sse-handler [_]
   {:status  200
@@ -74,7 +95,9 @@
      (cond-> (slurp "resources/public/index.html")
        ssr? (str/replace #"</head>" (str datastar-script "\n</head>"))
        ssr? (str/replace main-el-rx (rstr/render (🪐/replicant->d* (ui/render @system))))
-       ssr? (str/replace #"<body>" "<body data-init=\"@get('session')\">"))}))
+       ssr? (str/replace
+             #"<body>"
+             "<body data-init=\"@get('session')\" data-on-signal-patch=\"nextjournal.offworld.update_queries(patch)\">"))}))
 
 (defn read-dispatch [req]
   (some-> req

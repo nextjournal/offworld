@@ -2,19 +2,24 @@
   (:require
    [clojure.string :as str]
    [nexus.core :as nexus]
+   [nexus.registry :as nxr]
    [nextjournal.table.ui :as ui]
    [replicant.dom :as r]
    [nextjournal.table.util :as u]
    nextjournal.table.nexus
    [nextjournal.table.ui.nested-grid :as-alias ng]
    [nextjournal.offworld :as 🪐]
-   [nextjournal.baseline :as-alias k]))
+   [nextjournal.baseline :as k]))
 
 (defonce system
   (atom (u/init-state)))
 
+(def nexus+registry (merge-with merge nextjournal.table.nexus/nexus (nxr/get-registry)))
+
 (r/set-dispatch!
- #(nexus/dispatch nextjournal.table.nexus/nexus+registry system %1 %2))
+ #(nexus/dispatch nexus+registry system %1 %2))
+
+(🪐/register-nexus! nexus+registry)
 
 (defonce root-el
   (js/document.getElementById "app"))
@@ -22,12 +27,20 @@
 (defn ^:dev/after-load after-load []
   (swap! system update :dev/load inc))
 
-(🪐/register-nexus! nextjournal.table.nexus/nexus+registry)
-
 (defn main []
   (when-not (str/includes? js/document.location.search "?ssr=true")
-    (add-watch system ::render (fn [_ _ _ new-state]
-                                 (r/render root-el (ui/render new-state))))
+    (add-watch system
+               ::render
+               (fn [_ _ _ new-state]
+                 (def  new-state new-state)
+                 (let [hiccup             (ui/render new-state)
+                       query-placeholders (🪐/find-query-placeholders hiccup)
+                       query-results      (into {}
+                                                (map (fn [[_ k & args :as q]]
+                                                       [q (apply k/q new-state k args)]))
+                                                query-placeholders)
+                       _                  (reset! 🪐/query-results query-results)]
+                   (r/render root-el hiccup))))
     (after-load)))
 
 (comment
