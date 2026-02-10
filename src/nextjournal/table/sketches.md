@@ -122,8 +122,8 @@ Some issues come to mind. None of these are dealbreakers, but they express the f
 
 - `hover-alert`:
   - With `hover?`, we get a value along with its path. That makes it straightforward to model a change, using actions.
-  - We save values in the system store, but what happens if the UI ancestor `biz-panel` gets unmounted at runtime?
-    Those values will sit in the store forever!
+  - We save values in the system, but what happens if the UI ancestor `biz-panel` gets unmounted at runtime?
+    Those values will sit in the system forever!
 - `biz-problem-list`:
   - We get two business values passed in, and we post-process & destructure them into useable values.
 	- Why is that the responsibility of this render-fn? 
@@ -139,12 +139,12 @@ Some issues come to mind. None of these are dealbreakers, but they express the f
 	- It's hard to see *why* it needs these args, but at least the UI is guaranteed to work.
 	- This makes it nice to work with a repl, as well — the arguments *are* the scope.
   - We finally see an explicit value for `:hover-states-path`.
-	- When the user hovers, part of the top-level replicant store definitely changes value... under that exact path... somewhere. Probably.
+	- When the user hovers, part of the top-level replicant system definitely changes value... under that exact path... somewhere. Probably.
 	  - In reality, child render-fns are free to use any path they want.
 	  - This is less explicit than it looks. It's all held together by a loose convention.
 	- Why did we put our choice of path into *this* render-fn? Seems arbitrary.
-	- We have to assume our `state` argument contains the same subtree as the top-level store.
-	  - That means we're re-expressing the shape of the replicant store across an ever-growing set of callsites. Not very DRY.
+	- We have to assume our `state` argument contains the same subtree as the top-level state.
+	  - That means we're re-expressing the shape of the replicant state across an ever-growing set of callsites. Not very DRY.
 	- What if there's another `biz-panel` somewhere? How do we know our `:hover-states-path` isn't getting reused?
 	- A different dev wrote this render-fn. They're not as confident writing big destructuring forms. Instead, they use inline getters.
       - Now, to understand this function's requirements we have to read its entire body.
@@ -157,7 +157,7 @@ This is more concise, but we get less observability.
 {:nextjournal.clerk/visibility {:code :hide}}
 (clerk/code
 "(defn hover-alert [{:keys [id level label]}]
-  (let [hover? (get @store [::hover-alert id])]
+  (let [hover? (get @system [::hover-alert id])]
     [:div {:on    {:mouse-over [[:effects/save [::hover-alert id] true]]
                    :mouse-out  [[:effects/save [::hover-alert id] false]]}
            :style (when hover? {:border \"2px dashed black\"})}
@@ -602,8 +602,8 @@ a client-only placeholder _after_ action expansion. Here's a hiccup:
 And the corresponding nexus:
 
 ```clojure
-{:nexus/effects      {:save            (fn [_ store path value]                         ;4
-                                         (swap! store assoc-in path value))
+{:nexus/effects      {:save            (fn [_ system path value]                         ;4
+                                         (swap! system assoc-in path value))
                       :prevent-default (fn [{{:keys [dom-event]} :dispatch-data}]
                                          (.preventDefault dom-event))}
  :nexus/actions      {:change-field (fn [state id]
@@ -616,7 +616,7 @@ And the corresponding nexus:
 
 Our `:change-field` handler returns both (1) `[:event.target/value]` and (2) `[:prevent-default]`
 back to nexus after action expansion. To process them, nexus would need to execute
-in the client runtime. But the handlers also depend on (3) `state` and (4) `store`, which only have value
+in the client runtime. But the handlers also depend on (3) `state` and (4) `system`, which only have value
 in the server runtime. So, where exactly should we execute this action? How could we fulfill
 both requirements, client-state and server-state, without making an architectural mess?
 Here's what our solution looks like.
@@ -711,7 +711,7 @@ Then, it invokes `divert` - this inspects the nexus to decide which actions to d
 ```
 
 It dispatches client-actions immediately — note the `(atom nil)`, meaning we provide no
-replicant store to the client-actions.
+replicant system to the client-actions.
 
 Then, it uses the client-only placeholder functions to interpolate the server-actions.
 Finally, it returns the new server-actions to datastar, which sends them to the server within a GET request.

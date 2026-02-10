@@ -73,8 +73,8 @@
 
 (nxr/register-action! ::save
  ^:nexus/batch
- (fn [_ store path-vs]
-   (swap! store
+ (fn [_ system path-vs]
+   (swap! system
           (fn [state]
             (reduce (fn [acc [path v]]
                       (assoc-in acc (into [::domain] path) v))

@@ -10,27 +10,27 @@
    [nextjournal.offworld :as 🪐]
    [nextjournal.baseline :as-alias k]))
 
-(defonce !store
-  (atom (u/init-store)))
+(defonce system
+  (atom (u/init-state)))
 
 (r/set-dispatch!
- #(nexus/dispatch nextjournal.table.nexus/nexus+registry !store %1 %2))
+ #(nexus/dispatch nextjournal.table.nexus/nexus+registry system %1 %2))
 
 (defonce root-el
   (js/document.getElementById "app"))
 
 (defn ^:dev/after-load after-load []
-  (swap! !store update :dev/load inc))
+  (swap! system update :dev/load inc))
 
 (🪐/register-nexus! nextjournal.table.nexus/nexus+registry)
 
 (defn main []
   (when-not (str/includes? js/document.location.search "?ssr=true")
-    (add-watch !store ::render (fn [_ _ _ new-state]
+    (add-watch system ::render (fn [_ _ _ new-state]
                                  (r/render root-el (ui/render new-state))))
     (after-load)))
 
 (comment
   (require '[dataspex.core :as dataspex])
-  (dataspex/inspect "App state" !store)
+  (dataspex/inspect "App state" system)
   nil)

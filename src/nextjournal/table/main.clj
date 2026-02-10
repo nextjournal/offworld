@@ -19,10 +19,10 @@
   (:import
    (clojure.core.async.impl.channels ManyToManyChannel)))
 
-(def !store (atom (u/init-store)))
+(def system (atom (u/init-state)))
 
 (defn dispatch! [actions dispatch-data]
-  (nexus/dispatch nextjournal.table.nexus/nexus+registry !store dispatch-data actions))
+  (nexus/dispatch nextjournal.table.nexus/nexus+registry system dispatch-data actions))
 
 (defn sse-message [{:keys [event data prefix]}]
   (str "event: " event "\ndata: " prefix (when prefix " ") data "\n\n"))
@@ -42,7 +42,7 @@
 
  (def sse-chan (a/chan))
 
-(add-watch !store
+(add-watch system
            ::ui/render
            (fn [_ _ _ new-value]
              (a/put! sse-chan
@@ -73,7 +73,7 @@
      :body
      (cond-> (slurp "resources/public/index.html")
        ssr? (str/replace #"</head>" (str datastar-script "\n</head>"))
-       ssr? (str/replace main-el-rx (rstr/render (🪐/replicant->d* (ui/render @!store))))
+       ssr? (str/replace main-el-rx (rstr/render (🪐/replicant->d* (ui/render @system))))
        ssr? (str/replace #"<body>" "<body data-init=\"@get('session')\">"))}))
 
 (defn read-dispatch [req]
