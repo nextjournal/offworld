@@ -626,11 +626,11 @@ To distinguish handlers which can only run on the client, we'll mark them with `
 ```clojure
 {:nexus/effects      {:save            (fn [_ store path value]
                                          (swap! store assoc-in path value))
-                      :prevent-default ^:🪐/client (fn [{{:keys [dom-event]} :dispatch-data}]
+:prevent-default ^::🪐/client (fn [{{:keys [dom-event]} :dispatch-data}]
                                                      (.preventDefault dom-event))}
  :nexus/actions      {:change-field (fn [state id value] [(when-not (get-in state [:fields id :disabled?])
                                                             [:save [:fields id] value])])}
- :nexus/placeholders {:event.target/value ^:🪐/client (fn [{:replicant/keys [dom-event]}]
+ :nexus/placeholders {:event.target/value ^::🪐/client (fn [{:replicant/keys [dom-event]}]
                                                         (some-> dom-event .-target .-value))}}
 ```
 
@@ -699,7 +699,7 @@ Then, it invokes `divert` - this inspects the nexus to decide which actions to d
   [nexus dom-event actions-str]
   (let [actions        (edn/read-string actions-str)
         dispatch-data  (replicant/build-event-map dom-event)
-        select-client  #(into {} (filter (comp :🪐/client meta val)) %)
+        select-client  #(into {} (filter (comp ::🪐/client meta val)) %)
         client-action? (select-client
                         (merge (:nexus/effects nexus)
                                (:nexus/actions nexus)))

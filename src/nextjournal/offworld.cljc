@@ -28,7 +28,7 @@
      ([nexus dom-event actions-str]
       (let [actions        (deserialize actions-str)
             dispatch-data  (replicant/build-event-map dom-event)
-            select-client  #(into {} (filter (comp :🪐/client meta val)) %)
+            select-client  #(into {} (filter (comp ::🪐/client meta val)) %)
             client-action? (select-client
                             (merge (:nexus/effects nexus)
                                    (:nexus/actions nexus)))
