@@ -853,6 +853,12 @@ I'm not confident I've found the perfect way to indicate this behavior, but here
 
 2. `^::🪐/ssr` can be attached to an action *vector*, indicating it must be executed on the server, when in SSR mode, and on the client when in client-only mode.
 
+> 🤔 **mk**
+>
+> I'm wondering if an alternative to needing both `^::🪐/client` and `^::🪐/ssr` metadata could be to move the client-only effects to a separate map, with both the client and the server nexus knowing about its keys.
+>
+> Could you then just use these keys to decide what needs to be run where, elimating the need to flag individual action/effect vectors with `^::🪐/ssr`? 
+
 #### Problem: can effects be actions? Do we need to wrap them?
 Maybe we'll need to wrap them:
 ```clojure
