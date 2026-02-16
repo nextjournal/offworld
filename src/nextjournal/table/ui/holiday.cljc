@@ -42,18 +42,15 @@
   #(when (k/q % ::holiday-mode?)
      (day->icon (k/q % ::day-error))))
 
-(def randomize
-  ^::🪐/client
+(nxr/register-action! ::randomize ^::🪐/client
   (fn [_ key-mods season]
     (let [path        [::k/domain ::path :to :season]
           reset?      (contains? (set key-mods) :shift)
           rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
       (if reset?
-        [^::🪐/client [:browser/alert "Holiday season has been reset."]
-         ^::🪐/server [:effects/save path :spring]]
-        [^::🪐/server [:effects/save path rand-season]]))))
-
-(nxr/register-action! ::randomize randomize)
+        [[:browser/alert "Holiday season has been reset."]
+         [:effects/save path :spring]]
+        [[:effects/save path rand-season]]))))
 
 (defn switch [state]
   [:input {:id     ::mode-switch

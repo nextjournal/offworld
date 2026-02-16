@@ -3,16 +3,69 @@
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.walk :as walk]
-   [nexus.registry :as nxr]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.baseline :as-alias k]
    #?@(:cljs
        [[replicant.core :as replicant]
         [nexus.core :as nexus]])))
 
-#?(:cljs (def ^:dynamic user-nexus {}))
+#?(:cljs (def ^:dynamic client-nexus-static {}))
+#?(:cljs (def ^:dynamic client-nexus-registry {}))
+#?(:cljs (def ^:dynamic server-nexus-static {})
+   :clj  (def server-nexus-static (atom {})))
+#?(:cljs (def ^:dynamic server-nexus-registry {})
+   :clj  (def server-nexus-registry (atom {})))
 
-#?(:cljs (def register-nexus! #(set! user-nexus %)))
+(def mode (atom :csr))
+
+(defn dissoc-handlers [nexus k]
+  (let [dissoc-meta #(into {} (remove (comp k meta val)) %)]
+    (-> nexus
+        (update :nexus/actions dissoc-meta)
+        (update :nexus/effects dissoc-meta)
+        (update :nexus/placeholders dissoc-meta))))
+
+#?(:cljs
+   (defn get-client-nexus []
+     (case @mode
+       :csr {:nexus/system->state (some :nexus/system->state [client-nexus-static
+                                                              client-nexus-registry])
+             :nexus/actions       (merge (:nexus/actions client-nexus-static)
+                                         (:nexus/actions client-nexus-registry)
+                                         (:nexus/actions server-nexus-static)
+                                         (:nexus/actions server-nexus-registry))
+             :nexus/effects       (merge (:nexus/effects client-nexus-static)
+                                         (:nexus/effects client-nexus-registry)
+                                         (:nexus/effects server-nexus-static)
+                                         (:nexus/effects server-nexus-registry))
+             :nexus/placeholders  (merge (:nexus/placeholders client-nexus-static)
+                                         (:nexus/placeholders client-nexus-registry)
+                                         (:nexus/placeholders server-nexus-static)
+                                         (:nexus/placeholders server-nexus-registry))
+             :nexus/interceptors  ((fnil into [])
+                                   (:nexus/placeholders client-nexus-static)
+                                   (:nexus/interceptors client-nexus-registry))}
+       :ssr (-> (merge-with merge client-nexus-static client-nexus-registry)
+                (dissoc-handlers ::🪐/server)))))
+
+#?(:cljs
+   (defn get-server-nexus []
+     (case @mode
+       :csr nil
+       :ssr (-> (merge-with merge server-nexus-static server-nexus-registry)
+                (dissoc-handlers ::🪐/client)))))
+
+#?(:cljs
+   (defn register-client-nexus! [client-nexus & [registry]]
+     (set! nextjournal.offworld/client-nexus-registry registry)
+     (set! nextjournal.offworld/client-nexus-static client-nexus)
+     (get-client-nexus)))
+
+#?(:cljs
+   (defn register-server-nexus! [server-nexus & [registry]]
+     (set! nextjournal.offworld/server-nexus-registry registry)
+     (set! nextjournal.offworld/server-nexus-static server-nexus)
+     (get-server-nexus)))
 
 (defn serialize [actions]
   (-> (pr-str actions)
@@ -26,23 +79,24 @@
 #?(:cljs
    (defn divert
      ([dom-event actions-str]
-      (divert user-nexus dom-event actions-str))
-     ([nexus dom-event actions-str]
-      (let [actions                (deserialize actions-str)
-            dispatch-data          (replicant/build-event-map dom-event)
-            select-client          #(into {} (filter (comp ::🪐/client meta val)) %)
-            client-action?         (select-client
-                                    (merge (:nexus/effects nexus)
-                                           (:nexus/actions nexus)))
-            client-nexus           (update nexus :nexus/placeholders select-client)
-            server-actions         (vec (remove (comp client-action? first) actions))
-            client-actions         (vec (filter (comp client-action? first) actions))
-            {all-effects :effects} (nexus/expand-actions nexus nil client-actions dispatch-data)
-            client-effects         (vec (remove (comp ::🪐/server meta) all-effects))
-            server-effects         (vec (filter (comp ::🪐/server meta) all-effects))] ;; TODO: insert these in their original placements?
-        (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
-        (serialize (nexus/interpolate client-nexus dispatch-data ((fnil into []) server-actions server-effects)))))))
-
+      (divert (get-client-nexus) (get-server-nexus) dom-event actions-str))
+     ([client-nexus2 server-nexus2 dom-event actions-str]
+      (def client-nexus2 client-nexus2)
+      (def server-nexus2 server-nexus2)
+      (def dom-event dom-event)
+      (def actions-str actions-str)
+      (let [actions           (deserialize actions-str)
+            dispatch-data     (replicant/build-event-map dom-event)
+            client-actions    (filterv (comp (or (:nexus/actions client-nexus2) {}) first) actions)
+            server-actions    (filterv (comp (or (:nexus/actions server-nexus2) {}) first) actions)
+            {:keys [effects]} (nexus/expand-actions client-nexus2 nil client-actions dispatch-data)
+            client-effects    (filterv (comp (or (:nexus/effects client-nexus2) {}) first) effects)
+            server-effects    (filterv (comp (or (:nexus/effects server-nexus2) {}) first) effects)
+            actions-to-send   (seq (concat server-effects server-actions))]
+        (def actions-to-send actions-to-send)
+        (def dispatch-data dispatch-data)
+        (nexus/dispatch client-nexus2 (atom {}) dispatch-data client-effects)
+        (serialize (nexus/interpolate client-nexus2 dispatch-data (vec actions-to-send)))))))
 
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: "

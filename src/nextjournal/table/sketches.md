@@ -729,7 +729,7 @@ Open questions:
 - We run replicant & nexus on the client, but we only use a few features.
   Can we still get a tiny bundle (e.g. cljs-lite)?
 
-### Concept B: Datastar, but only for morphing (not interactivity)
+### Concept B: Nexus interceptors?
 Similar to Concept A, but pre-interpolation & dispatch are implemented as a nexus interceptor.
 In that case, we wouldn't attach datastar expressions to our html at all. We'd just use replicant/nexus on
 the frontend. The interceptor would interpolate the actions, then abort the actions on the client, and
@@ -858,6 +858,14 @@ I'm not confident I've found the perfect way to indicate this behavior, but here
 > I'm wondering if an alternative to needing both `^::🪐/client` and `^::🪐/ssr` metadata could be to move the client-only effects to a separate map, with both the client and the server nexus knowing about its keys.
 >
 > Could you then just use these keys to decide what needs to be run where, elimating the need to flag individual action/effect vectors with `^::🪐/ssr`? 
+
+Worth a try. The declarations would be more readable. I think I see how we can do it.
+
+in SSR mode, we have two different maps. The client needs to know about the server-map. So that map needs reader conditionals for any handlers that use clj-only features.
+
+In CSR mode, we merge the server map into the client map. Those same reader conditionals come in handy, so we can re-implement clj-only handlers in cljs as needed.
+
+What about the nexus registry? Will offworld need to take over that responsibility from nexus? That would be unfortunate. Here's where the meta keys are still more reasonable and ergonomic, I think.
 
 #### Problem: can effects be actions? Do we need to wrap them?
 Maybe we'll need to wrap them:

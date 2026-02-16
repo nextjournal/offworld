@@ -72,15 +72,13 @@
     {:value value
      :deps  (dissoc @trace* :stack)}))
 
-(nxr/register-action! ::save
- ^:nexus/batch
- (fn [_ system path-vs]
-   (swap! system
-          (fn [state]
-            (reduce (fn [acc [path v]]
-                      (assoc-in acc (into [::domain] path) v))
-                    state path-vs)))))
-
+(nxr/register-action! ::save ^::🪐/server ^:nexus/batch
+  (fn [_ system path-vs]
+    (swap! system
+           (fn [state]
+             (reduce (fn [acc [path v]]
+                       (assoc-in acc (into [::domain] path) v))
+                     state path-vs)))))
 
 (comment
   (-> {::k/local {:x {:a 1 :b {:c :d :e :f}}}

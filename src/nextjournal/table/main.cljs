@@ -3,23 +3,20 @@
    [clojure.string :as str]
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
+   [nextjournal.table.nexus :as table.nexus]
    [nextjournal.table.ui :as ui]
    [replicant.dom :as r]
    [nextjournal.table.util :as u]
-   nextjournal.table.nexus
    [nextjournal.table.ui.nested-grid :as-alias ng]
-   [nextjournal.offworld :as 🪐]
-   [nextjournal.baseline :as k]))
+   [nextjournal.offworld :as 🪐]))
 
 (defonce system
   (atom (u/init-state)))
 
-(def nexus+registry (merge-with merge nextjournal.table.nexus/nexus (nxr/get-registry)))
+(🪐/register-client-nexus! table.nexus/client (nxr/get-registry))
+(🪐/register-server-nexus! table.nexus/server (nxr/get-registry))
 
-(r/set-dispatch!
- #(nexus/dispatch nexus+registry system %1 %2))
-
-(🪐/register-nexus! nexus+registry)
+(r/set-dispatch! #(nexus/dispatch (🪐/get-client-nexus) system %1 %2))
 
 (defonce root-el
   (js/document.getElementById "app"))
@@ -28,7 +25,8 @@
   (swap! system update :dev/load inc))
 
 (defn main []
-  (when-not (str/includes? js/document.location.search "?ssr=true")
+  (reset! 🪐/mode (if (str/includes? js/document.location.search "?ssr=true") :ssr :csr))
+  (when (= :csr @🪐/mode)
     (add-watch system
                ::render
                (fn [_ _ _ new-state]

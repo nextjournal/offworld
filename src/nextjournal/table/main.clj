@@ -6,7 +6,7 @@
    [clojure.walk :as walk]
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
-   nextjournal.table.nexus
+   [nextjournal.table.nexus :as table.nexus]
    [cheshire.core :as cheshire]
    [nextjournal.table.ui :as ui]
    [replicant.string :as rstr]
@@ -22,7 +22,7 @@
 
 (def system (atom (u/init-state)))
 
-(def nexus+registry (merge-with merge nextjournal.table.nexus/nexus (nxr/get-registry)))
+(def nexus+registry (merge-with merge table.nexus/server (nxr/get-registry)))
 
 (defn dispatch! [actions dispatch-data]
   (nexus/dispatch nexus+registry system dispatch-data actions))
