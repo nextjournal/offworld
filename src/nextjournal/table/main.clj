@@ -32,23 +32,23 @@
   (str "event: " event "\n"
        (str/join "\n"
                  (for [[k v] lines]
-                    (str "data: " k " " v)))
-        "\n\n"))
+                   (str "data: " k " " v)))
+       "\n\n"))
 
 (defn channel->output-stream [channel output-stream]
-     (with-open [out    output-stream
-                 writer (io/writer out)]
-       (loop []
-         (when-let [^String msg (a/<!! channel)]
-           (doto writer (.write msg) (.flush))
-           (recur)))))
+  (with-open [out    output-stream
+              writer (io/writer out)]
+    (loop []
+      (when-let [^String msg (a/<!! channel)]
+        (doto writer (.write msg) (.flush))
+        (recur)))))
 
 (extend-type ManyToManyChannel
-     StreamableResponseBody
-     (write-body-to-stream [ch _response output-stream]
-       (channel->output-stream ch output-stream)))
+  StreamableResponseBody
+  (write-body-to-stream [ch _response output-stream]
+    (channel->output-stream ch output-stream)))
 
- (def sse-chan (a/chan))
+(def sse-chan (a/chan))
 
 (defn signals-object [q->value]
   (str "{" "queries: " "\"" (pr-str q->value) "\"" "}"))

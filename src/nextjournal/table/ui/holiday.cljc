@@ -82,7 +82,9 @@
     (switch state)]
    (when-let [day (k/q state ::day)]
      [:div "It's " (name day) "."])
-   [:button {:on {:click [[::randomize [:event/key-modifiers] [::k/q ::season]]]}}
+   [:button {:on {:click [[::randomize
+                           [:event/key-modifiers]
+                           [::k/q ::season]]]}}
     "Randomize (shift-click to reset)"]])
 
 (comment
