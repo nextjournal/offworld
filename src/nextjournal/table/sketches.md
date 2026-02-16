@@ -10,6 +10,7 @@
    [nextjournal.offworld :as 🪐]
    [nextjournal.baseline :as k]
    [nexus.core :as nexus]
+   [nexus.registry :as nxr]
    [replicant.core :as replicant]))
 ```
 
@@ -737,8 +738,132 @@ and datastar would patch the DOM.
 - We'd bundle replicant & nexus for the frontend. Could this still be a tiny bundle somehow?
 - Should we selectively dispatch actions to client/server? E.g. `[:div {:on {:click [[:client/do-this] [:server/do-that]]}}`
   - Could have problems with ordering, racing & coordinating two state atoms.
-### Concept C: Push actions through a datastar signal
+### Concept C: Return client-effects from server-actions
+Here's a new addition to what we do in Concept A:
+
+- Pre-interpolate actions on the client 🌎
+  - Expand client actions on the client 🌎
+	- Execute client effects 🌎
+  - Expand server actions on the server 🪐
+	- Execute server effects 🪐
+    - NEW✨: Send client effects back the client, via SSE 🌎
+
+We can achieve this with minimal infra. Just add this to the static HTML:
+
 `<script data-effect="nexus.core.dispatch($server_initiated_actions)" />`
+
+After expanding actions on the server, offworld intercepts the return value. 
+It separates out any effects marked `^::🪐client`, serializes them and pushes an SSE `data-patch-signals` event, updating the `$server_initiated_actions` signal.
+
+#### Problem: we can't send identical events, since `data-effect` only runs when the signal changes.
+Yes, but we can salt the signal value with a gensym.
+
+#### Problem: how sync/async is this?
+We'll have to look into exact consequences[^todo].
+What if an action causes both a re-render and a server-initiated-action?
+Will they race?
+What effects can we recommend to use this way?
+An alert or toast is probably okay?
+
+### ~~Concept D: Make some server values available to client actions.~~
+Update: I think this is a bad idea. See: [Problem: is this pointless?](#problem:-is-this-pointless?)
+
+While we don't cache all of our system state in the client, it might be useful to 
+cache a few values. These values can summarize our most recent system state for the purpose of making
+decisions. Specifically, we can declare a domain query[^query] as a placeholder:
+
+```clojure
+(defn randomize-button [state]
+  [:button {:on {:click [[::randomize
+                          [:event/key-modifiers]
+                          [::k/q ::season]]]}}
+   "Randomize (shift-click to reset)"])
+```
+
+I've demonstrated this with a new action, tied to a "Randomize" button in the top-right corner.
+It uses placeholders to require state both from the client and from the server.
+
+We don't push these values to the client in a reactive or on-demand fashion.
+Instead, we rely on replicant's top-down model to simply push all the values before each render,
+using a datastar-patch-signals event[^patch-signals-sse].
+
+How do we know what values to push? Again, we rely on the simplicity of top-down rendering.
+Our render-fns yield static data structures, so we can simply walk them to discover the relevant placeholders.
+
+[^patch-signals-sse]: [main.clj#L68](https://github.com/nextjournal/offworld/blob/55a9175c3a80afc4976a6a114a4ec2053c103c52/src/nextjournal/table/main.clj#L68)
+
+#### Problem: Is this a bad feature?
+So far, I'm not sure. Is this over-designed? I know the current implementation is convoluted,
+but what about the feature? Does it complement the rest, or is it a footgun?
+
+#### Problem: Is this pointless?
+The placeholder derives from a static "snapshot" of the system state. But, so does 
+the entire hiccup returned from our render-fn. We don't need a placeholder, because
+we can simply *call* `k/q`. Then our "summary" value will get serialized into the datastar expression.
+No need for any extra wiring.
+
+```clojure
+(defn randomize-button [state]
+  [:button {:on {:click [[::randomize
+                          [:event/key-modifiers]
+                          (k/q state ::season)]]}}
+   "Randomize (shift-click to reset)"])
+```
+
+[^query]: See [#domain-queries](#domain-queries)
+
+### Concept E: Return server-effects from client-actions
+
+- Pre-interpolate actions on the client 🌎
+  - Separate client-actions from server-actions
+  - Expand client actions on the client 🌎
+	- Execute client effects 🌎
+    - NEW✨: Group server-effects into the server-actions, via SSE 🌎
+  - Expand server actions on the server 🪐
+	- Execute server effects 🪐
+
+Here's an example:
+
+```clojure
+(nxr/register-action! ::randomize
+  ^::🪐/client
+  (fn [_ key-mods season]
+    (let [path        [::k/domain ::path :to :season]
+          reset?      (contains? (set key-mods) :shift)
+          rand-season (first (rand-nth (seq (dissoc season->holiday season))))
+          new-season  (if reset? :spring rand-season)]
+      [[:browser/alert "A new holiday is here!"]
+       ^::🪐/ssr
+       [:effects/save path new-season]])))
+
+(defn randomize-button [state]
+  [:button {:on {:click [[::randomize
+                          [:event/key-modifiers]
+                          (k/q state ::season)]]}}
+   "Randomize (shift-click to reset)"])
+```
+
+We see the usual `^::🪐/client` meta, indicating that this handler must always be executed on the client. The handler receives two inputs: `key-mods`, derived from client state via a placeholder, and `season`, derived from the server's system-state at render time. Now, here's the new part:
+
+The handler returns two effects. Offworld separates these, sending the first to the client and the second to the server.
+
+I'm not confident I've found the perfect way to indicate this behavior, but here's an attempt:
+
+1. `^::🪐/client` can be attached to an action *handler*, indicating it must be executed on the client.
+
+2. `^::🪐/ssr` can be attached to an action *vector*, indicating it must be executed on the server, when in SSR mode, and on the client when in client-only mode.
+
+#### Problem: can effects be actions? Do we need to wrap them?
+Maybe we'll need to wrap them:
+```clojure
+[[::🪐server-effect [:effects/save ...]]]
+
+(nxr/register-action! ::🪐/server-effect
+ (fn [_ effect] effect))
+```
+
+Our helper-fn `divert` can handle this wrapping, so it doesn't impact the library user.
+
 
 ## Can we render some parts on client, some on server?
 fast initial page load with SSR
@@ -794,6 +919,14 @@ That makes it straightforward to express datastar html using hiccup.
 - replicant or datastar?
 
 ## What types of clientside actions would we want to do, even in SSR mode?
+- animations
+- focus an element
+- scroll to an element
+- measuring element position/dimensions
+- positioning
+- local storage, indexed storage, indexedDB
+
+
 ## What do we name this project?
 
 - [offworld](https://bladerunner.fandom.com/wiki/off-world_colonies)

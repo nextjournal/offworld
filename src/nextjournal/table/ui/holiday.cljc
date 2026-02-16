@@ -42,20 +42,18 @@
   #(when (k/q % ::holiday-mode?)
      (day->icon (k/q % ::day-error))))
 
-(nxr/register-action! ::randomize
+(def randomize
   ^::🪐/client
   (fn [_ key-mods season]
     (let [path        [::k/domain ::path :to :season]
           reset?      (contains? (set key-mods) :shift)
-          rand-season (first
-                       (rand-nth
-                        (seq
-                         (dissoc season->holiday season))))]
-      [^::🪐/server
-       [:effects/save path (if reset? :spring rand-season)]
-       (when-not reset?
-         ^::🪐/client
-         [:browser/alert "Holiday season has been reset."])])))
+          rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
+      (if reset?
+        [^::🪐/client [:browser/alert "Holiday season has been reset."]
+         ^::🪐/server [:effects/save path :spring]]
+        [^::🪐/server [:effects/save path rand-season]]))))
+
+(nxr/register-action! ::randomize randomize)
 
 (defn switch [state]
   [:input {:id     ::mode-switch
@@ -73,6 +71,12 @@
    [:option {:value :fall} "Fall"]
    [:option {:value :winter} "Winter"]])
 
+(defn randomize-button [state]
+  [:button {:on {:click [[::randomize
+                          [:event/key-modifiers]
+                          (k/q state ::season)]]}}
+   "Randomize (shift-click to reset)"])
+
 (defn panel [state]
   [:div.fixed.top-2.right-2
    [:div.flex
@@ -85,10 +89,7 @@
     (switch state)]
    (when-let [day (k/q state ::day)]
      [:div "It's " (name day) "."])
-   [:button {:on {:click [[::randomize
-                           [:event/key-modifiers]
-                           [::k/q ::season]]]}}
-    "Randomize (shift-click to reset)"]])
+   (randomize-button state)])
 
 (comment
   (k/q {} ::season)

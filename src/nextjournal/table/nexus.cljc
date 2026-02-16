@@ -45,7 +45,11 @@
                          ^::🪐/client
                          #?(:clj (fn [])
                             :cljs (fn [{{:replicant/keys [node]} :dispatch-data} _ & {target-node :node}]
-                                    (.hidePopover (or target-node node))))}
+                                    (.hidePopover (or target-node node))))
+                         :browser/alert
+                         ^::🪐/client
+                         #?(:clj (fn [])
+                            :cljs (fn [_ _ s] (js/alert s)))}
    :nexus/actions       {:actions/inc       (fn [state path]
                                               [[:effects/save path (+ (:step state) (get-in state path))]])
                          ::ng/scroll        (fn [_ path top left]
