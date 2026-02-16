@@ -61,9 +61,10 @@
            :value  (k/q state ::day)
            :on     {:change [[::toggle [:event.target/checked]]]}}])
 
-(defn select [_]
-  [:select {:id ::season-select
-            :on {:change [[::season [:event.target/value]]]}}
+(defn select [state]
+  [:select {:id    ::season-select
+            :value (k/q state ::season)
+            :on    {:change [[::season [:event.target/value]]]}}
    [:option {:value :spring} "Spring"]
    [:option {:value :summer} "Summer"]
    [:option {:value :fall} "Fall"]
