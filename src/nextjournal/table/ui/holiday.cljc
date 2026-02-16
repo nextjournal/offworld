@@ -46,13 +46,16 @@
   ^::🪐/client
   (fn [_ key-mods season]
     (let [path        [::k/domain ::path :to :season]
-          randomize?  (contains? (set key-mods) :shift)
+          reset?      (contains? (set key-mods) :shift)
           rand-season (first
                        (rand-nth
                         (seq
                          (dissoc season->holiday season))))]
       [^::🪐/server
-       [:effects/save path (if randomize? :spring rand-season)]])))
+       [:effects/save path (if reset? :spring rand-season)]
+       (when-not reset?
+         ^::🪐/client
+         [:browser/alert "Holiday season has been reset."])])))
 
 (defn switch [state]
   [:input {:id     ::mode-switch
