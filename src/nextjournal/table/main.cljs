@@ -32,15 +32,7 @@
     (add-watch system
                ::render
                (fn [_ _ _ new-state]
-                 (def  new-state new-state)
-                 (let [hiccup             (ui/render new-state)
-                       query-placeholders (🪐/find-query-placeholders hiccup)
-                       query-results      (into {}
-                                                (map (fn [[_ k & args :as q]]
-                                                       [q (apply k/q new-state k args)]))
-                                                query-placeholders)
-                       _                  (reset! 🪐/query-results query-results)]
-                   (r/render root-el hiccup))))
+                 (r/render root-el (ui/render new-state))))
     (after-load)))
 
 (comment

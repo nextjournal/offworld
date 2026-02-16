@@ -43,19 +43,6 @@
         (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
         (serialize (nexus/interpolate client-nexus dispatch-data ((fnil into []) server-actions server-effects)))))))
 
-(def query-placeholders (atom {}))
-(def query-results (atom {}))
-
-#?(:cljs
-   (defn update-queries [patch]
-     (let [q->v (deserialize (get (js->clj patch) "queries"))]
-       (swap! query-results merge q->v))))
-
-(nxr/register-placeholder!
- ::k/q
- ^::🪐/client
- (fn [_ k & [opts]]
-   (get @query-results (into [::k/q k] opts))))
 
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: "
@@ -64,33 +51,21 @@
        (serialize actions)
        "')}})"))
 
-(defn find-query-placeholders [v]
-  (let [!acc (atom #{})]
-    (clojure.walk/postwalk
-     #(do (when (and (vector? %) (= ::k/q (first %)))
-            (swap! !acc conj %))
-          %)
-     v)
-    @!acc))
-
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
   a map containing datastar expressions. E.g.:
 
   {:on {:click [[:my-action]]}}
   {:data-on:click \"@get('/replicant-dispatch', {payload: '[[:my-action]]'})\"}"
-  [props !acc]
+  [props]
   (into (dissoc props :on)
         (for [[k v] (:on props)
-              :let  [{:datastar/keys [modifiers]} (meta v)
-                     _ (swap! !acc into (find-query-placeholders v))]]
+              :let  [{:datastar/keys [modifiers]} (meta v)]]
           [(keyword (apply str "data-on" k (interleave (repeat "__")
                                                        (map name modifiers))))
            (d*-dispatch v)])))
 
 (defn replicant->d* [hiccup]
-  (let [!acc (atom #{})
-        res  (walk/postwalk
-              #(cond-> % (map? %) (on-hooks-replicant->d* !acc))
-              hiccup)]
-    (with-meta res {::k/query-placeholders @!acc})))
+  (walk/postwalk
+   #(cond-> % (map? %) on-hooks-replicant->d*)
+   hiccup))

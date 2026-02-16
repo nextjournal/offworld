@@ -16,8 +16,7 @@
    [ring.middleware.resource :as resource]
    [nextjournal.table.ui.nested-grid :as-alias ng]
    [ring.core.protocols :refer [StreamableResponseBody]]
-   [nextjournal.offworld :as 🪐]
-   [nextjournal.baseline :as k])
+   [nextjournal.offworld :as 🪐])
   (:import
    (clojure.core.async.impl.channels ManyToManyChannel)))
 
@@ -50,30 +49,15 @@
 
 (def sse-chan (a/chan))
 
-(defn signals-object [q->value]
-  (str "{" "queries: " "\"" (pr-str q->value) "\"" "}"))
-
 (add-watch
  system
  ::ui/render
  (fn [_ _ _ new-state]
-   (let [d*-hiccup                       (🪐/replicant->d*
-                                          (ui/render new-state))
-         {::k/keys [query-placeholders]} (meta d*-hiccup)
-         query-results                   (into {}
-                                               (map (fn [[_ k & args :as q]]
-                                                      [q (apply k/q new-state k args)]))
-                                               query-placeholders)
-         _                               (reset! 🪐/query-results query-results)]
-     (a/put! sse-chan
-             (sse-message
-              {:event "datastar-patch-signals"
-               :lines [["signals" (signals-object query-results)]]}))
-     (a/put!
-      sse-chan
-      (sse-message
-       {:event "datastar-patch-elements"
-        :lines [["elements" (rstr/render d*-hiccup)]]})))))
+   (a/put!
+    sse-chan
+    (sse-message
+     {:event "datastar-patch-elements"
+      :lines [["elements" (rstr/render (🪐/replicant->d* (ui/render new-state)))]]}))))
 
 (defn sse-handler [_]
   {:status  200
