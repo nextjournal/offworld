@@ -80,23 +80,17 @@
    (defn divert
      ([dom-event actions-str]
       (divert (get-client-nexus) (get-server-nexus) dom-event actions-str))
-     ([client-nexus2 server-nexus2 dom-event actions-str]
-      (def client-nexus2 client-nexus2)
-      (def server-nexus2 server-nexus2)
-      (def dom-event dom-event)
-      (def actions-str actions-str)
+     ([client-nexus server-nexus dom-event actions-str]
       (let [actions           (deserialize actions-str)
             dispatch-data     (replicant/build-event-map dom-event)
-            client-actions    (filterv (comp (or (:nexus/actions client-nexus2) {}) first) actions)
-            server-actions    (filterv (comp (or (:nexus/actions server-nexus2) {}) first) actions)
-            {:keys [effects]} (nexus/expand-actions client-nexus2 nil client-actions dispatch-data)
-            client-effects    (filterv (comp (or (:nexus/effects client-nexus2) {}) first) effects)
-            server-effects    (filterv (comp (or (:nexus/effects server-nexus2) {}) first) effects)
+            client-actions    (filterv (comp (:nexus/actions client-nexus {}) first) actions)
+            server-actions    (filterv (comp (:nexus/actions server-nexus {}) first) actions)
+            {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
+            client-effects    (filterv (comp (:nexus/effects client-nexus {}) first) effects)
+            server-effects    (filterv (comp (:nexus/effects server-nexus {}) first) effects)
             actions-to-send   (seq (concat server-effects server-actions))]
-        (def actions-to-send actions-to-send)
-        (def dispatch-data dispatch-data)
-        (nexus/dispatch client-nexus2 (atom {}) dispatch-data client-effects)
-        (serialize (nexus/interpolate client-nexus2 dispatch-data (vec actions-to-send)))))))
+        (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
+        (serialize (nexus/interpolate client-nexus dispatch-data (vec actions-to-send)))))))
 
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: "
