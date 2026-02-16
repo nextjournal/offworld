@@ -862,7 +862,7 @@ I'm not confident I've found the perfect way to indicate this behavior, but here
 #### Problem: can effects be actions? Do we need to wrap them?
 Maybe we'll need to wrap them:
 ```clojure
-[[::🪐server-effect [:effects/save '...]]]
+[[::🪐/server-effect [:effects/save '...]]]
 
 (nxr/register-action! ::🪐/server-effect
  (fn [_ effect] effect))
