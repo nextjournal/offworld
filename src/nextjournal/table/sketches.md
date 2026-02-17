@@ -557,6 +557,10 @@ We might want to improve the concision with a macro, similar to deframe[^deframe
 
 [^deframe-event]: [deframe events in ductile](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/deframe.cljs#L245)
 
+> 🤔 **mk**
+>
+> I'm wondering if we're getting ahead of ourselves to think about caching & tracing already. I feel it might be worth to put these things off until we really run into problems that drive the need for it. The replicant design seems to encourage keeping high-fidelity state out of replicant and moving it into the browser, potentically using web components. Maybe this is something worth exploring, using acutal use cases we have on ductile like the VIN input.
+
 ## Can we design an API for data grids in clerk & ductile?
 
 ## Can we build a `nested-grid` in cljs using replicant's "top-down" UI model?
