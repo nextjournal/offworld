@@ -2,6 +2,7 @@
 (ns nextjournal.table.sketches
 	{:nextjournal.clerk/error-on-missing-vars :off}
   (:require
+   [clojure.string :as str]
    [clojure.edn :as edn]
    [nextjournal.clerk :as clerk]
    [replicant.string :as rstr]
@@ -974,6 +975,34 @@ That makes it straightforward to express datastar html using hiccup.
 ```
 
 ## [#B] `nested-grid` reagent component - can we use in clerk?
+
+Here's a basic viewer for nested grids.
+It doesn't virtualize yet.
+First, we'll define a function to call for each cell.
+It uses its paths within a structure of nested rows and columns to
+transform the base `data` into a summary value:
+
+```clojure
+(defn get-join-str [data row-path col-path]
+  (str/join (map data (into row-path col-path))))
+```
+
+And here's the full table spec:
+
+```clojure
+^{::clerk/viewer viewers/nested-grid}
+{:row-depth     2
+ :col-depth     2
+ :nested-cols   [:a [:b] [:c]]
+ :nested-rows   [:x [:y] [:z]]
+ :data          {:a "A" :b "B" :c "C" :x "X" :y "Y" :z "Z"}
+ :cell-viewer   `get-join-str
+ :row-viewer    `peek
+ :col-viewer    `peek
+ :corner-viewer `vector
+ :data-shape    :nested-grid}
+```
+
 ## [#B] `nested-grid` reagent component - use in ductile?
 ## [#B] Can Ductile be built with replicant/datastar/SSR/morphing?
 - replicant or datastar?
