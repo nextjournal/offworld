@@ -1,6 +1,7 @@
 ```clojure
 (ns nextjournal.table.sketches
-	{:nextjournal.clerk/error-on-missing-vars :off}
+  {:nextjournal.clerk/error-on-missing-vars :off
+   :nextjournal.clerk/toc true}
   (:require
    [clojure.string :as str]
    [clojure.edn :as edn]
