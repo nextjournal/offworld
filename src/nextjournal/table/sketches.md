@@ -150,6 +150,48 @@ Some issues come to mind. None of these are dealbreakers, but they express the f
 	- A different dev wrote this render-fn. They're not as confident writing big destructuring forms. Instead, they use inline getters.
       - Now, to understand this function's requirements we have to read its entire body.
 
+### Prop Drilling: Are we sure it's bad?
+💬 **mk** The more I think and read about it, the less I'm convinced prop drilling is really so bad. Here's a slightly different take of the examples above: 
+
+(I think it might be easier to discuss this with a better real-world use case.)
+
+```clojure
+(defn hover-alert [alert-props state state-key]
+  (let [hover? (get state state-key)]
+    [:div {:on {:mouse-over [[:effects/save state-key true]]
+                :mouse-out  [[:effects/save state-key false]]}
+           :style     (when hover? {:border "2px dashed black"})}
+     (alert alert-props)]))
+
+(defn biz-problem-list
+  [{:as       state
+    :biz/keys [problems problem-area]}]
+  (for [{:keys [id title severity]}
+        (filter problems (comp #{problem-area} :area))]
+    (hover-alert
+     {:label      title
+      :level      severity}
+     [::hover-alert id]
+     id)))
+
+(defn biz-panel [state]
+  (for [problem-area [:cars :trucks]]
+    (biz-problem-list
+     {:biz/problems      (:biz/problems state)
+      :biz/problem-area  problem-area})))
+```
+
+
+Some ideas to adress some of the problems above:
+- Combine the state access with the saving instead of needing to pass in both a path and the value of the state
+- Use the simplest state key possible, treat it as an opaque key:
+  - This can often be a namespaced keyword
+  - Use a vector only when you will have multiple instances of the same component with conflicting keys on it, e.g. when wanting to support multiple tables with per-column omniboxes on the same page
+
+I'm also not yet convinced component UI state sticking around in the system map after being unmounted is a problem. If it turns out to be, we can also clean up the state on load as suggested by @cjohansen:
+
+> I’ve often had an “on-load” style hook for pages that trigger when the user navigates to the page from another page, like you’re describing. This is indeed a good place to do any necessary cleanup of transient state, initiate data fetch etc. You could also have an “on-leave” style hook that can trigger when someone leaves a page for another, but I find it’s better to use onload to set up/clear the necessary state.
+
 ### Global State: Bad?
 
 This is more concise, but we get less observability.
