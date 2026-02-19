@@ -3,6 +3,7 @@
    [clojure.edn :as edn]
    [clojure.string :as str]
    [clojure.walk :as walk]
+   [datastar :as-alias 🚀]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.baseline :as-alias k]
    #?@(:cljs
@@ -68,13 +69,26 @@
      (get-server-nexus)))
 
 (defn serialize [actions]
+  (binding [*print-meta* true]
   (-> (pr-str actions)
-      (str/replace  "\"" "%20")))
+      (str/replace  "\"" "%20"))))
 
 (defn deserialize [s]
   (-> s
       (str/replace  "%20" "\"")
       edn/read-string))
+
+(defn client-action? [client-nexus [k :as action]]
+  (and (not (::🪐/server (meta action)))
+       ((merge (:nexus/actions client-nexus {})
+               (:nexus/effects client-nexus {}))
+        k)))
+
+(defn server-action? [server-nexus [k :as action]]
+  (and (not (::🪐/client (meta action)))
+       ((merge (:nexus/actions server-nexus {})
+               (:nexus/effects server-nexus {}))
+        k)))
 
 #?(:cljs
    (defn divert
@@ -82,12 +96,18 @@
       (divert (get-client-nexus) (get-server-nexus) dom-event actions-str))
      ([client-nexus server-nexus dom-event actions-str]
       (let [actions           (deserialize actions-str)
-            dispatch-data     (replicant/build-event-map dom-event)
-            client-actions    (filterv (comp (:nexus/actions client-nexus {}) first) actions)
-            server-actions    (filterv (comp (:nexus/actions server-nexus {}) first) actions)
+            _                 (def client-nexus client-nexus)
+            _                 (def server-nexus server-nexus)
+            _                 (def dom-event dom-event)
+            _                 (def actions actions)
+            dispatch-data     (when dom-event (replicant/build-event-map dom-event))
+            client-actions    (filterv #(client-action? client-nexus %) actions)
+            server-actions    (filterv #(server-action? server-nexus %) actions)
             {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
-            client-effects    (filterv (comp (:nexus/effects client-nexus {}) first) effects)
-            server-effects    (filterv (comp (:nexus/effects server-nexus {}) first) effects)
+            _                 (def effects effects)
+            client-effects    (filterv #(client-action? client-nexus %) effects)
+            _                 (def client-effects client-effects)
+            server-effects    (filterv #(server-action? server-nexus %) effects)
             actions-to-send   (seq (concat server-effects server-actions))]
         (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
         (serialize (nexus/interpolate client-nexus dispatch-data (vec actions-to-send)))))))
@@ -99,15 +119,21 @@
        (serialize actions)
        "')}})"))
 
+(defn attr->d*
+  "Converts top-level hiccup attributes to datastar expressions."
+  [{:as m ::🚀/keys [data-init]}]
+  (merge m
+         (when data-init {:data-init (d*-dispatch data-init)})))
+
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
   a map containing datastar expressions. E.g.:
 
   {:on {:click [[:my-action]]}}
   {:data-on:click \"@get('/replicant-dispatch', {payload: '[[:my-action]]'})\"}"
-  [props]
-  (into (dissoc props :on)
-        (for [[k v] (:on props)
+  [m]
+  (into (dissoc m :on)
+        (for [[k v] (:on m)
               :let  [{:datastar/keys [modifiers]} (meta v)]]
           [(keyword (apply str "data-on" k (interleave (repeat "__")
                                                        (map name modifiers))))
@@ -115,5 +141,6 @@
 
 (defn replicant->d* [hiccup]
   (walk/postwalk
-   #(cond-> % (map? %) on-hooks-replicant->d*)
+   #(cond-> % (map? %) (-> on-hooks-replicant->d*
+                           attr->d*))
    hiccup))

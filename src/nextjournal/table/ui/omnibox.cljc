@@ -29,37 +29,40 @@
 #?(:cljs (defscene filter-button-scene []
            (filter-button {:value ""})))
 
-(defn id [state & suffixes]
-  (->> (concat (::k/path state) suffixes)
+(defn id [path & suffixes]
+  (->> (concat path suffixes)
        flatten
        (map name)
        (interpose "-")
        (apply str)))
 
+(defn anchor-name [path & suffixes]
+  (str "--" (apply id path suffixes)))
+
 (defn choice-id [{:keys [parent-id index]}]
   (str parent-id index))
 
 (defn input [{:as      state
-              :keys    [input-id popover-id anchor-name]
-              ::k/keys [path]}]
+              :keys    [anchor-path input-path popover-path]
+              ::k/keys [stem path]}]
   [:input
-   {:id          input-id
+   {:id          (id input-path)
     :type        "text"
     :class       ["w-full" "cursor-default" "rounded-[3px]" "px-[6px]"
                   "ring-1" "ring-slate-300" "font-normal" "placeholder-slate-400"
                   "focus:outline-none" "focus:ring-2" "focus:ring-blue-500" "sm:leading-6"
                   "bg-white"]
-    :style       {:anchor-name anchor-name}
-    :placeholder (str "Filter..." (k/q state ::🎄/icon))
+    :style       {:anchor-name (anchor-name anchor-path)}
+    :placeholder (str "Filter..." (🎄/get-icon stem))
     :value       (:value state)
-    :on          {:focus   [[:dom-node/show-popover {:node [:document/element-by-id popover-id]}]]
-                  :input   [[:effects/save (conj path :value)
-                             [:event.target/value]]]
+    :on          {:focus   [[:dom-node/show-popover
+                             {:node [:document/element-by-id (id popover-path)]}]]
+                  :input   [[:effects/save (conj path :value) [:event.target/value]]]
                   :keydown [[::keydown-input-client
                              {:key           [:event/key]
                               :key-modifiers [:event/key-modifiers]
-                              :popover-id    popover-id
-                              :child-id      (choice-id {:parent-id popover-id :index 0})}]
+                              :popover-id    (id popover-path)
+                              :child-id      (choice-id {:parent-id (id popover-path) :index 0})}]
                             [::keydown-input
                              {:key           [:event/key]
                               :key-modifiers [:event/key-modifiers]
@@ -85,15 +88,17 @@
 #?(:cljs (defscene input-scene []
            (input {})))
 
-(defn popover [{::k/keys [path]
-                :keys    [choices filters-to-add anchor-name input-id popover-id filters]}]
-  (let [child-indices (vec (range (count (concat filters-to-add choices))))]
+(defn popover [{:as state :keys    [choices filters-to-add anchor-path input-path popover-path filters]
+                ::k/keys [path]}]
+  (let [child-indices (vec (range (count (concat filters-to-add choices))))
+        popover-id    (id popover-path)
+        input-id      (id popover-path)]
     [:div.w-full.p-1
      {:id      popover-id
       :popover :manual
       :style   {:background      :white
                 :position        :fixed
-                :position-anchor anchor-name
+                :position-anchor (anchor-name anchor-path)
                 :position-area   "bottom center"
                 :max-height      212
                 :overflow        :auto}}
@@ -145,7 +150,8 @@
                  :style {:user-select :none}}
          choice]])]))
 
-(defn filter-pill [{::k/keys [path]} {:keys [label] :as filter}]
+(defn filter-pill [{{:keys [label] :as filter} :filter
+                    ::k/keys                   [path]}]
    [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400.text-xs
     [:span.flex.mt-1.focus:outline-none
      [:div.w-3.h-3.text-slate-400 icon-filter]]
@@ -155,15 +161,24 @@
             :on    {:click [[::remove-filter path filter]]}}
      "X"]])
 
-(defn omnibox [{:as                     state
-                {:keys [filters value]} ::k/local}]
-  (let [state' (merge state
-                      {:popover-id  (id state :popover)
-                       :input-id    (id state :input)
-                       :anchor-name (apply str "--" (id state))}
-                      (when-not (str/blank? value)
-                        {:filters-to-add [(filters/text->filter value)]}))]
+(defn omnibox [{:as      state
+                :keys    [choices]
+                ::k/keys [stem path]}]
+  (let [{:keys
+         [filters value]} (get-in stem path)
+        popover-path      (conj path :popover)
+        input-path        (conj path :input)
+        config            (merge
+                           {:choices      choices
+                            :popover-path popover-path
+                            :input-path   input-path
+                            :anchor-path  path}
+                           (when-not (str/blank? value)
+                             {:filters-to-add
+                              [(filters/text->filter value)]}))]
     [:div
-     (input state')
-     (popover state')
-     (map filter-pill (repeat state') filters)]))
+     (input (k/+ state input-path config))
+     (popover (k/+ state popover-path config))
+     (->> filters
+          (map k/+ (repeat state) (repeat path))
+          (map filter-pill))]))

@@ -1,7 +1,7 @@
 (ns nextjournal.ductile.load-builder
   (:require
    [clojure.set :as set]
-   [nextjournal.baseline :as k]))
+   [nextjournal.baseline :as k :refer [defq]]))
 
 (defn ->v [x] (if (vector? x) x [x]))
 
@@ -421,23 +421,26 @@
                    [:fahrzeug/parking-spot {}]
                    [:fahrzeug/labels {:set? true}]])
 
-(def filters
-  (into {:fahrzeug/priorities [:checkbox "🤝"]}
-        (for [[k opts] base-filters]
-          [k [:omnibox
-              (cond
-                (:set? opts) (apply set/union (map get-in transports (repeat (->v k))))
-                :else        (into (sorted-set) (map get-in transports (repeat (->v k)))))
-              opts]])))
+(defq get-transports [stem] (::transports stem))
 
-(k/register! ::header-fields #(::header-fields %1))
+(defq get-filters [stem]
+  (let [transports (get-transports stem)]
+    (into {:fahrzeug/priorities [:checkbox "🤝"]}
+          (for [[k opts] base-filters]
+            [k [:omnibox
+                (cond
+                  (:set? opts) (apply set/union (map get-in transports (repeat (->v k))))
+                  :else        (into (sorted-set) (map get-in transports (repeat (->v k)))))
+                opts]]))))
 
-(defn init-domain [domain]
-  (-> domain
-      (assoc ::header-fields
-             {[:transport/destination :address/city]
-              {:id      [:transport/destination :address/city]
-               :choices (get-in filters [[:transport/destination :address/city] 1])}
-              [:transport/destination :address/postcode]
-              {:id      [:transport/destination :address/postcode]
-               :choices (get-in filters [[:transport/destination :address/postcode] 1])}})))
+(defq get-header-fields [stem] (::header-fields stem))
+
+(defq get-choices [stem id]
+  (-> stem get-filters (get-in [id 1])))
+
+(defn init-state [state]
+  (merge
+   state
+   {::transports    transports
+    ::header-fields [[:transport/destination :address/city]
+                     [:transport/destination :address/postcode]]}))

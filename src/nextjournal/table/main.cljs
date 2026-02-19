@@ -6,12 +6,13 @@
    [nextjournal.table.nexus :as table.nexus]
    [nextjournal.table.ui :as ui]
    [replicant.dom :as r]
-   [nextjournal.table.util :as u]
    [nextjournal.table.ui.nested-grid :as-alias ng]
-   [nextjournal.offworld :as 🪐]))
+   [nextjournal.offworld :as 🪐]
+   [nextjournal.baseline :as k]
+   [nextjournal.offworld.demo :as demo]))
 
 (defonce system
-  (atom (u/init-state)))
+  (atom (demo/init-state {})))
 
 (🪐/register-client-nexus! table.nexus/client (nxr/get-registry))
 (🪐/register-server-nexus! table.nexus/server (nxr/get-registry))
@@ -30,7 +31,7 @@
     (add-watch system
                ::render
                (fn [_ _ _ new-state]
-                 (r/render root-el (ui/render new-state))))
+                 (r/render root-el (ui/render (k/init-state new-state)))))
     (after-load)))
 
 (comment

@@ -1,8 +1,7 @@
 (ns nextjournal.table.ui.holiday
   (:require
    [nexus.registry :as nxr]
-   [nextjournal.baseline :as k]
-   [nextjournal.offworld :as 🪐]))
+   [nextjournal.baseline :as k :refer [defq]]))
 
 (def day->icon
   {:gift-day   "🎁"
@@ -16,62 +15,45 @@
    :fall   :squash-day
    :winter :gift-day})
 
-(k/register! ::holiday-mode?
-  #(get-in % [::path :to :holiday-mode?]))
+(defq get-holiday-mode? [stem]
+  (get-in stem [::path :to :holiday-mode?]))
 
 (nxr/register-action! ::toggle
-  (fn [_ ?] [[:effects/save [::k/domain ::path :to :holiday-mode?] ?]]))
+  (fn [_ ?] [[:effects/save [::path :to :holiday-mode?] ?]]))
 
-(k/register! ::season
-  #(get-in % [::path :to :season] :spring))
+(defq get-season [stem]
+  (get-in stem [::path :to :season] :spring))
 
 (nxr/register-action! ::season
-  (fn [_ s] [[:effects/save [::k/domain ::path :to :season] (keyword s)]]))
+  (fn [_ s] [[:effects/save [::path :to :season] (keyword s)]]))
 
-(k/register! ::day
-  ^{::k/deps #{::season}}
-  #(season->holiday (k/q % ::season)))
+(defq get-day [stem]
+  (season->holiday (get-season stem)))
 
-(k/register! ::icon
-  ^{::k/deps #{::day ::holiday-mode?}}
-  #(when (k/q % ::holiday-mode?)
-     (day->icon (k/q % ::day))))
-
-(k/register! ::icon-error
-  ^{::k/deps #{::day ::holiday-mode?}}
-  #(when (k/q % ::holiday-mode?)
-     (day->icon (k/q % ::day-error))))
-
-(nxr/register-action! ::randomize ^::🪐/client
-  (fn [_ key-mods season]
-    (let [path        [::k/domain ::path :to :season]
-          reset?      (contains? (set key-mods) :shift)
-          rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
-      (if reset?
-        [[:browser/alert "Holiday season has been reset."]
-         [:effects/save path :spring]]
-        [[:effects/save path rand-season]]))))
+(defq get-icon [stem]
+  (when (get-holiday-mode? stem)
+    (day->icon (get-day stem))))
 
 (defn switch [state]
   [:input {:id     ::mode-switch
            :type   :checkbox
            :switch true
-           :value  (k/q state ::day)
+           :value  (get-day state)
            :on     {:change [[::toggle [:event.target/checked]]]}}])
 
 (defn select [state]
   [:select {:id    ::season-select
-            :value (k/q state ::season)
+            :value (get-season state)
             :on    {:change [[::season [:event.target/value]]]}}
    [:option {:value :spring} "Spring"]
    [:option {:value :summer} "Summer"]
    [:option {:value :fall} "Fall"]
    [:option {:value :winter} "Winter"]])
 
-(defn randomize-button [state]
+(defn randomize-button [{::k/keys [stem]}]
   [:button {:on {:click [[::randomize
                           [:event/key-modifiers]
-                          (k/q state ::season)]]}}
+                          (get-season stem)]]}}
    "Randomize (shift-click to reset)"])
 
 (defn panel [state]
@@ -84,13 +66,11 @@
     [:label.select-none {:for ::mode-switch}
      "Holiday Mode: "]
     (switch state)]
-   (when-let [day (k/q state ::day)]
+   (when-let [day (get-day state)]
      [:div "It's " (name day) "."])
    (randomize-button state)])
 
 (comment
-  (k/q {} ::season)
-  (k/q {::k/domain {::path {:to {:holiday-mode? true}}}} ::icon)
-  (k/trace {::k/domain {::path {:to {:holiday-mode? true}}}} ::icon)
-  (k/trace {::path {:to {:holiday-mode? true}}} ::icon)
-  (k/trace {::path {:to {:holiday-mode? true}}} ::icon-error))
+  (get-season {})
+  (get-icon {::path {:to {:holiday-mode? true}}})
+  (k/trace (get-icon {::path {:to {:holiday-mode? true}}})))

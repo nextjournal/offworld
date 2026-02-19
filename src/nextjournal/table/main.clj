@@ -12,15 +12,16 @@
    [replicant.string :as rstr]
    [reitit.ring :as ring]
    [ring.util.codec :as codec]
-   [nextjournal.table.util :as u]
    [ring.middleware.resource :as resource]
    [nextjournal.table.ui.nested-grid :as-alias ng]
    [ring.core.protocols :refer [StreamableResponseBody]]
-   [nextjournal.offworld :as 🪐])
+   [nextjournal.offworld :as 🪐]
+   [nextjournal.baseline :as k]
+   [nextjournal.offworld.demo :as demo])
   (:import
    (clojure.core.async.impl.channels ManyToManyChannel)))
 
-(def system (atom (u/init-state)))
+(def system (atom (demo/init-state {})))
 
 (def nexus+registry (merge-with merge table.nexus/server (nxr/get-registry)))
 
@@ -57,7 +58,7 @@
     sse-chan
     (sse-message
      {:event "datastar-patch-elements"
-      :lines [["elements" (rstr/render (🪐/replicant->d* (ui/render new-state)))]]}))))
+      :lines [["elements" (rstr/render (🪐/replicant->d* (ui/render (k/init-state new-state))))]]}))))
 
 (defn sse-handler [_]
   {:status  200
@@ -78,7 +79,7 @@
      :body
      (cond-> (slurp "resources/public/index.html")
        ssr? (str/replace #"</head>" (str datastar-script "\n</head>"))
-       ssr? (str/replace main-el-rx (rstr/render (🪐/replicant->d* (ui/render @system))))
+       ssr? (str/replace main-el-rx (rstr/render (🪐/replicant->d* (ui/render (k/init-state @system)))))
        ssr? (str/replace
              #"<body>"
              "<body data-init=\"@get('session')\" data-on-signal-patch=\"nextjournal.offworld.update_queries(patch)\">"))}))
