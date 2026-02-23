@@ -14,6 +14,15 @@
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
    [replicant.core :as replicant]))
+
+{::clerk/visibility {:result :hide}}
+
+^{::clerk/visibility {:code :hide :result :hide}} (defn render-a [& _])
+^{::clerk/visibility {:code :hide :result :hide}} (defn render-b [& _])
+^{::clerk/visibility {:code :hide :result :hide}} (defn render-c [& _])
+^{::clerk/visibility {:code :hide :result :hide}} (defn render-x [& _])
+^{::clerk/visibility {:code :hide :result :hide}} (defn render-y [& _])
+^{::clerk/visibility {:code :hide :result :hide}} (defn render-z [& _])
 ```
 
 # Sketches with replicant, datastar & tables
@@ -60,28 +69,19 @@ Ductile's omnibox modeled the state of a "selection"[^select-state], letting the
 ## Can we still use dom watchers like "Resize"?
 replace the react functional ref pattern with replicant's :remember
 
-## How do we organize the "path" of a UI component?
-> - Need to pass down values and their conj'ed up paths
-> - "I just want some component local state" - now all of my parents must take care to build up a path
-> - Every value that might be changed needs its corresponding path passed down as well
->   - `value` & `path`
-> - Need to garbage collect transient state on DOM element unmount
-> (There are no components, thus no component lifecycle. Must hook into DOM node lifecycle)
->
-> From [Albert's notes](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/notes/albert/replicant.md?plain=1#L16)
-
-I'll focus this discussion around a chain of replicant render-fns.
-These demonstrate the common "concerns" a production app has to serve:
+## How do we organize all the state a render-fn requires?
+I'll focus the discussion around a chain of replicant render-fns:
 
 - **`alert`**: Basic UI. A pure function of its argument.
 - **`hover-alert`**: Stateful UI. It needs to get a `hover?` value from somewhere, and dispatch some action to change it.
-- **`biz-problem-list`**: Business UI. It depends on your business state. It translates business semantics into UI semantics.
+- **`biz-problem-list`**: Business UI. It depends on your business domain. It translates business semantics into UI semantics.
 - **`biz-panel`**: Business UI containing other business UI.
 
 ### Pure render-fn: Okay?
 
 Here's a simple render-fn I'll use in the following example.
-It has no issues, since it doesn't try to use any "local" or "domain" state.
+It doesn't try to use any "local" or "domain" state.
+It takes non-namespaced keys which represent its UI "contract".
 
 ```clojure
 (defn alert [{:keys [level label]}]
@@ -90,7 +90,7 @@ It has no issues, since it doesn't try to use any "local" or "domain" state.
 ```
 
 ### Prop Drilling: Bad? 
-Here's a naive implementation using prop drilling, illustrating the badness alleged by Albert:
+Here's a naive implementation using prop drilling, illustrating the badness alleged by Albert[^albert]:
 
 ```clojure
 (defn hover-alert [{:keys [level label hover? hover-path]}]
@@ -158,12 +158,12 @@ Some issues come to mind. None of these are dealbreakers, but they express the f
 (I think it might be easier to discuss this with a better real-world use case.)
 
 ```clojure
-(defn hover-alert [alert-props state state-key]
+(defn hover-alert [config state state-key]
   (let [hover? (get state state-key)]
     [:div {:on {:mouse-over [[:effects/save state-key true]]
                 :mouse-out  [[:effects/save state-key false]]}
            :style     (when hover? {:border "2px dashed black"})}
-     (alert alert-props)]))
+     (alert config)]))
 
 (defn biz-problem-list
   [{:as       state
@@ -173,8 +173,8 @@ Some issues come to mind. None of these are dealbreakers, but they express the f
     (hover-alert
      {:label      title
       :level      severity}
-     [::hover-alert id]
-     id)))
+	  state
+      [::hover-alert id])))
 
 (defn biz-panel [state]
   (for [problem-area [:cars :trucks]]
@@ -183,16 +183,11 @@ Some issues come to mind. None of these are dealbreakers, but they express the f
       :biz/problem-area  problem-area})))
 ```
 
-
 Some ideas to adress some of the problems above:
 - Combine the state access with the saving instead of needing to pass in both a path and the value of the state
 - Use the simplest state key possible, treat it as an opaque key:
   - This can often be a namespaced keyword
   - Use a vector only when you will have multiple instances of the same component with conflicting keys on it, e.g. when wanting to support multiple tables with per-column omniboxes on the same page
-
-I'm also not yet convinced component UI state sticking around in the system map after being unmounted is a problem. If it turns out to be, we can also clean up the state on load as suggested by @cjohansen:
-
-> I’ve often had an “on-load” style hook for pages that trigger when the user navigates to the page from another page, like you’re describing. This is indeed a good place to do any necessary cleanup of transient state, initiate data fetch etc. You could also have an “on-leave” style hook that can trigger when someone leaves a page for another, but I find it’s better to use onload to set up/clear the necessary state.
 
 ### Global State: Bad?
 
@@ -245,11 +240,13 @@ This is more concise, but we get less observability.
   - If we change the api, or the results, of `::problems`, how will we know that this render-fn is affected?
   - I just got an error: undefined query handler. But why does my render-fn even use that query? I don't see a call anywhere.
 
-### Conclusion:
+
+### Prop-drilling or global-state?
 
 With prop-drilling, I feel the explicitness and repl-friendliness can truly benefit a team.
 They make UI very easy to reason about. On the other hand, changing the UI tree causes a mess of re-drilling,
-slowing the team down.
+slowing the team down. Also, without any framework in place, it's up to our devs to "invent" the 
+means to get and update values.
 
 Can we prop-drill in a way that doesn't make messes, and requires less creativity?
 
@@ -257,103 +254,75 @@ With global state, render-fns are only explicit about their direct deps, not the
 This can feel more organized, even though it's more implicit. Most of the Clojure community has settled
 on this pattern with the re-frame paradigm. With re-frame, we tend to solve the observability problems using
 tooling. For instance, re-frame-10x returns us to "repl-friendliness" by providing a custom "visual repl".
-Although, 10x doesn't solve the issue of invisible dependencies. 
 
 Can we build observability tools that are more explicit and repl-friendly?
 
-### Solution: Drilling responsibly, with a "local" UI and a "global" domain.
+### Separating concerns
+I see a pattern emerging. We're seeing three distinct ways that a render-fn can model state, each with a defining constraint:
 
-- **Configuration**: values provided by the caller, who is responsible for modeling their change and locality.
-- **Local state**: like configuration, but *this* function models change and locality.
-- **Business domain state**: UI should *not* model its locality or change, or else we get "tar-pit"[^tar-pit] issues.
-  Any UI component can observe and request a change, but those procedures should be encapsulated.
+- **Configuration**:   the caller is responsible for providing this value and modeling its change and locality.
+- **Local state**:     like configuration, but *this* function models change and locality.
+- **Business domain**: UI should *not* model its locality or change, or else we get "tar-pit"[^tar-pit] issues. Instead, its locality is global, and change is modeled by nexus.
 
-I think we can model **configuration** using top-level named arguments. **Local state** and **business domain state** can be
-passed down the call chain via three namespaced keys, `::k/domain`, `::k/local` and `::k/path`.
+### Drilling responsibly
+Using pure functions, where all the required values come through the arguments, leads to significant repl-friendliness and testability.
+But "global" and "local" state patterns have organizational advantages.
 
-We prevent many of the above issues simply by putting each concern in a predictable place,
-with strong conventions for modeling change and locality.
+With top-down rendering, we can just do both. The "global" and "local" state can just be contained within the argument.
+Clojure's immutable data structures handle this perfectly. Simple and powerful.
 
-[^tar-pit]: [Out of the Tar Pit (Moseley & Marks, 2006)](https://www.semanticscholar.org/paper/Out-of-the-Tar-Pit-Moseley-Marks/41dc590506528e9f9d7650c235b718014836a39d)
+This is kind of more or less a dependency-injection pattern.
 
-### Receiving "local" state
+## What structure do we pass into a render-fn?
+What's the ideal way to structure this "responsible drilling" pattern? 
+What do we actually pass? How is the "global" part propagated?
+
+If we separate these three parts, then it's up to each render-fn to recombine them.
+What are the pitfalls? What if we mix up config & domain? What if we use local *as* config?
+
+### State concept A: Pass `config` (with library keys inside,)
+Here's what a typical callsite would look like:
+
+`::k/domain` and `::k/local` come from top-level keys in the replicant system-state, and `::k/path` comes from the caller.
+
+#### Receiving "local" state
 ```clojure
 (defn hover-alert [{:keys    [level label]
                     ::k/keys [path local]}]
-  [:div {::k/cleanup [[::k/cleanup path]]
-         :on         {:mouse-over [[::k/save-local (conj path :hover?) true]]
-                      :mouse-out  [[::k/save-local (conj path :hover?) false]]}
-         :style      (when (:hover? local) {:border "2px dashed black"})}
-   (alert {:level level
-           :label label})])
+  (let [{:keys [hover?]} (get local path)]
+    [:div {:on    {:mouse-over [[:events/save (conj path :hover?) true]]
+                   :mouse-out  [[::k/save-local (conj path :hover?) false]]}
+           :style (when hover? {:border "2px dashed black"})}
+     (alert {:level level
+             :label label})]))
 ```
 
-This is still a pure function, but the local state feels like a *dependency injection*[^injection].
-The "injector" is simply the function caller, passing in `::k/path` and `::k/local`.
-This provides a dedicated piece of state that the render-fn can evaluate and change, without
-needing to hard-code any "knowledge" of its location.
-
-#### Problem: what if our element unmounts? How do we "garbage collect"[^albert] the "local" state?
-Replicant has `:replicant/on-unmount`[^on-unmount], 
-and datastar has a `data-on-remove`[^data-on-remove] plugin.
-Maybe we could abstract these in our render-fns, like with `:k/cleanup` above.
-
-#### Problem: The caller has to "take care to build up a path"[^albert]
-Yes, but we automate the process so it doesn't require *too* much care.
-Read the following section to see how this is done.
-
-[^on-unmount]: [replicant.fun/life-cycle-hooks](https://replicant.fun/life-cycle-hooks/)
-[^data-on-remove]: [threadgold.nz/demos/data-on-remove](https://threadgold.nz/demos/data-on-remove)
-
-### Injecting "local" state, querying "domain" state
+#### Injecting "local" state, querying "domain" state
 
 Here's a "business" component, translating domain semantics into UI semantics.
 But first, let's see how it injects the "local" state into its children:
 
 ```clojure
-(defn biz-problem-list' [{:as      state
+^{::clerk/visiblity {:code :hide}}
+(clerk/code 
+"(defn biz-problem-list [{:as      state
                          :keys    [problem-area]
-                         ::k/keys [domain local path]
-                         :or      {path []}}]
+                         ::k/keys [domain local path]}]
   (for [{:keys [id title severity]}
-        (k/q domain :biz/problems {:area problem-area})]
+        (biz/get-problems domain {:area problem-area})]
     (hover-alert {:label    title
                   :level    severity
                   ::k/path  (into path [:biz/problem id])
-                  ::k/local (get-in local [:biz/problem id])})))
+				  ::k/local local})))")
 ```
 
-See how we receive `path` and `local` from yet another caller?
-We extend this `path` (using `conj`) and narrow `local` (using `get-in`) to "inject" them
-into our ui component (`hover-alert`).
-If we apply this pattern consistently, we will end up with a state which closely follows
-the shape of our UI. But we haven't done this to our *entire* state, only a subtree stored under 
-`::k/local`.
+We receive `path` and `local` from yet another caller.
+Then we extend `path` and pass down `local`.
 
-Apart from "local" state, we receive another injection: `::k/domain`.
-This complements the ui-oriented `::k/local` with nonlocal, business-oriented state.
-It doesn't get narrowed — we pass the exact same `::k/domain` to every render-fn.
-Instead of a path, we use `k/q` to get a value out of the domain. 
-`k/q` supports a query DSL similar to re-frame, with a name followed by an options map.
+We also receive another injection: `domain`.
+We use a helper from our app to get a value out of it.
 
-Here's the same component, using helper-functions to improve on concision:
-
-```clojure
-(defn biz-problem-list [{:as   state
-                         :keys [problem-area]}]
-  (for [{:keys [id title severity]}
-        (k/q state :biz/problems {:area problem-area})]
-    (hover-alert
-     (k/+ state [:biz/problem id]
-       {:label title
-        :level severity}))))
-```
-
-`k/+` just needs the `state`, the child's local `path` and the child's ordinary arguments.
-It handles destructuring, accumulating the path and all three injections.
-`k/q` can be a bit more concise as well, destructuring `::k/domain` automatically.
-
-To illustrate this even more obviously, here's one level higher in our UI call chain.
+Here's one here's one level higher in our UI call chain.
 This `biz-panel` does nothing but return its children, with injections:
 
 ```clojure
@@ -372,9 +341,11 @@ This `biz-panel` does nothing but return its children, with injections:
     ::k/domain    domain}))
 ```
 
-Finally, here's the same render-fn written concisely:
+#### Helpers
+We can make this pattern more regular and concise with helper-fns.
+For instance, here's that last component rewritten:
 
-```
+```clojure
 (defn biz-panel [state]
   (for [k [:cars :trucks]]
     (biz-problem-list
@@ -382,91 +353,200 @@ Finally, here's the same render-fn written concisely:
        {:problem-area k}))))
 ```
 
-### Domain queries
-The examples above use a `k/q` function to query the domain state.
-As for modeling change, nexus can handle this - we'll just namespace our actions by the domain.
-Here's what query handlers look like:
+### State concept B: Pass a `domain`, (with `::k/config` & `::k/path` keys inside)
+Similar to concept A, but inside-out:
 
 ```clojure
-{:nextjournal.clerk/visibility {:result :hide}}
-(def season->holiday {:spring :egg-day
-                      :summer :bird-day
-                      :fall   :squash-day
-                      :winter :gift-day})
-
-(k/register! :season
-  #(get-in % [:path :to :season] :spring))
-
-(k/register! :day
-  ^{::k/deps #{:season}}
-  #(season->holiday (k/q % :season)))
-
-(def day->icon {:gift-day   "🎁"
-                :egg-day    "🥚"
-                :bird-day   "🦃"
-                :squash-day "🎃"})
-
-(k/register! :holiday-mode?
-  #(get-in % [:path :to :holiday-mode?]))
-
-(k/register! :icon
-  ^{::k/deps #{:day :holiday-mode?}}
-  (fn [domain & {:keys [emphasize?]}]
-    (when (k/q domain :holiday-mode?)
-      (str (day->icon (k/q domain :day))
-           (when emphasize? "!")))))
-{:nextjournal.clerk/visibility {:result :show}}
+(render-b {:biz/vehicle  :truck
+           :biz/stations [:hanover :dresden]
+           ::k/local     {:biz/station-panel {:dresden {:highlight? true}
+                                              :hanover {:disable? true}}}
+           ::k/config    {:class :underline :color :blue}
+           ::k/path      [:biz/vehicle :ui/inspector 25]})
 ```
+#### Goes against Replicant ergonomics
+This won't feel like a "replicant" render-fn, since we don't destructure top-level keys to decide how to render. Instead, we get them from `::k/config`. Rewriting a "stateless" fn (like `alert`) into one that uses local state (like `hover-alert`) is complicated, since we have to destructure the arg differently.
 
-To use one, pass a domain map to `k/q`, followed by a registered key and any extra args.
+#### Query the domain: Easy! 
+Domain keys are top-level, not in a subtree. Just call `(get-something state)` to query the domain.
+
+### State concept C: Merge everything together
+Here we achieve separation in a different way:
+
+- plain keys represent `config`
+- ns-keys represent `domain`
+- flattened vector keys represent `local`
+
+This way, a callsite looks like:
 
 ```clojure
-(let [domain {:path {:to {:holiday-mode? true :season :winter}}}]
-  (k/q domain :icon))
+(render-x
+ {:class                        :underline
+  :style                        {:color :blue}
+  :biz/vehicle                  :truck
+  :biz/stations                 [:hanover :dresden]
+  [:biz/station-panel :dresden] {:highlight? true}
+  [:biz/station-panel :hanover] {:disable? true}})
 ```
 
-You can also pass an entire system state. The handler will get passed the `::k/domain` subtree, 
-followed by any extra args.
+#### Uses `clojure.core` as an implicit DSL
+For example, reagent has special behavior when you pass a vector: `[my-component]`.
+Reagent code doesn't *name* this behavior, you just have to know. 
+We'd do a similar thing, building special behavior for namespaced keys and vectors.
+
+I like how we're close to the "bare meta."[^bare-meta]
+Namespaces *are* domains, vectors *are* paths. There's formal elegance to that.
+
+But this might frustrate a more pragmatic dev.
+We can't just look at Clojure and see clojure any more.
+There's an unarticulated meaning behind the structure.
+If the separation of concerns is so clear, why not just name them with keys (i.e. Concept A)?
+Maybe that's less pretentious.
+
+
+#### Hard to handle dev sloppiness
+I think we'd need the "special behavior" above, because if devs don't follow our 3-type convention, 
+we get strange consequences. Here are some accidents I can foresee:
+
+- **Write a domain query that gets a vector:**  
+`(defq get-x [m] (get m [:biz/some :biz/place]))`
+*Oops, I used `get` instead of `get-in`. And since I named my paths after my domain, 
+that path exists! My domain-getter now returns local-state. That's nonsense!*
+  
+- **Destructure domain keys from the argument:**  
+`(defn render-x [state] [:span (:biz/vehicle state)])`
+*The key is right there in the arg, so I don't need a getter. That's okay, but I lost observability. My teammates can't trace this dependency, so they forgot to fulfil it!*
+
+- **Filter out some domain keys:**  
+`(defn render-x [m] (map render-y (filter-vals my-pred state)))`
+*Oops, I meant to update the config map, but I removed half the keys from our global domain, and passed that to every descendent. I'd rather the domain be `nil` than this degenerate value!*
+
+- **Pass a namespaced key within config:**  
+`(defn render-x [m] (render-y (assoc m :biz/vehicle :plane)))`
+*Oops, now `render-y` sees a degenerate domain. It builds an action-vector based on planes, but the global domain is set to trucks. My action handler just tried to update wings on a truck. That's a CQRS violation!*
+
+- **Pass the global domain in a brittle way:**  
+`(defn render-x [{:biz/keys [vehicle station]}] (render-y {:biz/vehicle vehicle :biz/station station :color :blue}))`
+*Oops, my team quietly added a third key, `:biz/route`, to the global domain. My `render-x` used to be correct, but now it passes down a degerate domain.*
+
+- **Leak the config to a descendent:**  
+```clojure
+(defn render-w [state] (render-x (assoc state :class :underline)))
+(defn render-x [state] [:div {:class class} (render-y state)])
+(defn render-y [state] (render-z state))
+(defn render-z [state] [:div {:class class}])
+```
+*Oops, I forgot to remove the config-key `:class` before calling `render-y`. `render-y` doesn't use that key anyway, so it's fine... right? But `render-z` does use that key. I only meant to declare one layer of underlined content, but now there are two!*
+
+We usually don't want to pass the same config to every descendent, but it's hard not to.
+When `config` is an open set of unqualified keys, how do we know what to dissoc?
+The only predicate we can use is `namespace`:
 
 ```clojure
-(let [state {::k/domain {:path {:to {:holiday-mode? true :season :winter}}}}]
-  (k/q state :icon {:emphasize? true}))
+(defn render-x [{:as state :keys [class]}]
+  (let [domain? (comp namespace key)
+        path?   (comp sequential? key)
+        drill?  (some-fn domain? path?)]
+    [:div {:class class}
+    (render-y (into {} (filter drill?) state))]))
 ```
 
-On the call side, these look like re-frame. However, following the replicant philosophy,
-we're exploring how to strip them back down to essentials:
+Every render-fn will need to do exactly this job. We can extract the work to a helper, but the question remains: Why take care to separate these values everywhere? Why couldn't we store them separately in the first place?
 
-#### Caching
-For instance, we don't cache the queries. In my work on re-frame,
+## How do we model a render-fn's "local" state?
+We're considering ways to reserve a subtree of the system state for a particular callsite of a render-fn, similar to react's `use-state`. The smallest thing we can provide is a **path**.
+
+This path could be fully automated[^membrane], but that's too magical for our taste. Instead, we'll declare the path explicitly within a render-fn's callsite:
+
+`(ui/vehicle-panel {::k/path [:biz/vehicle :ui/panel 25]})`
+
+A path joins over business domain, ui config and ui nesting. It says: "*this* business fact, displayed *this* way, in *this* location." In practice, paths could be more abstract, but I think they carry this essential meaning.
+
+### Problem: what if our element unmounts? How do we "garbage collect"[^albert] the "local" state?
+Replicant has `:replicant/on-unmount`[^on-unmount], 
+and datastar has a `data-on-remove`[^data-on-remove] plugin.
+
+💬 **mk**: I'm also not yet convinced component UI state sticking around in the system map after being unmounted is a problem. If it turns out to be, we can also clean up the state on load[^on-load-hooks]
+
+### Problem: The caller has to "take care to build up a path"[^albert]
+I agree - this could lead to bikeshedding. If our devs "invent" a new path for every callsite,
+we'll have two structures: the essential tree of render calls, and a second, redundant structure of "local" paths.
+
+### Path Concept A: Fully explicit paths
+When we call a render-fn, we decide its entire path:
+
+`(defn render-a [state] (render-b assoc state ::k/path [:biz/vehicle :ui/inspector 25]))`
+
+#### Is this PLOP?
+Only the current render-fn should have access to "local" state. 
+But if that state is not relevant elsewhere, then why, in the first degree of elsewhere, i.e. the caller,
+do we take care to "name" it using an explicit path?
+### Path Concept B: Get the head passed in, append an explicit tail.
+This way, paths "accumulate" as the tree of render-fn calls gets deeper.
+
+```clojure
+(defn render-a [{:as state :k/keys [path]}]
+  (render-b (assoc state ::k/path (concat path [:extra :stuff]))))
+```
+
+Although more complex to implement, this avoids key collisions by default.
+It also makes the task of choosing a path feel less "inventive".
+
+### Path Concept C: Prepend every path with a library key: `[::k/local ...]`
+This helps us avoid collisions while drilling and querying. The mental cost is low, since `path` just gets passed in. You don't have to write the path by hand just to get its corresponding value.
+
+### Conclusion
+We could have Concepts A, B and C within the same app:
+Use A for more central pieces, and B for pieces that are more nested and instanced.
+I think Concept C is preferable in all cases.
+
+
+
+## How do we translate our business domain into UI?
+### Caching
+I suggest we *don't* provide any built-in mechanism to cache queries. In my work on re-frame,
 I saw all the issues caused when users get caching by default, especially the issue of domain/ui coupling[^flows-advanced].
 Our solution was a "flow"[^flows], which lets the user implement the caching themselves via lifecycle methods.
 Crucially, these lifecycle methods did *not* depend on the state of the UI. Instead, they
 were pure functions of the app-db. The "cache" was not some out-of-band mechanism,
 but instead, it simply stored its latest value within the same app-db. We could then extract that value
-using a pure function, since the flow itself handled every side-effect regardless of what the UI was doing.
+using a pure function, since the flow itself executed its effects after every event,
+regardless of what the UI was doing.
 As a result, library users could implement a "cached" value in the few cases where it's needed, 
 with total control and almost no magic. 
 
-This clean pattern depended on "re-frame-time", where events get handled in a single queue, 
-the state changes as a side-effect, and views only change as a reaction to that state change.
-The top-down approach gives us an even simpler concept of "re-frame-time",
-so I think our new stack can provide something as nice as "flows" for a-la-carte caching.
+This clean pattern depended on "re-frame-time", where events get handled in a single queue,
+effects take place on a global app-db singleton, and views only change as a reaction to app-db.
+Replicant's top-down approach gives us an even simpler model than "re-frame-time",
+so I think our new stack can enable something as nice as "flows" for a-la-carte caching.
 
-#### Observability
-Our critique above noted that these queries are concise but opaque. 
-It's hard to know what state any given render-fn requires. 
-Traditionally, we've solved the observability problem at the tooling level.
+### Composability
+If one query can invoke another query, then we can express our domain using DRY, reusable pieces.
+The current demo uses `nextjournal.table.ui.holiday` to demonstrate this.
 
-How can we offer this tooling in a minimal, repl-friendly way?
+### Observability
+Querying a "global" domain can make our UI code very concise. 
+Render-fns can declare what they need out of the business domain,
+without the caller needing to micromanage their dependencies. 
+But the downside is decreased observability.
+Looking at a single render-fn, you can't see all the domain values its children will require.
+Traditionally, we've solved the observability problem at the tooling level - for instance,
+with re-frame-10x. There you can see what queries get invoked after each event,
+and get some explanation of *why* they're invoked.
 
-#### Tracing dynamic dependencies
-Like subscriptions, queries are composable. One query handler can invoke another. 
-To see this in action, simply run `k/trace` with the same arguments you'd pass to `k/q`: 
+The *why* tends to include:
+- What render-fn(s) depend on this query (or query-id)?
+- What queries does this render-fn depend on?
+- What is the value of this query?
+- What queries have changed value?
+- What event led this query to change value?
+- What upstream queries changed value, in order for this query to change value?
 
-```clojure
-(let [domain {:path {:to {:holiday-mode? true :season :winter}}}]
-  (k/trace domain :icon {:emphasize? true}))
-```
+How can we offer this observability in a minimal, repl-friendly way?
+
+#### Tracing
+A `trace` fn should be available, to fill in the detail we gave up when choosing
+to use a global-state query pattern.
 
 ```clojure
 ^{::clerk/visibility {:code :hide :result :hide}}
@@ -494,10 +574,6 @@ The `:day` query is only done *sometimes*, depending on what's in the state.
 By tracing at runtime, we see the graph of all queries that are *actually* done.
 Here's an invocation of the same query that doesn't depend on `:day`:
 
-```clojure
-(let [domain {:path {:to {:holiday-mode? false :season :winter}}}]
-  (k/trace domain :icon {:emphasize? true}))
-```
 ```clojure
 ^{::clerk/visibility {:code :hide}}
 (clerk/with-viewer mermaid-viewer
@@ -563,8 +639,71 @@ We might want to improve the concision with a macro, similar to deframe[^deframe
 >
 > I'm wondering if we're getting ahead of ourselves to think about caching & tracing already. I feel it might be worth to put these things off until we really run into problems that drive the need for it. The replicant design seems to encourage keeping high-fidelity state out of replicant and moving it into the browser, potentically using web components. Maybe this is something worth exploring, using acutal use cases we have on ductile like the VIN input.
 
-## Can we design an API for data grids in clerk & ductile?
 
+### Query Concept A: Minimalist registry
+The examples in *State Concept A* use a `k/q` function to query the domain state.
+As for modeling change, nexus can handle this - we'll just namespace our actions by the domain.
+Here's what query handlers look like:
+
+```clojure
+{:nextjournal.clerk/visibility {}}
+(def season->holiday {:spring :egg-day
+                      :summer :bird-day
+                      :fall   :squash-day
+                      :winter :gift-day})
+
+(clerk/code '(k/register! :season
+  #(get-in % [:path :to :season] :spring)))
+
+(clerk/code '(k/register! :day
+  ^{::k/deps #{:season}}
+  #(season->holiday (k/q % :season))))
+
+(def day->icon {:gift-day   "🎁"
+                :egg-day    "🥚"
+                :bird-day   "🦃"
+                :squash-day "🎃"})
+
+(clerk/code '(k/register! :holiday-mode?
+  #(get-in % [:path :to :holiday-mode?])))
+
+(clerk/code '(k/register! :icon
+  ^{::k/deps #{:day :holiday-mode?}}
+  (fn [domain & {:keys [emphasize?]}]
+    (when (k/q domain :holiday-mode?)
+      (str (day->icon (k/q domain :day))
+           (when emphasize? "!"))))))
+		   
+{:nextjournal.clerk/visibility {:result :show}}
+```
+
+To use one, pass a domain map to `k/q`, followed by a registered key and any extra args.
+
+```clojure
+(clerk/code '(let [domain {:path {:to {:holiday-mode? true :season :winter}}}]
+  (k/q domain :icon)))
+```
+
+You can also pass an entire system state. The handler will get passed the `::k/domain` subtree, 
+followed by any extra args.
+
+```clojure
+(clerk/code '(let [state {::k/domain {:path {:to {:holiday-mode? true :season :winter}}}}]
+  (k/q state :icon {:emphasize? true})))
+```
+
+On the call side, these look like re-frame. However, following the replicant philosophy,
+we're exploring how to strip them back down to essentials:
+### Query Concept B: Plain functions, with a trace helper.
+We could avoid the query DSL and registry, and just use regular pure fns to "get" a business value.
+For a static dependency graph, we can just declare the required fns in metadata.
+For a dynamic dependency graph, we can wrap our function body with a trace helper, or use a macro
+to wrap it for us.
+
+This way, our query pattern is truly first-class in clojure. No more special tooling 
+for looking up registry keys.
+
+## Can we design an API for data grids in clerk & ductile?
 ## Can we build a `nested-grid` in cljs using replicant's "top-down" UI model?
 
 Commit [7ecd60b](https://github.com/nextjournal/offworld/commit/7ecd60b/)
@@ -620,7 +759,7 @@ A few requirements constrain our choice of framework & runtime to which we can d
   otherwise, we'd coordinate two _system-states_, undermining the simplicity advantage of SSR.
 - Replicant & nexus can run on the server, on the client, or _within_ datastar expressions.
 - Datastar expressions can only run on the client.
-### Concept A: Replicant SSR with Datastar at the edges
+### SSR Concept A: Replicant SSR with Datastar at the edges
 Intuitively, I feel the cleanest design would be:
 - Dispatch actions: datastar          (first on the client, then on the server.)
 - Everything else:  replicant & nexus (on the server)
@@ -777,7 +916,7 @@ Open questions:
 - We run replicant & nexus on the client, but we only use a few features.
   Can we still get a tiny bundle (e.g. cljs-lite)?
 
-### Concept B: Nexus interceptors?
+### SSR Concept B: Nexus interceptors?
 Similar to Concept A, but pre-interpolation & dispatch are implemented as a nexus interceptor.
 In that case, we wouldn't attach datastar expressions to our html at all. We'd just use replicant/nexus on
 the frontend. The interceptor would interpolate the actions, then abort the actions on the client, and
@@ -813,7 +952,7 @@ Will they race?
 What effects can we recommend to use this way?
 An alert or toast is probably okay?
 
-### ~~Concept D: Make some server values available to client actions.~~
+### ~~SSR Concept D: Make some server values available to client actions.~~
 Update: I think this is a bad idea. See: [Problem: is this pointless?](#problem:-is-this-pointless?)
 
 While we don't cache all of our system state in the client, it might be useful to 
@@ -860,7 +999,7 @@ No need for any extra wiring.
 
 [^query]: See [#domain-queries](#domain-queries)
 
-### Concept E: Return server-effects from client-actions
+### SSR Concept E: Return server-effects from client-actions
 
 - Pre-interpolate actions on the client 🌎
   - Separate client-actions from server-actions
@@ -1021,6 +1160,11 @@ And here's the full table spec:
 
 - [offworld](https://bladerunner.fandom.com/wiki/off-world_colonies)
 
+### Ideas for subordinate names:
+
+- **stem**: "What comes from something else? Stem."
+- **baseline**: State management.
+
 ## What are our inspirations?
 - https://www.inkandswitch.com/
 - https://mas.to/@scottjenson@social.coop/115707072046013892
@@ -1035,3 +1179,10 @@ And here's the full table spec:
 [^flows-advanced]: [Flows: advanced topics](https://day8.github.io/re-frame/flows-advanced-topics)
 [^flows]: [Re-frame: Flows](https://day8.github.io/re-frame/Flows)
 [^todo]: TODO: not implemented yet.
+[^tar-pit]: [Out of the Tar Pit (Moseley & Marks, 2006)](https://www.semanticscholar.org/paper/Out-of-the-Tar-Pit-Moseley-Marks/41dc590506528e9f9d7650c235b718014836a39d)
+[^membrane]: See: [Membrane UI](https://github.com/phronmophobic/membrane)
+[^on-load-hooks]: > I’ve often had an “on-load” style hook for pages that trigger when the user navigates to the page from another page, like you’re describing. This is indeed a good place to do any necessary cleanup of transient state, initiate data fetch etc. You could also have an “on-leave” style hook that can trigger when someone leaves a page for another, but I find it’s better to use onload to set up/clear the necessary state. -- @cjohansen
+[^on-unmount]: [replicant.fun/life-cycle-hooks](https://replicant.fun/life-cycle-hooks/)
+[^data-on-remove]: [threadgold.nz/demos/data-on-remove](https://threadgold.nz/demos/data-on-remove)
+
+
