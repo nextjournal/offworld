@@ -18,34 +18,40 @@
       {:event/prevent-default #(.preventDefault (get-evt %))
        :dom-node/focus        (fn [ctx _ & {:keys [node]}] (.focus (or node (get-node ctx))))
        :dom-node/blur         (fn [ctx _ & {:keys [node]}] (.blur (or node (get-node ctx))))
-       :dom-node/set-checked  (fn [ctx _ & {:keys [node value]}]
-                                (set! (.-checked (or node (get-node ctx))) value))
        :dom-node/show-popover (fn [ctx _ & {:keys [node]}] (.showPopover (or node (get-node ctx))))
        :dom-node/hide-popover (fn [ctx _ & {:keys [node]}] (.hidePopover (or node (get-node ctx))))
-       :browser/alert         (fn [_ _ s] (js/alert s))}
+       :browser/alert         (fn [_ _ s] (js/alert s))
+       :dom-node/set-checked  (fn [ctx _ & {:keys [node value]}]
+                                (set! (.-checked (or node (get-node ctx))) value))
+       :input/clear           (fn [ctx _ & {:keys [node value]}]
+                                (set! (.-value (or node (get-node ctx))) value))}
 
       :nexus/actions
-      {::ob/keydown-input-client
-       (fn [_ {:keys [key popover-id child-id] mods :key-modifiers}]
+      {::ob/keydown-input
+       (fn [_ {:keys [key popover-id child-id path] mods :key-modifiers}]
          (cond
            (= key "Escape")    [[:event/prevent-default]
                                 [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                                [:dom-node/blur]]
+                                [:dom-node/blur]
+                                [:input/clear {:node [:document/element-by-id popover-id]}]
+                                [:effects/save (conj path :value) ""]]
            (= key "ArrowDown") [[:event/prevent-default]
                                 (when child-id
                                   [:dom-node/focus {:node [:document/element-by-id child-id]}])]
            (and (mods :shift)
                 (= key "Tab")) [[:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]]
            :else               nil))
-       ::ob/keydown-choice-item-client
+       ::ob/keydown-choice-item
        (fn [_ {:keys [key popover-id prev-id next-id input-id on-enter]}]
          (case key
            "Escape"    [[:event/prevent-default]
                         [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
                         [:dom-node/blur]]
-           "Enter"     [[:event/prevent-default]
-                        [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                        [:dom-node/blur]]
+           "Enter"     (into
+                        [[:event/prevent-default]
+                         [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
+                         [:dom-node/blur]]
+                        on-enter)
            "ArrowUp"   [[:event/prevent-default]
                         (if prev-id
                           [:dom-node/focus {:node [:document/element-by-id prev-id]}]
@@ -107,12 +113,4 @@
                                      new-set (if value
                                                (disj old-set k)
                                                (conj old-set k))]
-                                 [[:effects/save path new-set]]))
-    ::ob/keydown-input       (fn [_ {:keys [path key]}]
-                               (case key
-                                 "Escape" [[:effects/save (conj path :value) ""]]
-                                 nil))
-    ::ob/keydown-choice-item (fn [_ {:keys [on-enter key]}]
-                               (case key
-                                 "Enter" on-enter
-                                 nil))}})
+                                 [[:effects/save path new-set]]))}})

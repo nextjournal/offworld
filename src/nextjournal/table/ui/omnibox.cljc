@@ -58,14 +58,11 @@
     :on          {:focus   [[:dom-node/show-popover
                              {:node [:document/element-by-id (id popover-path)]}]]
                   :input   [[:effects/save (conj path :value) [:event.target/value]]]
-                  :keydown [[::keydown-input-client
+                  :keydown [[::keydown-input
                              {:key           [:event/key]
                               :key-modifiers [:event/key-modifiers]
                               :popover-id    (id popover-path)
-                              :child-id      (choice-id {:parent-id (id popover-path) :index 0})}]
-                            [::keydown-input
-                             {:key           [:event/key]
-                              :key-modifiers [:event/key-modifiers]
+                              :child-id      (choice-id {:parent-id (id popover-path) :index 0})
                               :path          path}]
                             #_(fn [e]
                                 (case (.-key e)
@@ -88,7 +85,7 @@
 #?(:cljs (defscene input-scene []
            (input {})))
 
-(defn popover [{:keys   [choices filters-to-add anchor-path popover-path filters]
+(defn popover [{:keys    [choices filters-to-add anchor-path popover-path filters]
                 ::k/keys [path]}]
   (let [child-indices (vec (range (count (concat filters-to-add choices))))
         popover-id    (id popover-path)
@@ -113,15 +110,13 @@
         [:span.flex.mt-1.focus:outline-none
          {:id       id
           :tabindex 0
-          :on       {:keydown [[::keydown-choice-item-client
+          :on       {:keydown [[::keydown-choice-item
                                 {:key        [:event/key]
                                  :input-id   input-id
                                  :popover-id popover-id
                                  :next-id    next-id
-                                 :prev-id    prev-id}]
-                               [::keydown-choice-item
-                                {:key      [:event/key]
-                                 :on-enter [add]}]]}}
+                                 :prev-id    prev-id
+                                 :on-enter   [add]}]]}}
          [:div.w-4.h-4.text-slate-400 icon-filter]]
         label])
      (for [ci   (range (count choices))
@@ -137,7 +132,7 @@
                           [::remove-filter anchor-path filter]
                           [::add-filter anchor-path filter])]
               :value   value
-              :keydown [[::keydown-choice-item-client
+              :keydown [[::keydown-choice-item
                          {:key        [:event/key]
                           :input-id   input-id
                           :popover-id popover-id
