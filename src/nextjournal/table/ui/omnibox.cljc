@@ -43,10 +43,10 @@
   (str parent-id index))
 
 (defn input [{:as      state
-              :keys    [anchor-path input-path popover-path]
+              :keys    [anchor-path popover-path]
               ::k/keys [stem path]}]
   [:input
-   {:id          (id input-path)
+   {:id          (id path)
     :type        "text"
     :class       ["w-full" "cursor-default" "rounded-[3px]" "px-[6px]"
                   "ring-1" "ring-slate-300" "font-normal" "placeholder-slate-400"
@@ -88,7 +88,7 @@
 #?(:cljs (defscene input-scene []
            (input {})))
 
-(defn popover [{:as state :keys    [choices filters-to-add anchor-path input-path popover-path filters]
+(defn popover [{:keys   [choices filters-to-add anchor-path popover-path filters]
                 ::k/keys [path]}]
   (let [child-indices (vec (range (count (concat filters-to-add choices))))
         popover-id    (id popover-path)
@@ -107,7 +107,7 @@
                  id      (choice-id {:parent-id popover-id :index i})
                  next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
                  prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))
-                 add     [::add-filter path (first filters-to-add)]]]
+                 add     [::add-filter anchor-path (first filters-to-add)]]]
        [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
         {:on {:click [add]}}
         [:span.flex.mt-1.focus:outline-none
@@ -134,8 +134,8 @@
                  value   (contains? (set filters) filter)]]
        [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
         {:on {:change  [(if value
-                          [::remove-filter path filter]
-                          [::add-filter path filter])]
+                          [::remove-filter anchor-path filter]
+                          [::add-filter anchor-path filter])]
               :value   value
               :keydown [[::keydown-choice-item-client
                          {:key        [:event/key]
@@ -150,16 +150,16 @@
                  :style {:user-select :none}}
          choice]])]))
 
-(defn filter-pill [{{:keys [label] :as filter} :filter
-                    ::k/keys                   [path]}]
-   [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400.text-xs
-    [:span.flex.mt-1.focus:outline-none
-     [:div.w-3.h-3.text-slate-400 icon-filter]]
-    label
-    [:span {:style {:cursor      :pointer
-                    :margin-left 5}
-            :on    {:click [[::remove-filter path filter]]}}
-     "X"]])
+(defn filter-pill [{{:keys [label] :as this-filter}
+                    :filter ::k/keys [path]}]
+  [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400.text-xs
+   [:span.flex.mt-1.focus:outline-none
+    [:div.w-3.h-3.text-slate-400 icon-filter]]
+   label
+   [:span {:style {:cursor      :pointer
+                   :margin-left 5}
+           :on    {:click [[::remove-filter path this-filter]]}}
+    "X"]])
 
 (defn omnibox [{:as      state
                 :keys    [choices]
@@ -180,5 +180,6 @@
      (input (k/+ state input-path config))
      (popover (k/+ state popover-path config))
      (->> filters
+          (map #(do {:filter %}))
           (map k/+ (repeat state) (repeat path))
           (map filter-pill))]))

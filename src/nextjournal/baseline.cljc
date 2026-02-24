@@ -25,7 +25,7 @@
   (merge config-state
          {::stem stem
           ::path (if (sequential? path)
-                   (into [::local] path)
+                   (into [::local] (remove #{::local}) path)
                    [::local path])}))
 
 (defn explain-trace [{:keys [stack]}]
