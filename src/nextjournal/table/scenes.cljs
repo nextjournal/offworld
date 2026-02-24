@@ -8,8 +8,8 @@
 (defscene init-view []
   (ui/render {:number 0}))
 
-(defscene input []
-  (omnibox-ui/input {}))
+(defscene anchor []
+  (omnibox-ui/anchor {}))
 
 (defscene filter-button []
   (omnibox-ui/filter-button {:value "s"}))

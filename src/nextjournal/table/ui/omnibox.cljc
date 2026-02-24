@@ -1,9 +1,11 @@
 (ns nextjournal.table.ui.omnibox
-  (:require [clojure.string :as str]
-            [nextjournal.baseline :as k]
-            [nextjournal.table.filters :as filters]
-            [nextjournal.table.ui.holiday :as 🎄]
-            #?(:cljs [portfolio.replicant :refer [defscene]])))
+  (:require
+   [clojure.string :as str]
+   [nextjournal.baseline :as k]
+   [nextjournal.table.filters :as filters]
+   [nextjournal.table.ui.holiday :as 🎄]
+   [nextjournal.table.ui.omnibox :as-alias ob]
+   #?(:cljs [portfolio.replicant :refer [defscene]])))
 
 (def icon-filter
   [:svg {:viewBox "0 0 20 20"
@@ -36,108 +38,88 @@
        (interpose "-")
        (apply str)))
 
-(defn anchor-name [path & suffixes]
-  (str "--" (apply id path suffixes)))
-
-(defn choice-id [{:keys [parent-id index]}]
+(defn choice-id [parent-id index]
   (str parent-id index))
 
-(defn input [{:as      state
-              :keys    [anchor-path popover-path]
-              ::k/keys [stem path]}]
+(defn anchor [{:keys    [anchor-id popover-id filters-to-add]
+               ::k/keys [stem path]}]
   [:input
-   {:id          (id path)
+   {:id          anchor-id
     :type        "text"
     :class       ["w-full" "cursor-default" "rounded-[3px]" "px-[6px]"
                   "ring-1" "ring-slate-300" "font-normal" "placeholder-slate-400"
                   "focus:outline-none" "focus:ring-2" "focus:ring-blue-500" "sm:leading-6"
                   "bg-white"]
-    :style       {:anchor-name (anchor-name anchor-path)}
+    :style       {:anchor-name (str "--" anchor-id)}
     :placeholder (str "Filter..." (🎄/get-icon stem))
-    :value       (:value state)
     :on          {:focus   [[:dom-node/show-popover
-                             {:node [:document/element-by-id (id popover-path)]}]]
+                             {:node [:document/element-by-id popover-id]}]]
                   :input   [[:effects/save (conj path :value) [:event.target/value]]]
                   :keydown [[::keydown-input
-                             {:key           [:event/key]
-                              :key-modifiers [:event/key-modifiers]
-                              :popover-id    (id popover-path)
-                              :child-id      (choice-id {:parent-id (id popover-path) :index 0})
-                              :path          path}]
-                            #_(fn [e]
-                                (case (.-key e)
-                                  "Enter"
-                                  (if-some [selected @!selected]
-                                    (on-row-click e (nth rows selected) state)
-                                    (when-some [filter-from-text (or
-                                                                  (cond
-                                                                    (:text->filter state) ((:text->filter state) @!text)
-                                                                    numeric?              (text->numeric-filter @!text)
-                                                                    date?                 (text->date-filter @!text)
-                                                                    keyword?              (text->filter (name @!text)))
-                                                                  (text->filter @!text))]
-                                      (.preventDefault e)
-                                      (set-filters (conj filters filter-from-text))
-                                      (reset! !text "")
-                                      (reset! !expanded false)))
-                                  nil))]}}])
+                             {:choice-id      (choice-id popover-id 0)
+                              :filters-to-add filters-to-add
+                              :key            [:event/key]
+                              :key-modifiers  [:event/key-modifiers]
+                              :path           path
+                              :popover-id     popover-id}]]}}])
 
-#?(:cljs (defscene input-scene []
-           (input {})))
+#?(:cljs (defscene anchor-scene []
+           (anchor {})))
 
-(defn popover [{:keys    [choices filters-to-add anchor-path popover-path filters]
+(defn popover [{:keys    [choices filters-to-add filters anchor-id popover-id]
                 ::k/keys [path]}]
-  (let [child-indices (vec (range (count (concat filters-to-add choices))))
-        popover-id    (id popover-path)
-        input-id      (id popover-path)]
+  (let [child-indices (vec (range (count (concat filters-to-add choices))))]
     [:div.w-full.p-1
      {:id      popover-id
       :popover :manual
       :style   {:background      :white
                 :position        :fixed
-                :position-anchor (anchor-name anchor-path)
+                :position-anchor (str "--" anchor-id)
                 :position-area   "bottom center"
                 :max-height      212
                 :overflow        :auto}}
      (for [i    (range (count filters-to-add))
            :let [{:keys [label]} (nth filters-to-add i)
-                 id      (choice-id {:parent-id popover-id :index i})
+                 id      (choice-id  popover-id i)
                  next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
                  prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))
-                 add     [::add-filter anchor-path (first filters-to-add)]]]
+                 add     [::add-filter path (first filters-to-add)]]]
        [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
         {:on {:click [add]}}
         [:span.flex.mt-1.focus:outline-none
          {:id       id
           :tabindex 0
           :on       {:keydown [[::keydown-choice-item
-                                {:key        [:event/key]
-                                 :input-id   input-id
-                                 :popover-id popover-id
-                                 :next-id    next-id
-                                 :prev-id    prev-id
-                                 :on-enter   [add]}]]}}
+                                {:anchor-id      anchor-id
+                                 :choice-id      id
+                                 :filters-to-add filters-to-add
+                                 :key            [:event/key]
+                                 :next-id        next-id
+                                 :path           path
+                                 :popover-id     popover-id
+                                 :prev-id        prev-id}]]}}
          [:div.w-4.h-4.text-slate-400 icon-filter]]
         label])
      (for [ci   (range (count choices))
            :let [choice  (nth (vec choices) ci)
                  i       (+ ci (count filters-to-add))
-                 id      (choice-id {:parent-id popover-id :index i})
+                 id      (choice-id popover-id i)
                  next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
                  prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))
-                 filter  (filters/build-equals-filter choice)
-                 value   (contains? (set filters) filter)]]
+                 filter  (filters/build-equals-filter choice)]]
        [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
-        {:on {:change  [(if value
-                          [::remove-filter anchor-path filter]
-                          [::add-filter anchor-path filter])]
-              :value   value
+        {:on {:change  [(if (contains? filters filter)
+                          [::remove-filter path filter]
+                          [::add-filter path filter])]
               :keydown [[::keydown-choice-item
-                         {:key        [:event/key]
-                          :input-id   input-id
-                          :popover-id popover-id
-                          :next-id    next-id
-                          :prev-id    prev-id}]]}}
+                         {:anchor-id      anchor-id
+                          :choice-id      id
+                          :filters-to-add [filter]
+                          :key            [:event/key]
+                          :next-id        next-id
+                          :path           path
+                          :popover-id     popover-id
+                          :prev-id        prev-id}]]}}
         [:input.focus:outline-none
          {:type :checkbox
           :id   id}]
@@ -161,19 +143,17 @@
                 ::k/keys [stem path]}]
   (let [{:keys
          [filters value]} (get-in stem path)
-        popover-path      (conj path :popover)
-        input-path        (conj path :input)
         config            (merge
-                           {:choices      choices
-                            :popover-path popover-path
-                            :input-path   input-path
-                            :anchor-path  path}
+                           {:choices    choices
+                            :filters    filters
+                            :popover-id (id path :popover)
+                            :anchor-id  (id path :anchor)}
                            (when-not (str/blank? value)
                              {:filters-to-add
                               [(filters/text->filter value)]}))]
     [:div
-     (input (k/+ state input-path config))
-     (popover (k/+ state popover-path config))
+     (anchor (k/+ state path config))
+     (popover (k/+ state path config))
      (->> filters
           (map #(do {:filter %}))
           (map k/+ (repeat state) (repeat path))
