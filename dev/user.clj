@@ -30,7 +30,7 @@
   (shadow/watch :app)
   (shadow/watch :portfolio))
 
-(defn start! [_opts]
+(defn start! [& [_opts]]
   (start-shadow!)
   (start-ring!)
   (start-clerk!))

@@ -26,11 +26,24 @@
 ```
 
 # Sketches with replicant, datastar & tables
-Some research questions follow, along with our findings.
-To demonstrate our findings, this project includes a clj webserver and a cljs client.
-To launch the server and build the client, run `user/start!`.
-Then, visit `http://localhost:8000`.
-Some demos implement server-side rendering. In that case, visit `http://localhost:8000?ssr=true`.
+
+Server-side rendering is interesting[^tomorrow-to-yesterday].
+But with SSR, you always need a server. What if the client lags or goes offline?
+
+On the other hand, rich clients can be nice[^re-frame].
+But these can be slow and complex. We end up inventing capabilities which our server already has.
+
+A codebase is often designed around one paradigm or the other. Switching or combining can daunt us
+with big rewrites and hacks. On the other hand, we use Clojure. If we just simplify our fundamental patterns,
+can we get this flexibility for "free"?
+
+## Quickstart.
+To demonstrate our thinking, this repo includes a clj webserver and a cljs client.
+
+- First, launch a repl: `clj -M:dev`.
+- Then, evaluate `(user/start!)`. This runs clerk, a webserver and a client build.
+- Then, visit [http://localhost:8000](http://localhost:8000). This demonstrates the rich client.
+- To run the same app in server-side-rendering mode, visit [http://localhost:8000?ssr=true](http://localhost:8000?ssr=true).
 
 ## What does ductile's `omnibox` look like when built from replicant?
 ### Web Standards
@@ -1192,5 +1205,5 @@ And here's the full table spec:
 [^on-load-hooks]: > I’ve often had an “on-load” style hook for pages that trigger when the user navigates to the page from another page, like you’re describing. This is indeed a good place to do any necessary cleanup of transient state, initiate data fetch etc. You could also have an “on-leave” style hook that can trigger when someone leaves a page for another, but I find it’s better to use onload to set up/clear the necessary state. -- @cjohansen
 [^on-unmount]: [replicant.fun/life-cycle-hooks](https://replicant.fun/life-cycle-hooks/)
 [^data-on-remove]: [threadgold.nz/demos/data-on-remove](https://threadgold.nz/demos/data-on-remove)
-
-
+[^tomorrow-to-yesterday]: David Yang: [From Tomorrow Back to Yesterday: A Tale of Two Web Architectures](https://www.youtube.com/watch?v=8W6Lr1hRgXo)
+[^re-frame]: For instance, [Re-Frame](https://day8.github.io/re-frame/)

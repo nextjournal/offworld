@@ -6,7 +6,6 @@
            no.cjohansen/nexus      {:mvn/version "2025.11.1"}}
  :paths   ["src" "resources"]
  :aliases {:dev {:exec-fn     user/start!
-                 :main-opts   ["-m" "shadow.cljs.devtools.cli"]
                  :extra-paths ["dev"]
                  :extra-deps  {no.cjohansen/dataspex       {:mvn/version "2026.01.1"}
                                no.cjohansen/portfolio      {:mvn/version "2025.08.29"}
