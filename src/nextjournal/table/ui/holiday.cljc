@@ -1,7 +1,8 @@
 (ns nextjournal.table.ui.holiday
   (:require
    [nexus.registry :as nxr]
-   [nextjournal.baseline :as k :refer [defq]]))
+   [nextjournal.baseline :as k :refer [defq]]
+   [nextjournal.offworld :as-alias 🪐]))
 
 (def day->icon
   {:gift-day   "🎁"
@@ -29,6 +30,16 @@
 
 (defq get-day [stem]
   (season->holiday (get-season stem)))
+
+(nxr/register-action! ::randomize ^::🪐/client
+  (fn [_ key-mods season]
+    (let [path        [::path :to :season]
+          reset?      (contains? (set key-mods) :shift)
+          rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
+      (if reset?
+        [[:browser/alert "Holiday season has been reset."]
+         [:effects/save path :spring]]
+        [[:effects/save path rand-season]]))))
 
 (defq get-icon [stem]
   (when (get-holiday-mode? stem)
