@@ -703,6 +703,11 @@ to wrap it for us.
 This way, our query pattern is truly first-class in clojure. No more special tooling 
 for looking up registry keys.
 
+### Query Concept C: Queries all the way down
+Arguably, in top-down rendering, render-fns *are* queries.
+And we'd like to have tracing on render-fns too.
+Could we provide a single library macro, `k/defn`, that can declare both render-fns and queries?
+
 ## Can we design an API for data grids in clerk & ductile?
 ## Can we build a `nested-grid` in cljs using replicant's "top-down" UI model?
 
@@ -1114,6 +1119,9 @@ That makes it straightforward to express datastar html using hiccup.
 [:button {:data-on:click "alert('Datastar, via replicant!')"} "Hello from Replicant!"]
 ```
 
+## What would a gradual migration of ductile look like?
+Could we make a feature-flag/alpha-flag using ductile's router,
+to switch on offworld one route/view at a time?
 ## [#B] `nested-grid` reagent component - can we use in clerk?
 
 Here's a basic viewer for nested grids.

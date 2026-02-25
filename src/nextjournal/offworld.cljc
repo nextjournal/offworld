@@ -96,17 +96,11 @@
       (divert (get-client-nexus) (get-server-nexus) dom-event actions-str))
      ([client-nexus server-nexus dom-event actions-str]
       (let [actions           (deserialize actions-str)
-            _                 (def client-nexus client-nexus)
-            _                 (def server-nexus server-nexus)
-            _                 (def dom-event dom-event)
-            _                 (def actions actions)
             dispatch-data     (when dom-event (replicant/build-event-map dom-event))
             client-actions    (filterv #(client-action? client-nexus %) actions)
             server-actions    (filterv #(server-action? server-nexus %) actions)
             {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
-            _                 (def effects effects)
             client-effects    (filterv #(client-action? client-nexus %) effects)
-            _                 (def client-effects client-effects)
             server-effects    (filterv #(server-action? server-nexus %) effects)
             actions-to-send   (seq (concat server-effects server-actions))]
         (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
