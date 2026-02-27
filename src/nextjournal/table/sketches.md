@@ -15,14 +15,14 @@
    [nexus.registry :as nxr]
    [replicant.core :as replicant]))
 
-{::clerk/visibility {:result :hide}}
-
+^{::clerk/visibility {:code :hide :result :hide}} (def state nil)
 ^{::clerk/visibility {:code :hide :result :hide}} (defn render-a [& _])
 ^{::clerk/visibility {:code :hide :result :hide}} (defn render-b [& _])
 ^{::clerk/visibility {:code :hide :result :hide}} (defn render-c [& _])
 ^{::clerk/visibility {:code :hide :result :hide}} (defn render-x [& _])
 ^{::clerk/visibility {:code :hide :result :hide}} (defn render-y [& _])
 ^{::clerk/visibility {:code :hide :result :hide}} (defn render-z [& _])
+{::clerk/visibility {:result :hide}}
 ```
 
 # Sketches with replicant, datastar & tables
@@ -87,8 +87,8 @@ I'll focus the discussion around a chain of replicant render-fns:
 
 - **`alert`**: Basic UI. A pure function of its argument.
 - **`hover-alert`**: Stateful UI. It needs to get a `hover?` value from somewhere, and dispatch some action to change it.
-- **`biz-problem-list`**: Business UI. It depends on your business domain. It translates business semantics into UI semantics.
-- **`biz-panel`**: Business UI containing other business UI.
+- **`station-panel`**: Business UI. It depends on your business domain. It translates business semantics into UI semantics.
+- **`main-view`**: Business UI containing other business UI.
 
 ### Pure render-fn: Okay?
 
@@ -97,8 +97,9 @@ It doesn't try to use any "local" or "domain" state.
 It takes non-namespaced keys which represent its UI "contract".
 
 ```clojure
-(defn alert [{:keys [level label]}]
-  [:span {:style {:color (case level :warn :orange :error :red nil)}}
+(defn alert [{:keys [level label style]}]
+  [:span {:style (merge {:color (case level :warn :orange :error :red nil)}
+                        style)}
    label])
 ```
 
@@ -107,63 +108,65 @@ Here's a naive implementation using prop drilling, illustrating the badness alle
 
 ```clojure
 (defn hover-alert [{:keys [level label hover? hover-path]}]
-  [:div {:on        {:mouse-over [[:effects/save hover-path true]]
-                     :mouse-out  [[:effects/save hover-path false]]}
-         :style     (when hover? {:border "2px dashed black"})}
+  [:div {:on {:mouse-over [[:save hover-path true]]
+              :mouse-out  [[:save hover-path false]]}}
    (alert {:level level
-           :label label})])
+           :label label
+           :style (when hover? {:border "2px dashed black"})})])
 
-(defn biz-problem-list
+(defn station-panel
   [{:as       state
-    :biz/keys [problems problem-area]
+    :biz/keys [problems station]
     :keys     [hover-states hover-states-path]}]
   (for [{:keys [id title severity]}
-        (filter problems (comp #{problem-area} :area))]
+        (filter problems (comp #{station} :station))]
     (hover-alert
      {:label      title
       :level      severity
       :hover?     (get hover-states id)
       :hover-path (conj hover-states-path id)})))
 
-(defn biz-panel [state]
-  (for [problem-area [:cars :trucks]]
-    (biz-problem-list
-     {:biz/problems      (:biz/problems state)
-      :biz/problem-area  problem-area
-      :hover-states      (get-in state [:biz/panel :ui/hover-alerts])
-      :hover-states-path [:biz/panel :ui/hover-alerts]})))
+(defn main-view [state]
+  (for [k [:dresden :hanover]]
+    (station-panel
+     {:hover-states      (get-in state [:biz/panel :ui/hover-alerts])
+      :hover-states-path [:biz/panel :ui/hover-alerts]
+      :biz/problems      (:biz/problems state)
+      :biz/station       k})))
 ```
 
 Some issues come to mind. None of these are dealbreakers, but they express the frustration of prop-drilling.
 
-- `hover-alert`:
-  - With `hover?`, we get a value along with its path. That makes it straightforward to model a change, using actions.
-  - We save values in the system, but what happens if the UI ancestor `biz-panel` gets unmounted at runtime?
-    Those values will sit in the system forever!
-- `biz-problem-list`:
-  - We get two business values passed in, and we post-process & destructure them into useable values.
-	- Why is that the responsibility of this render-fn? 
-	- Even if we extracted the operation to a helper-fn, why call it here? Why not in `biz-panel`?
-	- Not that one place is better than the other, but simply having to choose comes with an engineering cost.
-  - We pass a map to `hover-alert`, effectively translating business terms to UI terms.
-	- Except, these two hover keys *aren't* translating, they're just a mechanism.
-	- Why put domain and UI in the same map? Which is which? This feels inarticulate.
-- `biz-panel`:
-  - Now we face a confusing api. We're trying to render a problem-list. Why do we need `:hover-states` and `:hover-states-path`? 
-    - We can guess how these relate to our "problem-list", but it's becoming less obvious.
-  - On the other hand, the function signature shows me what's required - no side-channels or hidden apis.
-	- It's hard to see *why* it needs these args, but at least the UI is guaranteed to work.
-	- This makes it nice to work with a repl, as well — the arguments *are* the scope.
-  - We finally see an explicit value for `:hover-states-path`.
-	- When the user hovers, part of the top-level replicant system definitely changes value... under that exact path... somewhere. Probably.
-	  - In reality, child render-fns are free to use any path they want.
-	  - This is less explicit than it looks. It's all held together by a loose convention.
-	- Why did we put our choice of path into *this* render-fn? Seems arbitrary.
-	- We have to assume our `state` argument contains the same subtree as the top-level state.
-	  - That means we're re-expressing the shape of the replicant state across an ever-growing set of callsites. Not very DRY.
-	- What if there's another `biz-panel` somewhere? How do we know our `:hover-states-path` isn't getting reused?
-	- A different dev wrote this render-fn. They're not as confident writing big destructuring forms. Instead, they use inline getters.
-      - Now, to understand this function's requirements we have to read its entire body.
+**`hover-alert`**:
+- With `hover?`, we get a value along with its path. That makes it straightforward to model a change, using actions.
+- We save values in the system, but what happens if the UI ancestor `main-view` gets unmounted at runtime?
+  Those values will sit in the system forever!
+
+**`station-panel`**:
+- We get two business values passed in, and we post-process & destructure them into useable values.
+  - Why is that the responsibility of this render-fn? 
+  - Even if we extracted the operation to a helper-fn, why call it here? Why not in `main-view`?
+  - Not that one place is better than the other, but simply having to choose comes with an engineering cost.
+- We pass a map to `hover-alert`, effectively translating business terms to UI terms.
+  - Except, these two hover keys *aren't* translating, they're just a mechanism.
+  - Why put domain and UI in the same map? Which is which? This feels inarticulate.
+
+**`main-view`**:
+- Now we face a confusing api. We're trying to render a problem-list. Why do we need `:hover-states` and `:hover-states-path`? 
+  - We can guess how these relate to our "problem-list", but it's becoming less obvious.
+- On the other hand, the function signature shows me what's required - no side-channels or hidden apis.
+  - It's hard to see *why* it needs these args, but at least the UI is guaranteed to work.
+  - This makes it nice to work with a repl, as well — the arguments *are* the scope.
+- We finally see an explicit value for `:hover-states-path`.
+  - When the user hovers, part of the top-level replicant system definitely changes value... under that exact path... somewhere. Probably.
+  - In reality, child render-fns are free to use any path they want.
+  - This is less explicit than it looks. It's all held together by a loose convention.
+- Why did we put our choice of path into *this* render-fn? Seems arbitrary.
+- We have to assume our `state` argument contains the same subtree as the top-level state.
+  - That means we're re-expressing the shape of the replicant state across an ever-growing set of callsites. Not very DRY.
+- What if there's another `main-view` somewhere? How do we know our `:hover-states-path` isn't getting reused?
+- A different dev wrote this render-fn. They prefer to write inline getters.
+  - Now, to understand this function's requirements we have to read its entire body.
 
 ### Prop Drilling: Are we sure it's bad?
 💬 **mk** The more I think and read about it, the less I'm convinced prop drilling is really so bad. Here's a slightly different take of the examples above: 
@@ -171,14 +174,18 @@ Some issues come to mind. None of these are dealbreakers, but they express the f
 (I think it might be easier to discuss this with a better real-world use case.)
 
 ```clojure
-(defn hover-alert [config state state-key]
+^{::clerk/visibility {:code :hide}}
+(clerk/code
+ "(defn hover-alert [config state state-key]
   (let [hover? (get state state-key)]
     [:div {:on {:mouse-over [[:effects/save state-key true]]
                 :mouse-out  [[:effects/save state-key false]]}
-           :style     (when hover? {:border "2px dashed black"})}
-     (alert config)]))
+           :style     (when hover? {:border \"2px dashed black\"})}
+     (alert config)]))")
 
-(defn biz-problem-list
+^{::clerk/visibility {:code :hide}}
+(clerk/code
+ "(defn station-panel
   [{:as       state
     :biz/keys [problems problem-area]}]
   (for [{:keys [id title severity]}
@@ -186,14 +193,16 @@ Some issues come to mind. None of these are dealbreakers, but they express the f
     (hover-alert
      {:label      title
       :level      severity}
-	  state
-      [::hover-alert id])))
+          state
+      [::hover-alert id])))")
 
-(defn biz-panel [state]
+^{::clerk/visibility {:code :hide}}
+(clerk/code
+ "(defn main-view [state]
   (for [problem-area [:cars :trucks]]
-    (biz-problem-list
+    (station-panel
      {:biz/problems      (:biz/problems state)
-      :biz/problem-area  problem-area})))
+      :biz/problem-area  problem-area})))")
 ```
 
 Some ideas to adress some of the problems above:
@@ -207,175 +216,186 @@ Some ideas to adress some of the problems above:
 This is more concise, but we get less observability.
 
 ```clojure
-{:nextjournal.clerk/visibility {:code :hide}}
+^{::clerk/visibility {:code :hide}}
 (clerk/code
-"(defn hover-alert [{:keys [id level label]}]
-  (let [hover? (get @system [::hover-alert id])]
-    [:div {:on    {:mouse-over [[:effects/save [::hover-alert id] true]]
-                   :mouse-out  [[:effects/save [::hover-alert id] false]]}
-           :style (when hover? {:border \"2px dashed black\"})}
-     (alert {:level level
-             :label label})]))")
-
-(clerk/code "(defn biz-problem-list
+ "(defn hover-alert [{:keys [id level label]}]
+   (let [hover? (get @system [::hover-alert id])]
+     [:div {:on {:mouse-over [[:save [::hover-alert id] true]]
+                 :mouse-out  [[:save [::hover-alert id] false]]}}
+      (alert {:level level
+              :label label
+              :style (when hover? {:border \"2px dashed black\"})})]))")
+^{::clerk/visibility {:code :hide}}
+(clerk/code "(defn station-panel
   [{:as   state
-    :keys [problem-area]}]
+    :keys [station]}]
   (for [{:keys [id title severity]}
-        (biz/get [::problems {:filter-by {:area problem-area}}])]
+        (biz/get [::problems {:station station}])]
     (hover-alert
      {:id    id
       :label title
       :level severity})))")
-
-(clerk/code "(defn biz-panel [_]
-  (for [problem-area [:cars :trucks]]
-    (biz-problem-list {:problem-area problem-area})))")
+^{::clerk/visibility {:code :hide}}
+(clerk/code "(defn main-view [_]
+  (for [k [:dresden :hanover]]
+    (station-panel {:station k})))")
 {:nextjournal.clerk/visibility {:code :show}}	
 ```
 
-- `hover-alert`:
-  - This builds a path to access some global state.
-  - `id` had better be globally unique, or else we'll have
-  - How do we show the same state in two places, but with unique hover behavior?
-    - We'd have to encode the unique UI location into `id`. Otherwise, the hover state will be duplicated.
-    - Of course this is possible, but the problem is that we have to make a choice.
-	- How reliably "local" the state is depends on how disciplined we are in calling `hover-alert`.
+`hover-alert`:
+- This builds a path to access some global state.
+- `id` had better be globally unique, or else we'll have collisions.
+- How do we show the same state in two places, but with unique hover behavior?
+  - We'd have to encode the unique UI location into `id`. Otherwise, the hover state will be duplicated.
+  - Of course this is possible, but the problem is that we have to make a choice.
+  - How reliably "local" the state is depends on how disciplined we are in calling `hover-alert`.
 
-- `biz-problems-list`:
-  - This uses a re-frame-like registration to get a domain value, using the key `::problems`.
-    - What parts of state does this come from?
-    - It probably looks up another registration and filters the result. And so on. What are these?
+`biz-problems-list`:
+- This uses a re-frame-like registration to get a domain value, using the key `::problems`.
+  - What parts of state does this come from?
+  - It probably looks up another registration and filters the result. And so on. What are these?
 
-- `biz-panel`: 
-  - Here we can't see what parts of state our child component depends on.
-  - What happens if we remove this? What parts of state will become unused?
-  - What if we add this to another app? What registrations will we need to make available?
-  - If we change the api, or the results, of `::problems`, how will we know that this render-fn is affected?
-  - I just got an error: undefined query handler. But why does my render-fn even use that query? I don't see a call anywhere.
-
+`main-view`: 
+- What if we remove this? What parts of state will become unused?
+- What if we add this to another app? What registrations will we need to make available?
+- If we change the api for `::problems`, how will we know that this render-fn is affected?
+- I just got an error: "undefined query handler: `::macguffin`". Why does `main-view` need that? I don't see a call anywhere.
 
 ### Prop-drilling or global-state?
 
-With prop-drilling, I feel the explicitness and repl-friendliness can truly benefit a team.
+With prop-drilling, the explicitness and repl-friendliness can truly benefit a team.
 They make UI very easy to reason about. On the other hand, changing the UI tree causes a mess of re-drilling,
-slowing the team down. Also, without any framework in place, it's up to our devs to "invent" the 
+slowing the team down. Also, without any standard convention, it's up to our devs to "invent" the 
 means to get and update values.
 
 Can we prop-drill in a way that doesn't make messes, and requires less creativity?
 
 With global state, render-fns are only explicit about their direct deps, not the deps of their children.
-This can feel more organized, even though it's more implicit. Most of the Clojure community has settled
-on this pattern with the re-frame paradigm. With re-frame, we tend to solve the observability problems using
-tooling. For instance, re-frame-10x returns us to "repl-friendliness" by providing a custom "visual repl".
+This can feel organized, but it's more implicit. Nevertheless, most of the Clojure community has settled
+on this pattern. With re-frame, we tend to solve the observability problems using
+tooling. For instance, re-frame-10x provides a "visual repl".
 
 Can we build observability tools that are more explicit and repl-friendly?
 
 ### Separating concerns
-I see a pattern emerging. We're seeing three distinct ways that a render-fn can model state, each with a defining constraint:
+I see a pattern emerging. There are three distinct ways that a render-fn can model state, each with a defining constraint:
 
 - **Configuration**:   the caller is responsible for providing this value and modeling its change and locality.
 - **Local state**:     like configuration, but *this* function models change and locality.
-- **Business domain**: UI should *not* model its locality or change, or else we get "tar-pit"[^tar-pit] issues. Instead, its locality is global, and change is modeled by nexus.
+- **Business domain**: UI should *not* model its locality or change, or else we get "tar-pit"[^tar-pit] issues. Instead, its locality is global, and change is modeled by a registry of event handlers.
 
 ### Drilling responsibly
-Using pure functions, where all the required values come through the arguments, leads to significant repl-friendliness and testability.
-But "global" and "local" state patterns have organizational advantages.
+When we use pure functions, where all required values are arguments, we gain significant repl-friendliness and testability.
+But "global" and "local" state patterns give organizational clarity.
 
-With top-down rendering, we can just do both. The "global" and "local" state can just be contained within the argument.
-Clojure's immutable data structures handle this perfectly. Simple and powerful.
+With top-down rendering, we can just do both. The "global" state can just *be* one of the arguments. Clojure's immutable data structures handle this perfectly - simple and powerful.
 
-This is kind of more or less a dependency-injection pattern.
+This is, more or less, a dependency-injection pattern.
 
 ## What structure do we pass into a render-fn?
 What's the ideal way to structure this "responsible drilling" pattern? 
 What do we actually pass? How is the "global" part propagated?
 
-If we separate these three parts, then it's up to each render-fn to recombine them.
+If we separate state into three concerns, then it's up to each render-fn to recombine them.
 What are the pitfalls? What if we mix up config & domain? What if we use local *as* config?
 
-### State concept A: Pass `config` (with library keys inside,)
-Here's what a typical callsite would look like:
+### State concept A: Pass `config` (with library keys inside)
+Here's what a typical callsite looks like:
+```clojure
+(hover-alert
+ {:level     :warn
+  :label     "Construction zone"
+  ::k/path   [::k/local :stations :dresden :alerts 0]
+  ::k/domain {:biz/stations [:hanover :dresden]
+              :biz/problems #{{:id       0
+                               :title    "Construction zone"
+                               :severity :warn}}}
+  ::k/local  {:stations
+              {:dresden
+               {:alerts {0 {:hover? true}}}}}})
+```
 
-`::k/domain` and `::k/local` come from top-level keys in the replicant system-state, and `::k/path` comes from the caller.
+`::k/domain` and `::k/local` come directly out of the replicant system-state. `::k/path` comes from the caller. Here's a more detailed walkthrough:
 
 #### Receiving "local" state
 ```clojure
 (defn hover-alert [{:keys    [level label]
                     ::k/keys [path local]}]
   (let [{:keys [hover?]} (get local path)]
-    [:div {:on    {:mouse-over [[:events/save (conj path :hover?) true]]
-                   :mouse-out  [[::k/save-local (conj path :hover?) false]]}
-           :style (when hover? {:border "2px dashed black"})}
+    [:div {:on {:mouse-over [[:save (conj path :hover?) true]]
+                :mouse-out  [[:save (conj path :hover?) false]]}}
      (alert {:level level
-             :label label})]))
+             :label label
+             :style (when hover? {:border "2px dashed black"})})]))
 ```
+
+Here we wrap the basic `alert` with local state management. When the user mouses over the wrapper div, our `:save` action updates a value within replicant's system state, under `::k/local`. This causes replicant to re-render. It calls `hover-alert` again, and this time it destructures `hover?` to pass a style map the the `alert` fn.
 
 #### Injecting "local" state, querying "domain" state
 
-Here's a "business" component, translating domain semantics into UI semantics.
-But first, let's see how it injects the "local" state into its children:
-
 ```clojure
-^{::clerk/visiblity {:code :hide}}
-(clerk/code 
-"(defn biz-problem-list [{:as      state
-                         :keys    [problem-area]
-                         ::k/keys [domain local path]}]
-  (for [{:keys [id title severity]}
-        (biz/get-problems domain {:area problem-area})]
-    (hover-alert {:label    title
-                  :level    severity
-                  ::k/path  (into path [:biz/problem id])
-				  ::k/local local})))")
+^{::clerk/visibility {:code :hide :result :show}}
+(clerk/code
+ "(defn station-panel [{:as     state
+                       :keys    [station]
+                       ::k/keys [domain local path]}]
+   (for [{:keys [id title severity]}
+         (biz/get-problems domain {:station station})]
+     (hover-alert {:label    title
+                   :level    severity
+                   ::k/path  (into path [:alerts id])
+                   ::k/local local})))")
 ```
 
-We receive `path` and `local` from yet another caller.
-Then we extend `path` and pass down `local`.
+Here's a "business" component, translating domain semantics into UI semantics.
+It receives `path` and `local` from yet another caller, extending `path` and passing both along.
 
 We also receive another injection: `domain`.
-We use a helper from our app to get a value out of it.
+We use a helper from our business logic to get a value out of it.
 
 Here's one here's one level higher in our UI call chain.
-This `biz-panel` does nothing but return its children, with injections:
+This `main-view` just returns its children, with injections:
 
 ```clojure
-(defn biz-panel' [{:as      state
+(defn main-view' [{:as      state
                    ::k/keys [domain local path]
                    :or      {path []}}]
-  (biz-problem-list
-   {:problem-area :cars
-    ::k/local     (get local :cars)
-    ::k/path      (conj path :cars)
-    ::k/domain    domain})
-  (biz-problem-list
-   {:problem-area :trucks
-    ::k/local     (get local :trucks)
-    ::k/path      (conj path :trucks)
-    ::k/domain    domain}))
+  (station-panel
+   {:station   :dresden
+    ::k/local  local
+    ::k/path   (into path [:stations :trucks])
+    ::k/domain domain})
+  (station-panel
+   {:station   :hanover
+    ::k/local  local
+    ::k/path   (into path [:stations :trains])
+    ::k/domain domain}))
 ```
 
 #### Helpers
 We can make this pattern more regular and concise with helper-fns.
-For instance, here's that last component rewritten:
+For instance, here's that last component rewritten. 
 
 ```clojure
-(defn biz-panel [state]
-  (for [k [:cars :trucks]]
-    (biz-problem-list
-     (k/+ state k
-       {:problem-area k}))))
+(defn main-view [state]
+  (for [k [:dresden :hanover]]
+    (station-panel
+     (k/+ state [:stations k]
+       {:station k}))))
 ```
 
-### State concept B: Pass a `domain`, (with `::k/config` & `::k/path` keys inside)
+### State concept B: Pass a `domain`, (with lib keys inside)
 Similar to concept A, but inside-out:
 
 ```clojure
-(render-b {:biz/vehicle  :truck
-           :biz/stations [:hanover :dresden]
-           ::k/local     {:biz/station-panel {:dresden {:highlight? true}
-                                              :hanover {:disable? true}}}
-           ::k/config    {:class :underline :color :blue}
-           ::k/path      [:biz/vehicle :ui/inspector 25]})
+(hover-alert
+ {::k/config    {:label "Construction zone" :level :warn}
+  ::k/local     {:stations
+                 {:dresden
+                  {:alerts {0 {:hover? true}}}}}
+  ::k/path      [::k/local :stations :dresden :alerts 0]
+  :biz/problems #{{:id 0 :severity :warn :title "Construction zone"}}
+  :biz/stations [:hanover :dresden]})
 ```
 #### Goes against Replicant ergonomics
 This won't feel like a "replicant" render-fn, since we don't destructure top-level keys to decide how to render. Instead, we get them from `::k/config`. Rewriting a "stateless" fn (like `alert`) into one that uses local state (like `hover-alert`) is complicated, since we have to destructure the arg differently.
@@ -393,13 +413,13 @@ Here we achieve separation in a different way:
 This way, a callsite looks like:
 
 ```clojure
-(render-x
- {:class                        :underline
-  :style                        {:color :blue}
-  :biz/vehicle                  :truck
-  :biz/stations                 [:hanover :dresden]
-  [:biz/station-panel :dresden] {:highlight? true}
-  [:biz/station-panel :hanover] {:disable? true}})
+(hover-alert
+ {::k/path      [::k/local :stations :dresden :alerts 0]
+  :biz/problems #{{:id 0 :severity :warn :title "Construction zone"}}
+  :biz/stations [:hanover :dresden]
+  :label        "Construction zone"
+  :level        :warn
+  [:stations :dresden :alerts 0] {:hover? true}})
 ```
 
 #### Uses `clojure.core` as an implicit DSL
@@ -407,7 +427,7 @@ For example, reagent has special behavior when you pass a vector: `[my-component
 Reagent code doesn't *name* this behavior, you just have to know. 
 We'd do a similar thing, building special behavior for namespaced keys and vectors.
 
-I like how we're close to the "bare meta."[^bare-meta]
+I like how we're close to the "bare meta."
 Namespaces *are* domains, vectors *are* paths. There's formal elegance to that.
 
 But this might frustrate a more pragmatic dev.
@@ -416,18 +436,17 @@ There's an unarticulated meaning behind the structure.
 If the separation of concerns is so clear, why not just name them with keys (i.e. Concept A)?
 Maybe that's less pretentious.
 
-
 #### Hard to handle dev sloppiness
 I think we'd need the "special behavior" above, because if devs don't follow our 3-type convention, 
 we get strange consequences. Here are some accidents I can foresee:
 
 - **Write a domain query that gets a vector:**  
-`(defq get-x [m] (get m [:biz/some :biz/place]))`
+`(defq get-alert [station] (get m [:stations station]))`
 *Oops, I used `get` instead of `get-in`. And since I named my paths after my domain, 
 that path exists! My domain-getter now returns local-state. That's nonsense!*
   
 - **Destructure domain keys from the argument:**  
-`(defn render-x [state] [:span (:biz/vehicle state)])`
+`(defn render-station [state] [:span (:biz/station state)])`
 *The key is right there in the arg, so I don't need a getter. That's okay, but I lost observability. My teammates can't trace this dependency, so they forgot to fulfil it!*
 
 - **Filter out some domain keys:**  
@@ -464,14 +483,38 @@ The only predicate we can use is `namespace`:
     (render-y (into {} (filter drill?) state))]))
 ```
 
-Every render-fn will need to do exactly this job. We can extract the work to a helper, but the question remains: Why take care to separate these values everywhere? Why couldn't we store them separately in the first place?
+Every render-fn will need to do exactly this job. We can extract the work to a helper, but the question remains: Why take care to separate these values everywhere? Why couldn't we place them separately in the first place?
+
+### State concept D:
+```clojure
+(hover-alert
+ {:label   "Construction zone"
+  :level   :warn
+  ::k/path [::k/local :stations :dresden 0]
+  ::k/stem {:biz/stations [:hanover :dresden]
+            :biz/problems #{{:id 0 :severity :warn :title "Construction zone"}}
+            ::k/local     {:stations
+                           {:dresden
+                            {:alerts {0 {:hover? true}}}}}}})
+```
+
+This looks more complicated, but it makes for nice ergonomics. 
+
+- `::k/stem`[^stem-name]:
+  - It's just the value of the replicant (sy)stem, with no restructuring.
+  - It's not called "domain" because it contains more than that.
+  - For "domain" queries, just pass `stem`: `(biz/get-problems stem)`
+  - For "local" state, use a library getter: `(k/local state)` or `(k/local stem)`
+- `::k/path`: 
+  - Paths must begin with `::k/local`. Our passing helper can handle that for us, so we only declare the meaningful part of the path.
+  - We don't "accumulate" paths by default. The user can just do `conj`, or we'll provide another helper.
 
 ## How do we model a render-fn's "local" state?
 We're considering ways to reserve a subtree of the system state for a particular callsite of a render-fn, similar to react's `use-state`. The smallest thing we can provide is a **path**.
 
 This path could be fully automated[^membrane], but that's too magical for our taste. Instead, we'll declare the path explicitly within a render-fn's callsite:
 
-`(ui/vehicle-panel {::k/path [:biz/vehicle :ui/panel 25]})`
+`(ui/main-view {::k/path [:biz/vehicle :ui/panel 25]})`
 
 A path joins over business domain, ui config and ui nesting. It says: "*this* business fact, displayed *this* way, in *this* location." In practice, paths could be more abstract, but I think they carry this essential meaning.
 
@@ -502,18 +545,26 @@ This way, paths "accumulate" as the tree of render-fn calls gets deeper.
   (render-b (assoc state ::k/path (concat path [:extra :stuff]))))
 ```
 
-Although more complex to implement, this avoids key collisions by default.
-It also makes the task of choosing a path feel less "inventive".
+Although more complex to implement, we get a nice property:
+the structure of "local" state mirrors the call tree of render-fns.
+This ensures every render-fn gets to access a unique location, without collisions.
+
+We shouldn't really care about the shape of "local" state, because:
+- Each location should be accessible only to a single render-fn
+- It's accessbile via an opaque "path" that gets passed in
+- Its value should be ephemeral
+
+All this makes the task of choosing a path feel less "inventive".
 
 ### Path Concept C: Prepend every path with a library key: `[::k/local ...]`
-This helps us avoid collisions while drilling and querying. The mental cost is low, since `path` just gets passed in. You don't have to write the path by hand just to get its corresponding value.
+This helps us avoid collisions while drilling and querying.
+If we also use Path Concept B, then the mental cost is low, since we never have to write the entire path by hand.
+A library getter can help resolve ambiguities: `(k/local state)` can do the perfect destructuring for us.
 
 ### Conclusion
 We could have Concepts A, B and C within the same app:
 Use A for more central pieces, and B for pieces that are more nested and instanced.
 I think Concept C is preferable in all cases.
-
-
 
 ## How do we translate our business domain into UI?
 ### Caching
@@ -528,7 +579,7 @@ regardless of what the UI was doing.
 As a result, library users could implement a "cached" value in the few cases where it's needed, 
 with total control and almost no magic. 
 
-This clean pattern depended on "re-frame-time", where events get handled in a single queue,
+This clean pattern depended on "re-frame-time"[^re-frame-time], where events get handled in a single queue,
 effects take place on a global app-db singleton, and views only change as a reaction to app-db.
 Replicant's top-down approach gives us an even simpler model than "re-frame-time",
 so I think our new stack can enable something as nice as "flows" for a-la-carte caching.
@@ -782,9 +833,13 @@ Intuitively, I feel the cleanest design would be:
 - Dispatch actions: datastar          (first on the client, then on the server.)
 - Everything else:  replicant & nexus (on the server)
 - Mutate DOM:       datastar          (on the client)
+
 We can achieve this if we follow one convention, and one operational rule:
+
 👷 **Declare placeholders and actions which depend on the client in the _action_ stage (not after action expansion)**
+
 🚥 **Client effects execute first, then server effects execute after.**
+
 By the "action stage", I mean the vector literals we declare under a hiccup's `:on` key. "After action expansion" refers to
 the vector literals that an action handler-fn may return. A client dependency could be the dom-node or dom-event
 provided by replicant, as well as things like the URL bar, local-storage or an ajax request.
@@ -1207,3 +1262,5 @@ And here's the full table spec:
 [^data-on-remove]: [threadgold.nz/demos/data-on-remove](https://threadgold.nz/demos/data-on-remove)
 [^tomorrow-to-yesterday]: David Yang: [From Tomorrow Back to Yesterday: A Tale of Two Web Architectures](https://www.youtube.com/watch?v=8W6Lr1hRgXo)
 [^re-frame]: For instance, [Re-Frame](https://day8.github.io/re-frame/)
+[^re-frame-time]: See: [re-frame time](https://github.com/day8/re-frame/blob/d430576ce036f97e736f2fc0f9ddec39cbedb2a1/docs/on-dynamics.md#re-frame-time)
+[^stem-name]: Quoted from Blade Runner 2049's [baseline test](https://gist.github.com/JuneKelly/57b1acd4234409917d44eb90c88d7804#file-baselinetest-txt-L149)
