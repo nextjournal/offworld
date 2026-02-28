@@ -485,7 +485,7 @@ The only predicate we can use is `namespace`:
 
 Every render-fn will need to do exactly this job. We can extract the work to a helper, but the question remains: Why take care to separate these values everywhere? Why couldn't we place them separately in the first place?
 
-### State concept D:
+### State concept D: Pass a combined `stem`
 ```clojure
 (hover-alert
  {:label   "Construction zone"
@@ -508,6 +508,38 @@ This looks more complicated, but it makes for nice ergonomics.
 - `::k/path`: 
   - Paths must begin with `::k/local`. Our passing helper can handle that for us, so we only declare the meaningful part of the path.
   - We don't "accumulate" paths by default. The user can just do `conj`, or we'll provide another helper.
+
+### State concept E: Close over the replicant state
+Maybe we're overdoing it with "responsible drilling". Our render-fns could all just close over the replicant state to achieve our "global" pattern.
+This is "impure," but it's just one symbol, well-known to library users.
+
+This ensures the value we're querying truly is the "global" state,
+since there aren't any callers that might tamper with it.
+
+Same goes for "local" state, which we store within this "global" value.
+We still pass a path into any render-fn that needs some "local" state.
+
+We can still substitute the value in tests, using `with-redefs`.
+
+```clojure
+(defn hover-alert [{:keys    [level label path]
+                    ::k/keys [path]}]
+  (let [{:keys [hover?]} (get k/*stem* path)]
+    [:div {:on {:mouse-over [[:save (conj path :hover?) true]]
+                :mouse-out  [[:save (conj path :hover?) false]]}}
+     (alert {:level level
+             :label label
+             :style (when hover? {:border "2px dashed black"})})]))
+
+(defn station-panel [{:as      state
+                      :keys    [station]
+                      ::k/keys [path]}]
+  (for [{:keys [id title severity]}
+        (biz/get-problems k/*stem* {:station station})]
+    (hover-alert {:label    title
+                  :level    severity
+                  ::k/path  (into path [:alerts id])})))
+```
 
 ## How do we model a render-fn's "local" state?
 We're considering ways to reserve a subtree of the system state for a particular callsite of a render-fn, similar to react's `use-state`. The smallest thing we can provide is a **path**.
