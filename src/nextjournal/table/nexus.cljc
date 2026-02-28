@@ -4,7 +4,8 @@
    [nexus.core :as nx]
    [nextjournal.table.ui.nested-grid :as-alias ng]
    [nextjournal.table.ui.omnibox :as-alias ob]
-   [nextjournal.offworld :as-alias 🪐]))
+   [nextjournal.offworld :as 🪐]
+   [nextjournal.baseline :as-alias k]))
 
 (defn get-node [{:as ctx :keys [dispatch-data]}]
     (-> (or dispatch-data ctx) :replicant/dom-event))
@@ -35,8 +36,8 @@
 
       :nexus/actions
       {::ob/keydown-input
-       (fn [state {:keys [key popover-id choice-id anchor-id filters-to-add path]
-                   mods  :key-modifiers}]
+       (fn [_ {:keys [key popover-id choice-id anchor-id filters-to-add path]
+               mods  :key-modifiers}]
          (cond
            (= key "Escape")    [[:event/prevent-default]
                                 [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
@@ -45,11 +46,11 @@
            (= key "ArrowDown") [[:event/prevent-default]
                                 (when choice-id
                                   [:dom-node/focus {:node [:document/element-by-id choice-id]}])]
-           (= key "Enter")     (into [[:event/prevent-default]
-                                      [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                                      [:input/clear {:node [:document/element-by-id anchor-id]}]
-                                      [:effects/save (conj path :value) ""]]
-                                     (ob-add-filter state path (first filters-to-add)))
+           (= key "Enter")     [[:event/prevent-default]
+                                [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
+                                [:input/clear {:node [:document/element-by-id anchor-id]}]
+                                [:effects/save (conj path :value) ""]
+                                [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
            (and (mods :shift)
                 (= key "Tab")) [[:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]]
            :else               nil))
@@ -59,13 +60,12 @@
            "Escape"    [[:event/prevent-default]
                         [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
                         [:dom-node/blur]]
-           "Enter"     (into
-                        [[:event/prevent-default]
-                         [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                         [:dom-node/blur {:node [:document/element-by-id anchor-id]}]
-                         [:dom-node/set-checked {:node  [:document/element-by-id choice-id]
-                                                 :value true}]]
-                        (ob-add-filter state path (first filters-to-add)))
+           "Enter"     [[:event/prevent-default]
+                        [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
+                        [:dom-node/blur {:node [:document/element-by-id anchor-id]}]
+                        [:dom-node/set-checked {:node  [:document/element-by-id choice-id]
+                                                :value true}]
+                        [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
            "ArrowUp"   [[:event/prevent-default]
                         (if prev-id
                           [:dom-node/focus {:node [:document/element-by-id prev-id]}]
@@ -104,6 +104,14 @@
                                   (fn [state]
                                     (reduce (fn [acc [path v]]
                                               (assoc-in acc path v))
+                                            state path-vs))))
+                         :effects/conj
+                         ^:nexus/batch
+                         (fn [_ system path-vs]
+                           (swap! system
+                                  (fn [state]
+                                    (reduce (fn [acc [path v default-coll]]
+                                              (update-in acc path (fnil conj (or default-coll [])) v))
                                             state path-vs))))}
    :nexus/actions
    {::ng/scroll              (fn [_ path top left]

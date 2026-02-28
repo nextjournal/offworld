@@ -61,6 +61,7 @@
                               :key            [:event/key]
                               :key-modifiers  [:event/key-modifiers]
                               :path           path
+                              :anchor-id      anchor-id
                               :popover-id     popover-id}]]}}])
 
 #?(:cljs (defscene anchor-scene []
