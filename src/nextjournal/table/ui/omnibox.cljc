@@ -82,10 +82,9 @@
            :let [{:keys [label]} (nth filters-to-add i)
                  id      (choice-id  popover-id i)
                  next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
-                 prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))
-                 add     [::add-filter path (first filters-to-add)]]]
+                 prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))]]
        [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
-        {:on {:click [add]}}
+        {:on {:click [[::add-filter path (first filters-to-add)]]}}
         [:span.flex.mt-1.focus:outline-none
          {:id       id
           :tabindex 0

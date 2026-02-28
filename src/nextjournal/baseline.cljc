@@ -15,8 +15,6 @@
 (defn local [{::k/keys [stem path]}]
   (get-in stem path))
 
-
-
 (defn +
   "This fn signature standardizes our convention for writing render-fns.
   - We pass a single map to a render-fn, i.e. replicant's \"state\".
