@@ -80,15 +80,19 @@
 
 (defn client-action? [client-nexus [k :as action]]
   (and (not (::🪐/server (meta action)))
-       ((merge (:nexus/actions client-nexus {})
-               (:nexus/effects client-nexus {}))
-        k)))
+       (contains? (:nexus/actions client-nexus {}) k)))
+
+(defn client-effect? [client-nexus [k :as action]]
+  (and (not (::🪐/server (meta action)))
+       (contains? (:nexus/effects client-nexus {}) k)))
 
 (defn server-action? [server-nexus [k :as action]]
   (and (not (::🪐/client (meta action)))
-       ((merge (:nexus/actions server-nexus {})
-               (:nexus/effects server-nexus {}))
-        k)))
+       (contains? (:nexus/actions server-nexus {}) k)))
+
+(defn server-effect? [server-nexus [k :as action]]
+  (and (not (::🪐/client (meta action)))
+       (contains? (:nexus/effects server-nexus {}) k)))
 
 #?(:cljs
    (defn divert
@@ -97,14 +101,26 @@
      ([client-nexus server-nexus dom-event actions-str]
       (let [actions           (deserialize actions-str)
             dispatch-data     (when dom-event (replicant/build-event-map dom-event))
-            client-actions    (filterv #(client-action? client-nexus %) actions)
-            server-actions    (filterv #(server-action? server-nexus %) actions)
+            client-actions    (filterv #(or (client-action? client-nexus %)
+                                            (client-effect? client-nexus %)) actions)
+            server-actions    (filterv #(or (server-action? server-nexus %)
+                                            (server-effect? server-nexus %)) actions)
             {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
-            client-effects    (filterv #(client-action? client-nexus %) effects)
-            server-effects    (filterv #(server-action? server-nexus %) effects)
+            client-effects    (filterv #(client-effect? client-nexus %) effects)
+            server-effects    (filterv #(server-effect? server-nexus %) effects)
+            bad-actions       (filterv #(and (server-action? server-nexus %)
+                                             (not (server-effect? server-nexus %)))
+                                       effects)
             actions-to-send   (seq (concat server-effects server-actions))]
+        (when (seq bad-actions)
+          (js/console.warn "🪐OFFWORLD: These keys were returned from an action handler: "
+                           (pr-str (mapv first bad-actions))
+                           "They're listed in the nexus as actions, not effects."
+                           "In SSR mode, they won't be sent to the server (or executed at all)."
+                           "This matches the behavior of CSR mode. By design, actions can't trigger actions."))
         (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
         (serialize (nexus/interpolate client-nexus dispatch-data (vec actions-to-send)))))))
+
 
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: "
