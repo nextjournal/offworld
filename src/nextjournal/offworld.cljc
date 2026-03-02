@@ -7,8 +7,7 @@
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.baseline :as-alias k]
    #?@(:cljs
-       [[replicant.core :as replicant]
-        [nexus.core :as nexus]])))
+       [[nexus.core :as nexus]])))
 
 #?(:cljs (def ^:dynamic client-nexus-static {}))
 #?(:cljs (def ^:dynamic client-nexus-registry {}))
@@ -94,13 +93,19 @@
   (and (not (::🪐/client (meta action)))
        (contains? (:nexus/effects server-nexus {}) k)))
 
+(defn build-event-map [e]
+  (let [node #?(:cljs (.-target e) :clj nil)]
+    (cond-> {:replicant/trigger :replicant.trigger/dom-event
+             :replicant/dom-event e}
+      node (assoc :replicant/node node))))
+
 #?(:cljs
    (defn divert
      ([dom-event actions-str]
       (divert (get-client-nexus) (get-server-nexus) dom-event actions-str))
      ([client-nexus server-nexus dom-event actions-str]
       (let [actions           (deserialize actions-str)
-            dispatch-data     (when dom-event (replicant/build-event-map dom-event))
+            dispatch-data     (when dom-event (build-event-map dom-event))
             client-actions    (filterv #(or (client-action? client-nexus %)
                                             (client-effect? client-nexus %)) actions)
             server-actions    (filterv #(or (server-action? server-nexus %)
