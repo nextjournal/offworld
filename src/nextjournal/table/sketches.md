@@ -11,6 +11,7 @@
    [nextjournal.table.clerk-viewers :as viewers]
    [nextjournal.offworld :as 🪐]
    [nextjournal.baseline :as k]
+   [nextjournal.offworld.demo.biz :as biz]
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
    [replicant.core :as replicant]))
@@ -230,7 +231,7 @@ This is more concise, but we get less observability.
   [{:as   state
     :keys [station]}]
   (for [{:keys [id title severity]}
-        (biz/get [::problems {:station station}])]
+        (biz/get-problems {:station station})]
     (hover-alert
      {:id    id
       :label title

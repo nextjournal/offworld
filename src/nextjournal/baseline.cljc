@@ -93,6 +93,8 @@
 (defq get-j [stem] (when (get-i stem) (:j stem)))
 (defn render-j [stem] (get-j stem))
 
+(def ^:dynamic *stem* nil)
+
 (comment
   (trace (q {:a 1} get-a))
   (trace (render-a {:a 1}))
