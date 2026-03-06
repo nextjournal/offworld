@@ -16,6 +16,8 @@
 #?(:cljs (def ^:dynamic server-nexus-registry {})
    :clj  (def server-nexus-registry (atom {})))
 
+#?(:cljs (def memories (js/WeakMap.)))
+
 (def mode (atom :csr))
 
 (defn dissoc-handlers [nexus k]
@@ -93,19 +95,27 @@
   (and (not (::🪐/client (meta action)))
        (contains? (:nexus/effects server-nexus {}) k)))
 
-(defn build-event-map [e]
-  (let [node #?(:cljs (.-target e) :clj nil)]
-    (cond-> {:replicant/trigger :replicant.trigger/dom-event
-             :replicant/dom-event e}
-      node (assoc :replicant/node node))))
+#?(:cljs
+   (defn build-event-map [e]
+     (let [node  (.-target e)]
+       (cond-> {:replicant/trigger :replicant.trigger/dom-event
+                :replicant/dom-event e}
+         node (assoc :replicant/node node)))))
+
+#?(:cljs
+   (defn build-lifecycle-map [node]
+     {:replicant/life-cycle :replicant.life-cycle/mount
+      :replicant/node      node}))
 
 #?(:cljs
    (defn divert
-     ([dom-event actions-str]
-      (divert (get-client-nexus) (get-server-nexus) dom-event actions-str))
-     ([client-nexus server-nexus dom-event actions-str]
+     ([trigger js-data actions-str]
+      (divert (get-client-nexus) (get-server-nexus) trigger js-data actions-str))
+     ([client-nexus server-nexus trigger js-data actions-str]
       (let [actions           (deserialize actions-str)
-            dispatch-data     (when dom-event (build-event-map dom-event))
+            dispatch-data     (case trigger
+                                "event"     (build-event-map js-data)
+                                "lifecycle" (build-lifecycle-map js-data))
             client-actions    (filterv #(or (client-action? client-nexus %)
                                             (client-effect? client-nexus %)) actions)
             server-actions    (filterv #(or (server-action? server-nexus %)
@@ -126,19 +136,46 @@
         (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
         (serialize (nexus/interpolate client-nexus dispatch-data (vec actions-to-send)))))))
 
-
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: "
        "nextjournal.offworld.divert("
+       "'event',"
        "evt, '"
        (serialize actions)
        "')}})"))
 
+(defn d*-dispatch-init [actions signal-name]
+  (str "@get('/replicant-dispatch', {payload: {actions: "
+       "nextjournal.offworld.divert("
+       "'lifecycle',"
+       "$" signal-name ", '"
+       (serialize actions)
+       "')}})"))
+
+(defn priority-sorted-map
+  [priority-keys]
+  (let [rank         (zipmap priority-keys (range))
+        default-rank (count priority-keys)]
+    (sorted-map-by
+     (fn [a b]
+       (let [ra (get rank a default-rank)
+             rb (get rank b default-rank)]
+         (if (= ra rb)
+           (compare a b)
+           (compare ra rb)))))))
+
 (defn attr->d*
-  "Converts top-level hiccup attributes to datastar expressions."
+  "Converts top-level hiccup attributes to datastar expressions.
+  Returns a sorted-map, since datastar depends on some keys appearing
+  earlier in the attributes."
   [{:as m ::🚀/keys [data-init]}]
-  (merge m
-         (when data-init {:data-init (d*-dispatch data-init)})))
+  (let [signal-name "offworld-ref"]
+    (if-not data-init
+      m
+      (into (priority-sorted-map [:data-ref])
+            (merge m
+                   {:data-ref  signal-name
+                    :data-init (d*-dispatch-init data-init signal-name)})))))
 
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
