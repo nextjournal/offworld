@@ -1,10 +1,7 @@
 (ns nextjournal.table.nexus
   (:require
-   [nexus.registry :as nxr]
-   [nexus.core :as nx]
    [nextjournal.table.ui.nested-grid :as-alias ng]
    [nextjournal.table.ui.omnibox :as-alias ob]
-   [nextjournal.offworld :as 🪐]
    [nextjournal.baseline :as-alias k]))
 
 (defn get-node [{:as ctx :keys [dispatch-data]}]

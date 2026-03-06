@@ -5,6 +5,7 @@
    [clojure.walk :as walk]
    [datastar :as-alias 🚀]
    [nextjournal.offworld :as-alias 🪐]
+   [replicant.dom :as rdom]
    [nextjournal.baseline :as-alias k]
    #?@(:cljs
        [[nexus.core :as nexus]])))
@@ -16,9 +17,14 @@
 #?(:cljs (def ^:dynamic server-nexus-registry {})
    :clj  (def server-nexus-registry (atom {})))
 
-#?(:cljs (def memories (js/WeakMap.)))
+#?(:cljs (defonce memories (js/WeakMap.)))
 
 (def mode (atom :csr))
+
+#?(:cljs (defn recall [node]
+           (case @mode
+             :csr (rdom/recall node)
+             :ssr (.get memories node))))
 
 (defn dissoc-handlers [nexus k]
   (let [dissoc-meta #(into {} (remove (comp k meta val)) %)]
@@ -105,7 +111,9 @@
 #?(:cljs
    (defn build-lifecycle-map [node]
      {:replicant/life-cycle :replicant.life-cycle/mount
-      :replicant/node      node}))
+      :replicant/node       node
+      :replicant/remember   (fn remember [memory]
+                              (.set ^js memories node memory))}))
 
 #?(:cljs
    (defn divert

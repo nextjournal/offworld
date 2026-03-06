@@ -38,8 +38,8 @@
     (if-not size-cache
       [:div {:replicant/on-mount [[::init-local path]]
              ::🚀/data-init      [^::🪐/server [::init-local path]]}]
-      (let [height 800
-            width  1200
+      (let [height 400
+            width  600
             {:as            row-traversal
              row-paths      :header-paths
              row-grid-names :grid-names
