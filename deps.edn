@@ -3,7 +3,8 @@
            ring/ring-core          {:mvn/version "1.15.3"}
            ring/ring-jetty-adapter {:mvn/version "1.15.3"}
            cheshire/cheshire       {:mvn/version "6.1.0"}
-           no.cjohansen/nexus      {:mvn/version "2025.11.1"}}
+           no.cjohansen/nexus      {:mvn/version "2025.11.1"}
+           selmer/selmer           {:mvn/version "1.13.1"}}
  :paths   ["src" "resources"]
  :aliases {:dev {:exec-fn     user/start!
                  :extra-paths ["dev"]

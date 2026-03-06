@@ -17,7 +17,9 @@
    [ring.core.protocols :refer [StreamableResponseBody]]
    [nextjournal.offworld :as 🪐]
    [nextjournal.baseline :as k]
-   [nextjournal.offworld.demo :as demo])
+   [nextjournal.offworld.demo :as demo]
+   [selmer.parser :as selmer]
+   [selmer.util])
   (:import
    (clojure.core.async.impl.channels ManyToManyChannel)))
 
@@ -58,7 +60,11 @@
     sse-chan
     (sse-message
      {:event "datastar-patch-elements"
-      :lines [["elements" (rstr/render (🪐/replicant->d* (ui/render (k/init-state new-state))))]]}))))
+      :lines [["elements" (-> new-state
+                              k/init-state
+                              ui/render
+                              🪐/replicant->d*
+                              rstr/render)]]}))))
 
 (defn sse-handler [_]
   {:status  200
@@ -68,21 +74,27 @@
 
 (def datastar-script
   (str "<script type=\"module\" "
-       "src=\"https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js\""
+       "src=\"https://cdn.jsdelivr.net/gh"
+       "/starfederation/datastar@1.0.0-RC.7"
+       "/bundles/datastar.js\""
        "></script>"))
 
 (defn index-handler [req]
-  (let [ssr?        (some-> req :query-string (str/includes? "ssr=true"))
-        main-el-rx  #"<main id=\"app\" class=\"p-4\">Loading...</main>"]
+  (let [ssr? (some-> req :query-string (str/includes? "ssr=true"))]
     {:status  200
      :headers {"Content-Type" "text/html; charset=utf-8"}
      :body
-     (cond-> (slurp "resources/public/index.html")
-       ssr? (str/replace #"</head>" (str datastar-script "\n</head>"))
-       ssr? (str/replace main-el-rx (rstr/render (🪐/replicant->d* (ui/render (k/init-state @system)))))
-       ssr? (str/replace
-             #"<body>"
-             "<body data-init=\"@get('session')\" data-on-signal-patch=\"nextjournal.offworld.update_queries(patch)\">"))}))
+     (selmer.util/without-escaping
+      (selmer/render-file
+       "public/index.html"
+       (when ssr?
+         {:extra-head datastar-script
+          :body-attr  "data-init=\"@get('session')\""
+          :main       (-> @system
+                          k/init-state
+                          ui/render
+                          🪐/replicant->d*
+                          rstr/render)})))}))
 
 (defn read-dispatch [req]
   (some-> req
