@@ -1172,6 +1172,23 @@ Maybe we'll need to wrap them:
 Our helper-fn `divert` can handle this wrapping, so it doesn't impact the library user.
 
 
+### SSR concept F: Client placeholder, Server action, Client effect
+- Pre-interpolate on the client 🌎
+- Push actions to the server 🌎->🪐
+- Expand all actions on the server 🪐
+  - Push client effects to the client (with placeholders) 🪐->🌎
+	- Interpolate client effects 🌎
+	- Execute client effects 🌎
+	- Acknowledge client effects 🌎->🪐
+  - Execute server effects 🪐
+
+Here we accept that we can't pass a js-only value through the full chain from actions to effects. Instead, we'd use placeholders in the effects we send back to the client.
+
+#### Benefit: less serialization?
+Similar to lightweight-labs/feather[^feather-uuids], could we just pass uuids for dispatch and acknowledgement?
+
+#### Problem: two roundtrips per dispatch sounds buggy
+
 ## Can we render some parts on client, some on server?
 fast initial page load with SSR
 switch to CSR?
@@ -1297,3 +1314,4 @@ And here's the full table spec:
 [^re-frame]: For instance, [Re-Frame](https://day8.github.io/re-frame/)
 [^re-frame-time]: See: [re-frame time](https://github.com/day8/re-frame/blob/d430576ce036f97e736f2fc0f9ddec39cbedb2a1/docs/on-dynamics.md#re-frame-time)
 [^stem-name]: Quoted from Blade Runner 2049's [baseline test](https://gist.github.com/JuneKelly/57b1acd4234409917d44eb90c88d7804#file-baselinetest-txt-L149)
+[^feather-uuids]: https://inv.nadeko.net/8W6Lr1hRgXo?t=1064
