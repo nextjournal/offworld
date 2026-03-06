@@ -81,8 +81,16 @@ Ductile's omnibox modeled the state of a "selection"[^select-state], letting the
 [^nexus-focus]: [offworld/.../nexus.cljc#L105](https://github.com/nextjournal/offworld/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/nexus.cljc#L105)
 
 ## Can we still use dom watchers like "Resize"?
-replace the react functional ref pattern with replicant's :remember
+In reagent, we often access React's `ref`[^react-ref] to access the html element that our component is rendering.
 
+For instance, re-com's nested-grid stores its `ref` in a local atom[^rc-grid-ref], then uses that to react to its own scroll state and flex sizing. This is necessary to determine the right virtualization "window", while still remaining lightweight and compatible by leaving scroll and sizing "uncontrolled". 
+
+Do we need any of this with our new pattern? We could hold on to the ref using replicant's `:remember`[^replicant-remember], and datastar's `data-ref`[^data-ref]. On the other hand, why do we need this?
+
+[^rc-grid-ref]: [re-com/../nested_grid.cljs#L393](https://github.com/day8/re-com/blob/6be4763003aa4c990ddf00cad5fdc13a6a8d512f/src/re_com/nested_grid.cljs#L393)
+[^rc-dropdown-client-rect]: [re-com/.../nested_grid.cljs#L552](https://github.com/day8/re-com/blob/6be4763003aa4c990ddf00cad5fdc13a6a8d512f/src/re_com/dropdown.cljs#L552)
+[^data-ref]: [https://data-star.dev/reference/attributes#data-ref](https://data-star.dev/reference/attributes#data-ref)
+[^replicant-remember]: [https://replicant.fun/life-cycle-hooks/#memory](https://replicant.fun/life-cycle-hooks/#memory)
 ## How do we organize all the state a render-fn requires?
 I'll focus the discussion around a chain of replicant render-fns:
 
@@ -1314,4 +1322,5 @@ And here's the full table spec:
 [^re-frame]: For instance, [Re-Frame](https://day8.github.io/re-frame/)
 [^re-frame-time]: See: [re-frame time](https://github.com/day8/re-frame/blob/d430576ce036f97e736f2fc0f9ddec39cbedb2a1/docs/on-dynamics.md#re-frame-time)
 [^stem-name]: Quoted from Blade Runner 2049's [baseline test](https://gist.github.com/JuneKelly/57b1acd4234409917d44eb90c88d7804#file-baselinetest-txt-L149)
+[^react-ref]: [React: referencing values with refs](https://react.dev/learn/referencing-values-with-refs)
 [^feather-uuids]: https://inv.nadeko.net/8W6Lr1hRgXo?t=1064
