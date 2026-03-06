@@ -1,15 +1,17 @@
-{:deps    {no.cjohansen/replicant  {:mvn/version "2025.12.1"}
-           metosin/reitit          {:mvn/version "0.9.2"}
-           ring/ring-core          {:mvn/version "1.15.3"}
-           ring/ring-jetty-adapter {:mvn/version "1.15.3"}
-           cheshire/cheshire       {:mvn/version "6.1.0"}
-           no.cjohansen/nexus      {:mvn/version "2025.11.1"}
-           selmer/selmer           {:mvn/version "1.13.1"}}
+{:deps    {org.clojure/clojurescript {:mvn/version "1.12.134"}
+           no.cjohansen/replicant    {:git/url "https://github.com/cjohansen/replicant.git"
+                                      :git/sha "29f7644b2848205b835209b0b71980727aacbd9b"}
+           metosin/reitit            {:mvn/version "0.9.2"}
+           ring/ring-core            {:mvn/version "1.15.3"}
+           ring/ring-jetty-adapter   {:mvn/version "1.15.3"}
+           cheshire/cheshire         {:mvn/version "6.1.0"}
+           no.cjohansen/nexus        {:mvn/version "2025.11.1"}
+           selmer/selmer             {:mvn/version "1.13.1"}}
  :paths   ["src" "resources"]
  :aliases {:dev {:exec-fn     user/start!
                  :extra-paths ["dev"]
                  :extra-deps  {no.cjohansen/dataspex       {:mvn/version "2026.01.1"}
                                no.cjohansen/portfolio      {:mvn/version "2025.08.29"}
-                               thheller/shadow-cljs        {:mvn/version "3.3.2"}
+                               thheller/shadow-cljs        {:mvn/version "3.3.6"}
                                ;; clerk + replicant in sci env, from https://github.com/nextjournal/clerk/pull/794
                                io.github.nextjournal/clerk {:git/sha "6056c3e3bc2a96a749a0a5f61c3f8d38dbb23a1b"}}}}}
