@@ -5,7 +5,8 @@
    [nextjournal.table.ui.holiday :as holiday]
    [nextjournal.ductile.load-builder :as lb]
    [nextjournal.baseline :as k]
-   [nextjournal.offworld.demo.mapbox :as mb]))
+   [nextjournal.offworld.demo.mapbox :as mb]
+   [nextjournal.offworld.demo.scan :as scan]))
 
 (defn render [{:as state ::k/keys [stem]}]
   [:main {:id "app"}
@@ -21,4 +22,5 @@
       (k/+ state [:grid]
            {:row-tree    ng/demo-row-tree
             :column-tree ng/demo-col-tree}))]
+    (scan/game (k/+ state [:scan]))
     (holiday/panel (k/+ state [:panel]))]])
