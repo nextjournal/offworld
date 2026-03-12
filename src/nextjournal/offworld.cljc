@@ -1,12 +1,10 @@
 (ns nextjournal.offworld
   (:require
-   [clojure.edn :as edn]
-   [clojure.string :as str]
    [clojure.walk :as walk]
    [datastar :as-alias 🚀]
    [nextjournal.offworld :as-alias 🪐]
-   [replicant.dom :as rdom]
    [nextjournal.baseline :as-alias k]
+   [nextjournal.offworld.util :as ou]
    #?@(:cljs
        [[nexus.core :as nexus]])))
 
@@ -75,16 +73,6 @@
      (set! nextjournal.offworld/server-nexus-static server-nexus)
      (get-server-nexus)))
 
-(defn serialize [actions]
-  (binding [*print-meta* true]
-  (-> (pr-str actions)
-      (str/replace  "\"" "%20"))))
-
-(defn deserialize [s]
-  (-> s
-      (str/replace  "%20" "\"")
-      edn/read-string))
-
 (defn client-action? [client-nexus [k :as action]]
   (and (not (::🪐/server (meta action)))
        (contains? (:nexus/actions client-nexus {}) k)))
@@ -120,7 +108,7 @@
      ([trigger js-data actions-str]
       (divert (get-client-nexus) (get-server-nexus) trigger js-data actions-str))
      ([client-nexus server-nexus trigger js-data actions-str]
-      (let [actions           (deserialize actions-str)
+      (let [actions           (ou/deserialize actions-str)
             dispatch-data     (case trigger
                                 "event"     (build-event-map js-data)
                                 "lifecycle" (build-lifecycle-map js-data))
@@ -142,14 +130,14 @@
                            "In SSR mode, they won't be sent to the server (or executed at all)."
                            "This matches the behavior of CSR mode. By design, actions can't trigger actions."))
         (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
-        (serialize (nexus/interpolate client-nexus dispatch-data (vec actions-to-send)))))))
+        (ou/serialize (nexus/interpolate client-nexus dispatch-data (vec actions-to-send)))))))
 
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: "
        "nextjournal.offworld.divert("
        "'event',"
        "evt, '"
-       (serialize actions)
+       (ou/serialize actions)
        "')}})"))
 
 (defn d*-dispatch-init [actions signal-name]
@@ -157,20 +145,8 @@
        "nextjournal.offworld.divert("
        "'lifecycle',"
        "$" signal-name ", '"
-       (serialize actions)
+       (ou/serialize actions)
        "')}})"))
-
-(defn priority-sorted-map
-  [priority-keys]
-  (let [rank         (zipmap priority-keys (range))
-        default-rank (count priority-keys)]
-    (sorted-map-by
-     (fn [a b]
-       (let [ra (get rank a default-rank)
-             rb (get rank b default-rank)]
-         (if (= ra rb)
-           (compare a b)
-           (compare ra rb)))))))
 
 (defn attr->d*
   "Converts top-level hiccup attributes to datastar expressions.
@@ -180,7 +156,7 @@
   (let [signal-name "offworld-ref"]
     (if-not data-init
       m
-      (into (priority-sorted-map [:data-ref])
+      (into (ou/priority-sorted-map [:data-ref])
             (merge m
                    {:data-ref  signal-name
                     :data-init (d*-dispatch-init data-init signal-name)})))))

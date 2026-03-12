@@ -7,15 +7,14 @@
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
    [nextjournal.table.nexus :as table.nexus]
-   [cheshire.core :as cheshire]
    [nextjournal.table.ui :as ui]
    [replicant.string :as rstr]
    [reitit.ring :as ring]
-   [ring.util.codec :as codec]
    [ring.middleware.resource :as resource]
    [nextjournal.table.ui.nested-grid :as-alias ng]
    [ring.core.protocols :refer [StreamableResponseBody]]
    [nextjournal.offworld :as 🪐]
+   [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo :as demo]
    [selmer.parser :as selmer]
@@ -27,8 +26,8 @@
 
 (def nexus+registry (merge-with merge table.nexus/server (nxr/get-registry)))
 
-(defn dispatch! [actions dispatch-data]
-  (nexus/dispatch nexus+registry system dispatch-data actions))
+(defn dispatch! [actions]
+  (nexus/dispatch nexus+registry system {} actions))
 
 (defn sse-message [{:keys [event lines]}]
   (str "event: " event "\n"
@@ -96,15 +95,6 @@
                           🪐/replicant->d*
                           rstr/render)})))}))
 
-(defn read-dispatch [req]
-  (some-> req
-          :query-string
-          codec/form-decode
-          (get "datastar")
-          cheshire/parse-string
-          walk/keywordize-keys
-          (update :actions 🪐/deserialize)))
-
 (def handler
   (resource/wrap-resource
    (ring/ring-handler
@@ -112,10 +102,7 @@
      [["/" {:get {:handler index-handler}}]
       ["/session" {:get {:handler sse-handler}}]
       ["/replicant-dispatch"
-       {:get {:handler (fn [req]
-                         (let [{:keys [actions dispatch_data]}
-                               (read-dispatch req)]
-                           (dispatch! actions dispatch_data))
+       {:get {:handler (fn [req] (dispatch! (:actions (ou/read-dispatch req)))
                          {:status 200})}}]]))
    "public"))
 
