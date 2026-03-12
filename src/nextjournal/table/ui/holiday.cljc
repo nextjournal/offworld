@@ -28,7 +28,7 @@
 (nxr/register-action! ::season
   (fn [_ s] [[:effects/save [::path :to :season] (keyword s)]]))
 
-(defq get-day ^{::k/deps #{`get-season}} [stem]
+(defq get-day {::k/deps #{`get-season}} [stem]
   (season->holiday (get-season stem)))
 
 (nxr/register-action! ::randomize ^::🪐/client
@@ -41,7 +41,7 @@
          [:effects/save path :spring]]
         [[:effects/save path rand-season]]))))
 
-(defq get-icon ^{::k/deps #{`get-holiday-mode? `get-day}} [stem]
+(defq get-icon {::k/deps #{`get-holiday-mode? `get-day}} [stem]
   (when (get-holiday-mode? stem)
     (day->icon (get-day stem))))
 

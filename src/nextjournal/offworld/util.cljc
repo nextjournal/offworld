@@ -6,6 +6,8 @@
    [cheshire.core :as cheshire]
    [clojure.edn :as edn]))
 
+(defonce render-fn-registry (atom {}))
+
 (defn serialize [actions]
   (binding [*print-meta* true]
   (-> (pr-str actions)
