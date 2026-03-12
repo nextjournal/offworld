@@ -180,3 +180,26 @@
    #(cond-> % (map? %) (-> on-hooks-replicant->d*
                            attr->d*))
    hiccup))
+
+#?(:clj
+   (defmacro defc
+     {:clj-kondo/lint-as 'clojure.core/defn}
+     [sym & decls]
+     (let [k (str (ns-name *ns*) "/" sym)]
+       `(do
+          (k/defq ~sym ~@decls)
+          (swap! ou/registry assoc-in [:render-fn ~k] #?(:clj  (var ~sym)
+                                                         :cljs ~sym))
+            #?(:clj  (var ~sym)
+               :cljs ~sym)))))
+
+(comment
+  (require '[nextjournal.baseline :as k])
+
+  (k/defq a [stem] true)
+
+  (k/defq b {::k/deps `a} [stem] (when (a stem) (:b stem)))
+
+  (defc render-fn {::k/deps `b} [stem] (b stem))
+
+  (k/trace (render-fn {})))
