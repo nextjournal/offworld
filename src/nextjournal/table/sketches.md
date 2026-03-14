@@ -1197,9 +1197,103 @@ Similar to lightweight-labs/feather[^feather-uuids], could we just pass uuids fo
 
 #### Problem: two roundtrips per dispatch sounds buggy
 
-## Can we render some parts on client, some on server?
+## Can we render some parts on the server, and some on the client?
 fast initial page load with SSR
 switch to CSR?
+### Offline mode
+Consider this user story:
+
+- Load the page in SSR mode.
+- Go offline.
+- Click a button. Your UI changes.
+- Go online.
+- Your change is still there, next to a new change made by your coworker.
+
+For instance, with Ductile, users want to board a ship without internet, collect data by scanning truck license plates, then disembark and continue using the app.
+
+This requires some kind of "sync" operation on our app state. I find it easy to think of this as a git tree.
+When a user goes offline, it's like they're forking onto a "local" branch. When they go back online, they have to merge back into the latest "main" branch, fixing any conflicts that arise. A conflict might be two users scanning the same truck. Or, user A updates that scan result, while user B deletes it. The best way to merge often depends on the use-case. For scanning trucks, maybe the user should decide, or maybe some logic on the server should handle it.
+
+One problem: our app state only exists on the server. In that case, how do we create our "fork"?
+
+#### Offline concept A: re-render some inner elements using replicant
+
+Maybe we can sidestep the complexities of offline-sync by separating out a "slice" of the UI.
+Then, our truck scanner can work offline without us re-engineering the entire app, 
+or synchronizing the entire system.
+
+When the user goes offline, we highlight a few "offline-capable" elements, greying out the rest.
+Such an element doesn't need our *entire* system state to do its job, just a few subtrees. 
+We wrap a hiccup to make it "offline-capable"[^offline-a1]. For this, we declare:
+
+- The render-fn that should keep running when offline.
+- A set of `:select-paths`, to subtrees of the server's `system`.
+- `::k/config`: the current named args passed into the render-fn.
+  - These won't change as long as the user is offline, since the caller is "disabled".
+
+Our server returns html as usual, but it stores the "selected" subtrees as an edn blob
+within a data attribute[^offline-a2]. This way, the necessary state gets "cached" on the client,
+before the user goes offline.
+
+When the user goes offline, the client reads the blob to initialize a "temp" replicant `system`[^offline-a3].
+Based on that system, it renders our UI "slice" directly to our wrapper div.
+When the user triggers an action, nexus handles it in CSR mode, applying effects to the "temp" system[^offline-a4].
+This way, our UI "slice" reacts "optimistically", showing the same updates, as
+if the server were still responding. 
+
+We also pass down a snapshot of the last known server state, in case we need to inform the user of what 
+state is "confirmed" on the server and what's still "optimistic."
+
+At the same time, we separate out the server-bound actions & effects, just like in SSR mode.
+But, instead of sending them off to the server, we store them in a temporary `action-log`[^offline-a5].
+When the user goes back online, we send the `action-log` and the `system` to the server.
+This conveys all the user's offline activity as a single intent. Then, it's up to 
+the server to reconcile this intent with its system state. For the demo, we simply dispatch 
+the entire `action-log`. But, since we've separated the intent from any implementation, 
+we're free to build a more sophisticated sync algorithm - for instance, a differential sync[^diff-sync]
+could reconcile between multiple users touching the same state.
+
+In any case, after reconciliation, the server pushes the latest html tree.
+Our UI "slice" gets morphed back into a datastar-driven element, the client stops calling replicant, 
+and we're back to our usual SSR render loop.
+
+[^offline-a1]: [ui.cljc#L26](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/table/ui.cljc#L26)
+[^offline-a2]: [offline.clj#L19](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/offline.clj#L19)
+[^offline-a3]: [offline.cljs#L29](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/offline.cljs#L29)
+[^offline-a4]: [offworld.cljc#L157](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld.cljc#L157)
+[^offline-a5]: [offworld.cljc#L156](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld.cljc#L156)
+[^diff-sync]: https://blog.ndk.io/why-csp-matters1.html
+
+##### Problem: how do we know what paths the component needs?
+The local path is easy to deal with.
+What about queries? A query can look anywhere within the state.
+We do know exactly what queries a render-fn needs to make.
+But to rigorously sync queries, we'd be implementing IVM - complicated.
+
+##### Idea: Should we cache queries, too?
+We could treat some queries as "static" while offline - instead of running the query-fn, 
+just return a snapshot value.
+
+##### Idea: declare path guardrails for queries
+Just like we declare a static `::k/deps`, on a query[^static-deps], indicating the required sub-queries,
+we could declare a `::k/paths`[^static-paths], promising to use only certain subtrees of the state.
+Then, we could infer an element's required state from the union of every query's paths.
+This could be a nice 80/20 solution, bottoming out on the simplest queries, which are analagous
+to re-frame's "layer-2 extractors"[^re-frame-l2].
+
+Since static trace is available at runtime[^render-trace], we might get away with a zero-config macro:
+
+```clojure
+^{::clerk/visibility {:code :hide}}
+(clerk/code "(🌠/offline-capable (truck-scanner (k/+ state my-path {:config true})))")
+```
+
+[^static-deps]: [scan.cljc#L38](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/demo/scan.cljc#L38)
+[^static-paths]: [scan.cljc#L28](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/demo/scan.cljc#L28)
+[^re-frame-l2]: https://day8.github.io/re-frame/subscriptions/#the-four-layers
+[^render-trace]: [baseline.cljc#L129](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/baseline.cljc#L129)
+
+##### Tradeoff: this requires replicant on the client. We're back to a thick bundle.
 
 ## Can we run replicant "commands" on the client?
 For instance, if we provide a server.js artifact, which executes these in SCI or CLJS.

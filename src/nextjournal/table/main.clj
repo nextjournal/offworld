@@ -103,7 +103,11 @@
       ["/session" {:get {:handler sse-handler}}]
       ["/replicant-dispatch"
        {:get {:handler (fn [req] (dispatch! (:actions (ou/read-dispatch req)))
-                         {:status 200})}}]]))
+                         {:status 200})}}]
+      ["/offworld-go-online"
+       {:get
+        {:handler
+         (fn [req] (dispatch! (ou/read-action-log req)))}}]]))
    "public"))
 
 (comment

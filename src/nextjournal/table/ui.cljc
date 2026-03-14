@@ -6,7 +6,8 @@
    [nextjournal.ductile.load-builder :as lb]
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo.mapbox :as mb]
-   [nextjournal.offworld.demo.scan :as scan]))
+   [nextjournal.offworld.demo.scan :as scan]
+   [nextjournal.offworld.offline :as 🌠]))
 
 (defn render [{:as state ::k/keys [stem]}]
   [:main {:id "app"}
@@ -22,5 +23,13 @@
       (k/+ state [:grid]
            {:row-tree    ng/demo-row-tree
             :column-tree ng/demo-col-tree}))]
-    (scan/game (k/+ state [:scan]))
+    (🌠/offline-capable
+     {:id                "scan-game-offline"
+      :render-fn         #'scan/offline-game
+      :select-paths      #{[::scan/scans]
+                           [::scan/plates]}
+      ::k/path           [:scan-game]
+      ::k/stem           stem
+      #_#_:cache-queries [#'scan/get-scans #'scan/get-plates]}
+     (scan/game (k/+ state [:scan-game])))
     (holiday/panel (k/+ state [:panel]))]])

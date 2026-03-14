@@ -25,6 +25,9 @@
        :dom-node/blur         (fn [ctx _ & {:keys [node]}] (.blur (or node (get-node ctx))))
        :dom-node/show-popover (fn [ctx _ & {:keys [node]}] (.showPopover (or node (get-node ctx))))
        :dom-node/hide-popover (fn [ctx _ & {:keys [node]}] (.hidePopover (or node (get-node ctx))))
+       :dom-node/show-modal   (fn [ctx]
+                                (get-node ctx)
+                                (.showModal (get-node ctx)))
        :browser/alert         (fn [_ _ s] (js/alert s))
        :dom-node/set-checked  (fn [ctx _ & {:keys [node value]}]
                                 (set! (.-checked (or node (get-node ctx))) value))

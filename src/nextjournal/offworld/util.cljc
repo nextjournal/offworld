@@ -2,9 +2,9 @@
   (:require
    [clojure.string :as str]
    [clojure.walk :as walk]
-   [ring.util.codec :as codec]
-   [cheshire.core :as cheshire]
-   [clojure.edn :as edn]))
+   [clojure.edn :as edn]
+   #?@(:clj [[ring.util.codec :as codec]
+             [cheshire.core :as cheshire]])))
 
 (defonce registry (atom {}))
 
@@ -26,6 +26,12 @@
                   walk/keywordize-keys
                   (update :actions deserialize))))
 
+#?(:clj (defn read-action-log [{:keys [query-string]}]
+          (some-> query-string
+                  codec/form-decode
+                  (get "action-log")
+                  deserialize)))
+
 (defn select-paths [m paths]
   (reduce #(assoc-in %1 %2 (get-in m %2)) {} paths))
 
@@ -40,3 +46,8 @@
          (if (= ra rb)
            (compare a b)
            (compare ra rb)))))))
+
+(defn fn-ref->str [x]
+  (->> (meta x)
+       ((juxt :ns :name))
+       (clojure.string/join "/")))
