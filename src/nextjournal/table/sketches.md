@@ -1257,11 +1257,11 @@ In any case, after reconciliation, the server pushes the latest html tree.
 Our UI "slice" gets morphed back into a datastar-driven element, the client stops calling replicant, 
 and we're back to our usual SSR render loop.
 
-[^offline-a1]: [ui.cljc#L26](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/table/ui.cljc#L26)
-[^offline-a2]: [offline.clj#L19](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/offline.clj#L19)
-[^offline-a3]: [offline.cljs#L29](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/offline.cljs#L29)
-[^offline-a4]: [offworld.cljc#L157](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld.cljc#L157)
-[^offline-a5]: [offworld.cljc#L156](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld.cljc#L156)
+[^offline-a1]: [ui.cljc#L26](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/table/ui.cljc#L26)
+[^offline-a2]: [offline.clj#L19](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld/offline.clj#L19)
+[^offline-a3]: [offline.cljs#L29](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld/offline.cljs#L29)
+[^offline-a4]: [offworld.cljc#L157](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld.cljc#L157)
+[^offline-a5]: [offworld.cljc#L156](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld.cljc#L156)
 [^diff-sync]: https://blog.ndk.io/why-csp-matters1.html
 
 ##### Problem: how do we know what paths the component needs?
@@ -1288,8 +1288,8 @@ Since static trace is available at runtime[^render-trace], we might get away wit
 (clerk/code "(🌠/offline-capable (truck-scanner (k/+ state my-path {:config true})))")
 ```
 
-[^static-deps]: [scan.cljc#L38](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/demo/scan.cljc#L38)
-[^static-paths]: [scan.cljc#L28](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/demo/scan.cljc#L28)
+[^static-deps]: [scan.cljc#L38](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld/demo/scan.cljc#L38)
+[^static-paths]: [scan.cljc#L28](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld/demo/scan.cljc#L28)
 [^re-frame-l2]: https://day8.github.io/re-frame/subscriptions/#the-four-layers
 [^render-trace]: [baseline.cljc#L129](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/baseline.cljc#L129)
 
