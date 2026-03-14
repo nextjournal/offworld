@@ -8,7 +8,7 @@
    [nextjournal.baseline :as-alias k]))
 
 (defn get-node [{:as ctx :keys [dispatch-data]}]
-    (-> (or dispatch-data ctx) :replicant/dom-event))
+    (-> (or dispatch-data ctx) :replicant/node))
 
 (defn get-evt [{:as ctx :keys [dispatch-data]}]
   (-> (or dispatch-data ctx) :replicant/dom-event))
