@@ -7,6 +7,7 @@
            selmer/selmer                  {:mvn/version "1.13.1"}
            http-kit/http-kit              {:mvn/version "2.8.0"}
            dev.data-star.clojure/http-kit {:mvn/version "1.0.0-RC8"}
+           dev.data-star.clojure/brotli   {:mvn/version "1.0.0-RC8"}
            babashka/fs                    {:mvn/version "0.5.28"}}
  :paths   ["src" "resources"]
  :aliases {:dev {:exec-fn     user/start!

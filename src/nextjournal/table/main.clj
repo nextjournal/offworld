@@ -5,6 +5,7 @@
    [nexus.core :as nexus]
    [starfederation.datastar.clojure.api :as d*]
    [starfederation.datastar.clojure.adapter.http-kit :as hk-gen]
+   [starfederation.datastar.clojure.brotli :as brotli]
    [nexus.registry :as nxr]
    [nextjournal.table.nexus :as table.nexus]
    [nextjournal.table.ui :as ui]
@@ -36,14 +37,16 @@
 (def !connections (atom #{}))
 
 (defn sse-handler [req]
-  (hk-gen/->sse-response req
-    {hk-gen/on-open
-     (fn [sse-gen]
-       (swap! !connections conj sse-gen))
+  (hk-gen/->sse-response
+   req
+   {hk-gen/write-profile (brotli/->brotli-profile)
+    hk-gen/on-open
+    (fn [sse-gen]
+      (swap! !connections conj sse-gen))
 
-     hk-gen/on-close
-     (fn [sse-gen status]
-       (swap! !connections disj sse-gen))}))
+    hk-gen/on-close
+    (fn [sse-gen status]
+      (swap! !connections disj sse-gen))}))
 
 (defn broadcast-elements! [elements]
   (doseq [c @!connections]
