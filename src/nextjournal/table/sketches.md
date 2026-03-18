@@ -80,33 +80,35 @@ Ductile's omnibox modeled the state of a "selection"[^select-state], letting the
 [^scroll-into-view]: [ductile/.../omnibox.cljs#L321](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/src/ductile/ui/components/omnibox.cljs#L321)
 [^nexus-focus]: [offworld/.../nexus.cljc#L105](https://github.com/nextjournal/offworld/blob/c6743a6387577832592fee301b0960e6d1df56bd/src/nextjournal/table/nexus.cljc#L105)
 
-## Can we still use dom watchers like "Resize"?
-In reagent, we often access React's `ref`[^react-ref] to access the html element that our component is rendering.
+## Can UI elements still have a "lifecycle?"
+In reagent, we often use React's `ref`[^react-ref] to access the html element that our component is rendering.
 
-For instance, re-com's nested-grid stores its `ref` in a local atom[^rc-grid-ref], then uses that to react to its own scroll state and flex sizing. This is necessary to determine the right virtualization "window", while still remaining lightweight and compatible by leaving scroll and sizing "uncontrolled". 
+For instance, re-com's nested-grid stores a reference to its dom-node in a local reagent atom[^rc-grid-ref], then uses a reagent lifecycle method to react to that node's scroll-state and flex-sizing. This reaction necessary to determine the right virtualization "window", while still remaining lightweight and compatible by leaving scroll and sizing "uncontrolled".
 
-Do we need any of this with our new pattern? We could hold on to the ref using replicant's `:remember`[^replicant-remember], and datastar's `data-ref`[^data-ref].
+We can still model this behavior, even without a component abstraction. Replicant passes the target dom-node to placeholder- and action-handlers. That's enough for the most basic features - for instance, our nested-grid demo gets the same scroll-state using placeholders, and then updates `::k/local` state to trigger a re-render [^ng-scroll].
 
-One lightweight pattern is if we impelment `remember` and `recall` functionality in datastar.
-This stores a value inside a WeakMap, keyed by the triggering dom-node.
-Weakmaps have the special behavior of removing any val when its key becomes unreferenced.
-That way, when our dom-node is removed from the dom, the val gets GC'd.
+We might also need to do actor-like messaging, where one element can observe another element's browser-local state, and act on it. But again, we can skip any component model and just use the DOM. We make a dom-node addressable the old fashioned way, by rendering an html id. For instance, our mapbox render-fn declares the id of one element within the action handler of another[^component-id-passing]. This way, our hiccup describes how the `:button` "acts" on the mapbox `:div`, and the only abstraction we need is a let-binding.
 
-For instance, we can `remember` a mapbox object when a node mounts[^mapbox-remember].
-Later, we can call its methods simply by passing around the node's id[^mapbox-pass-id].
-Effects can `recall` the current mapbox object by querying the dom[^mapbox-recall].
-Again, the mapbox object gets GC'd when the element is removed from the dom, either by replicant's vdom reconciler in CSR, or datastar's morph in SSR.
-If we want to persist some of that object's underlying state across mounts/unmounts (or, in the case of SSR, across sessions), we can store it in the same action-vector
-as we change it[^mapbox-reinit]. That way, we get an "uncontrolled" object which can be reinitialized to its last-known state whenever it enters the UX.
+Using the html id, the action handler gets the node from a standard DOM query, then uses a `recall` function to get the mapbox js object which it can "act" on, via method calls. We made this `recall` possible by dispatching an action when the mapbox `:div` enters the DOM, calling an injected `remember` function[^mapbox-recall]. This is straight out of replicant's playbook[^replicant-js-interop]. The `remember` function puts our mapbox object into a global WeakMap, keyed by the dom-node. The WeakMap's contract subordinates the object's lifecycle to the dom-node's lifecycle[^mdn-weakmap]. When that node is removed from the dom, the corresponding mapbox object gets GC'd. For instance, when the user clicks away to another tab, we "unmount" the div, and the mapbox gets destroyed. When the user returns, we "mount" the div and construct a whole new mapbox object.
 
+This gives us a minimal "component lifecycle" pattern. Since we articulate it using portable data (action-vectors), the pattern works in the exact same way, whether in SSR, CSR or hybrid offline-mode. In SSR mode, datastar's morph does the "mount" and "unmount" behavior, while in CSR, replicant's vdom reconciler does it.
+
+If we need to persist some of our "component's" underlying state across mounts and unmounts (or, with SSR, across sessions), we can dispatch an action that both stores the essential state and mutates the object[^mapbox-reinit]. That way, we can reinitialize the "component" to its last-known state whenever it mounts. This depends on our `::k/local` pattern, where we assign a unique `::k/path` to each meaningful "component" of our UI. That means, to build a persistent "component" with javascript batteries included, all you need is a path and an id. That sounds like two things, but essentially they are one, since the id can be a pure derivation of the path.
+
+Id passing lets us express the concept of "this", without adopting any special architecture. It keeps our mental model close to the browser, enabling synergy with modern browser APIs.
+
+[^ng-scroll]: [nested_grid.cljs#L73](https://github.com/nextjournal/offworld/blob/85ac5efcf30bb1c233f6178d06dcdce21b6b0a9f/src/nextjournal/table/ui/nested_grid.cljc#L73)
+[^component-id-passing]: [mapbox.cljc#L39](https://github.com/nextjournal/offworld/blob/8ca56413dbfe03f30f099f26c1d54227379a5945/src/nextjournal/offworld/demo/mapbox.cljc#L39)
+[^mapbox-recall]: [mapbox.cljc#L23](https://github.com/nextjournal/offworld/blob/8ca56413dbfe03f30f099f26c1d54227379a5945/src/nextjournal/offworld/demo/mapbox.cljc#L23)
+[^replicant-js-interop]: https://replicant.fun/tutorials/javascript-interop/
+[^mdn-weakmap]: "Once... a key has been collected, its corresponding values... [become] candidates for garbage collection as well" - [WeakMap (MDN)](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/WeakMap)
 [^rc-grid-ref]: [re-com/../nested_grid.cljs#L393](https://github.com/day8/re-com/blob/6be4763003aa4c990ddf00cad5fdc13a6a8d512f/src/re_com/nested_grid.cljs#L393)
 [^rc-dropdown-client-rect]: [re-com/.../nested_grid.cljs#L552](https://github.com/day8/re-com/blob/6be4763003aa4c990ddf00cad5fdc13a6a8d512f/src/re_com/dropdown.cljs#L552)
 [^data-ref]: [https://data-star.dev/reference/attributes#data-ref](https://data-star.dev/reference/attributes#data-ref)
 [^replicant-remember]: [https://replicant.fun/life-cycle-hooks/#memory](https://replicant.fun/life-cycle-hooks/#memory)
 [^remember-mapbox]: [mapbox.cljc#L12](https://github.com/nextjournal/offworld/blob/47087ce83306e78e0be424f29f63c46f4dfc74e0/src/nextjournal/offworld/demo/mapbox.cljc#L12)
 [^mapbox-pass-id]: [mapbox.cljc#L36](https://github.com/nextjournal/offworld/blob/47087ce83306e78e0be424f29f63c46f4dfc74e0/src/nextjournal/offworld/demo/mapbox.cljc#L36)
-[^mapbox-recall]: [mapbox.cljc#l22](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/demo/mapbox.cljc#L22)
-[^mapbox-reinit]: [mapbox.cljc#L40](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/demo/mapbox.cljc#L40)
+[^mapbox-reinit]: [mapbox.cljc#L40](https://github.com/nextjournal/offworld/blob/8ca56413dbfe03f30f099f26c1d54227379a5945/src/nextjournal/offworld/demo/mapbox.cljc#L40)
 
 ## How do we organize all the state a render-fn requires?
 I'll focus the discussion around a chain of replicant render-fns:
