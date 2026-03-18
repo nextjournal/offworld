@@ -85,12 +85,29 @@ In reagent, we often access React's `ref`[^react-ref] to access the html element
 
 For instance, re-com's nested-grid stores its `ref` in a local atom[^rc-grid-ref], then uses that to react to its own scroll state and flex sizing. This is necessary to determine the right virtualization "window", while still remaining lightweight and compatible by leaving scroll and sizing "uncontrolled". 
 
-Do we need any of this with our new pattern? We could hold on to the ref using replicant's `:remember`[^replicant-remember], and datastar's `data-ref`[^data-ref]. On the other hand, why do we need this?
+Do we need any of this with our new pattern? We could hold on to the ref using replicant's `:remember`[^replicant-remember], and datastar's `data-ref`[^data-ref].
+
+One lightweight pattern is if we impelment `remember` and `recall` functionality in datastar.
+This stores a value inside a WeakMap, keyed by the triggering dom-node.
+Weakmaps have the special behavior of removing any val when its key becomes unreferenced.
+That way, when our dom-node is removed from the dom, the val gets GC'd.
+
+For instance, we can `remember` a mapbox object when a node mounts[^mapbox-remember].
+Later, we can call its methods simply by passing around the node's id[^mapbox-pass-id].
+Effects can `recall` the current mapbox object by querying the dom[^mapbox-recall].
+Again, the mapbox object gets GC'd when the element is removed from the dom, either by replicant's vdom reconciler in CSR, or datastar's morph in SSR.
+If we want to persist some of that object's underlying state across mounts/unmounts (or, in the case of SSR, across sessions), we can store it in the same action-vector
+as we change it[^mapbox-reinit]. That way, we get an "uncontrolled" object which can be reinitialized to its last-known state whenever it enters the UX.
 
 [^rc-grid-ref]: [re-com/../nested_grid.cljs#L393](https://github.com/day8/re-com/blob/6be4763003aa4c990ddf00cad5fdc13a6a8d512f/src/re_com/nested_grid.cljs#L393)
 [^rc-dropdown-client-rect]: [re-com/.../nested_grid.cljs#L552](https://github.com/day8/re-com/blob/6be4763003aa4c990ddf00cad5fdc13a6a8d512f/src/re_com/dropdown.cljs#L552)
 [^data-ref]: [https://data-star.dev/reference/attributes#data-ref](https://data-star.dev/reference/attributes#data-ref)
 [^replicant-remember]: [https://replicant.fun/life-cycle-hooks/#memory](https://replicant.fun/life-cycle-hooks/#memory)
+[^remember-mapbox]: [mapbox.cljc#L12](https://github.com/nextjournal/offworld/blob/47087ce83306e78e0be424f29f63c46f4dfc74e0/src/nextjournal/offworld/demo/mapbox.cljc#L12)
+[^mapbox-pass-id]: [mapbox.cljc#L36](https://github.com/nextjournal/offworld/blob/47087ce83306e78e0be424f29f63c46f4dfc74e0/src/nextjournal/offworld/demo/mapbox.cljc#L36)
+[^mapbox-recall]: [mapbox.cljc#l22](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/demo/mapbox.cljc#L22)
+[^mapbox-reinit]: [mapbox.cljc#L40](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/offworld/demo/mapbox.cljc#L40)
+
 ## How do we organize all the state a render-fn requires?
 I'll focus the discussion around a chain of replicant render-fns:
 
