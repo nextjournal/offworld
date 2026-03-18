@@ -1,11 +1,78 @@
 (ns nextjournal.table.ui.omnibox
   (:require
    [clojure.string :as str]
+   [nexus.registry :as nxr]
    [nextjournal.baseline :as k]
+   [nextjournal.offworld :as-alias 🪐]
    [nextjournal.table.filters :as filters]
    [nextjournal.table.ui.holiday :as 🎄]
    [nextjournal.table.ui.omnibox :as-alias ob]
    #?(:cljs [portfolio.replicant :refer [defscene]])))
+
+(nxr/register-action! ::ob/keydown-input ^::🪐/client
+  (fn [_ {:keys [key popover-id choice-id anchor-id filters-to-add path]
+          mods  :key-modifiers}]
+    (cond
+      (= key "Escape")    [[:event/prevent-default]
+                           [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
+                           [:input/clear {:node [:document/element-by-id popover-id]}]
+                           [:effects/save (conj path :value) ""]]
+      (= key "ArrowDown") [[:event/prevent-default]
+                           (when choice-id
+                             [:dom-node/focus {:node [:document/element-by-id choice-id]}])]
+      (= key "Enter")     [[:event/prevent-default]
+                           [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
+                           [:input/clear {:node [:document/element-by-id anchor-id]}]
+                           [:effects/save (conj path :value) ""]
+                           [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
+      (and (mods :shift)
+           (= key "Tab")) [[:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]]
+      :else               nil)))
+
+(nxr/register-action! ::ob/keydown-choice-item ^::🪐/client
+  (fn [_ {:keys [key popover-id prev-id next-id choice-id anchor-id filters-to-add path]}]
+    (case key
+      "Escape"    [[:event/prevent-default]
+                   [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
+                   [:dom-node/blur]]
+      "Enter"     [[:event/prevent-default]
+                   [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
+                   [:dom-node/blur {:node [:document/element-by-id anchor-id]}]
+                   [:dom-node/set-checked {:node  [:document/element-by-id choice-id]
+                                           :value true}]
+                   [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
+      "ArrowUp"   [[:event/prevent-default]
+                   (if prev-id
+                     [:dom-node/focus {:node [:document/element-by-id prev-id]}]
+                     [:dom-node/focus {:node [:document/element-by-id anchor-id]}])]
+      "ArrowDown" [[:event/prevent-default]
+                   (when next-id
+                     [:dom-node/focus {:node [:document/element-by-id next-id]}])]
+      "Tab"       [(when-not next-id
+                     [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}])]
+      nil)))
+
+(nxr/register-action! ::ob/add-filter ^::🪐/server
+  (fn [state path value]
+    (let [p           (conj path :filters)
+          old-filters (get-in state p #{})
+          new-filters (conj old-filters value)]
+      [[:effects/save p new-filters]])))
+
+(nxr/register-action! ::ob/remove-filter ^::🪐/server
+  (fn [state path value]
+    (let [p           (conj path :filters)
+          old-filters (get-in state p #{})
+          new-filters (disj old-filters value)]
+      [[:effects/save (conj path :filters) new-filters]])))
+
+(nxr/register-action! ::ob/toggle-choice ^::🪐/server
+  (fn [state {:keys [path k value]}]
+    (let [old-set (get-in state path #{})
+          new-set (if value
+                    (disj old-set k)
+                    (conj old-set k))]
+      [[:effects/save path new-set]])))
 
 (def icon-filter
   [:svg {:viewBox "0 0 20 20"

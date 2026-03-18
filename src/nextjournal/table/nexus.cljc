@@ -10,12 +10,6 @@
 (defn get-evt [{:as ctx :keys [dispatch-data]}]
   (-> (or dispatch-data ctx) :replicant/dom-event))
 
-(defn ob-add-filter [state path value]
-  (let [p           (conj path :filters)
-        old-filters (get-in state p #{})
-        new-filters (conj old-filters value)]
-    [[:effects/save p new-filters]]))
-
 #?(:cljs
    (def client
      {:nexus/system->state deref
@@ -33,49 +27,6 @@
                                 (set! (.-checked (or node (get-node ctx))) value))
        :input/clear           (fn [ctx _ & {:keys [node value]}]
                                 (set! (.-value (or node (get-node ctx))) value))}
-
-      :nexus/actions
-      {::ob/keydown-input
-       (fn [_ {:keys [key popover-id choice-id anchor-id filters-to-add path]
-               mods  :key-modifiers}]
-         (cond
-           (= key "Escape")    [[:event/prevent-default]
-                                [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                                [:input/clear {:node [:document/element-by-id popover-id]}]
-                                [:effects/save (conj path :value) ""]]
-           (= key "ArrowDown") [[:event/prevent-default]
-                                (when choice-id
-                                  [:dom-node/focus {:node [:document/element-by-id choice-id]}])]
-           (= key "Enter")     [[:event/prevent-default]
-                                [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                                [:input/clear {:node [:document/element-by-id anchor-id]}]
-                                [:effects/save (conj path :value) ""]
-                                [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
-           (and (mods :shift)
-                (= key "Tab")) [[:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]]
-           :else               nil))
-       ::ob/keydown-choice-item
-       (fn [state {:keys [key popover-id prev-id next-id choice-id anchor-id filters-to-add path]}]
-         (case key
-           "Escape"    [[:event/prevent-default]
-                        [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                        [:dom-node/blur]]
-           "Enter"     [[:event/prevent-default]
-                        [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                        [:dom-node/blur {:node [:document/element-by-id anchor-id]}]
-                        [:dom-node/set-checked {:node  [:document/element-by-id choice-id]
-                                                :value true}]
-                        [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
-           "ArrowUp"   [[:event/prevent-default]
-                        (if prev-id
-                          [:dom-node/focus {:node [:document/element-by-id prev-id]}]
-                          [:dom-node/focus {:node [:document/element-by-id anchor-id]}])]
-           "ArrowDown" [[:event/prevent-default]
-                        (when next-id
-                          [:dom-node/focus {:node [:document/element-by-id next-id]}])]
-           "Tab"       [(when-not next-id
-                          [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}])]
-           nil))}
 
       :nexus/placeholders
       {:event.target/value       #(some-> % get-evt .-target .-value)
@@ -112,23 +63,4 @@
                                   (fn [state]
                                     (reduce (fn [acc [path v default-coll]]
                                               (update-in acc path (fnil conj (or default-coll [])) v))
-                                            state path-vs))))}
-   :nexus/actions
-   {::ng/scroll              (fn [_ path top left]
-                               [[:effects/save (concat path [:scroll-top]) top]
-                                [:effects/save (concat path [:scroll-left]) left]])
-    ::ng/resize              (fn [_ width height]
-                               [[:effects/save [:grid :width] width]
-                                [:effects/save [:grid :height] height]])
-    ::ob/add-filter          ob-add-filter
-    ::ob/remove-filter       (fn [state path value]
-                               (let [p           (conj path :filters)
-                                     old-filters (get-in state p #{})
-                                     new-filters (disj old-filters value)]
-                                 [[:effects/save (conj path :filters) new-filters]]))
-    ::ob/toggle-choice       (fn [state {:keys [path k value]}]
-                               (let [old-set (get-in state path #{})
-                                     new-set (if value
-                                               (disj old-set k)
-                                               (conj old-set k))]
-                                 [[:effects/save path new-set]]))}})
+                                            state path-vs))))}})

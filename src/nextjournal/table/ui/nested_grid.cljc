@@ -8,6 +8,16 @@
    [nextjournal.offworld :as-alias 🪐]
    [datastar :as-alias 🚀]))
 
+(nxr/register-action! ::ng/scroll ^::🪐/server
+  (fn [_ path top left]
+    [[:effects/save (concat path [:scroll-top]) top]
+     [:effects/save (concat path [:scroll-left]) left]]))
+
+(nxr/register-action! ::ng/resize ^::🪐/server
+  (fn [_ width height]
+    [[:effects/save [:grid :width] width]
+     [:effects/save [:grid :height] height]]))
+
 (defn demo-header-tree [direction]
   (into [:root]
         (map (fn [a]
