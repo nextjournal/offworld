@@ -1,4 +1,4 @@
-(ns nextjournal.offworld.offline
+(ns nextjournal.offworld.demo.offline
   (:require
    [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]

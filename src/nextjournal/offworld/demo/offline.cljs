@@ -1,8 +1,9 @@
-(ns nextjournal.offworld.offline
+(ns nextjournal.offworld.demo.offline
   (:require
    [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]
-   [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld :as 🪐]
+   [nexus.core :as nexus]
    [replicant.dom :as rdom]))
 
 (def !online? (atom true))
@@ -13,7 +14,7 @@
 (defn render [{::k/keys [stem path config]
                :keys    [render-fn dom-node]}
               & [new-stem]]
-  (let [render-fn (get-in @ou/registry [:render-fn render-fn])
+  (let [render-fn (get-in @🪐/registry [:render-fn render-fn])
         state     {::k/stem (merge (or new-stem stem)
                                    {::🪐/offline?         true
                                     ::🪐/last-server-stem stem})}]
@@ -37,6 +38,7 @@
                                {}
                                sync-states)]
     (flush-replicant!)
+    (reset! 🪐/online? false)
     (reset! !online? false)
     (reset! !id->sync-state id->sync-state)
     (reset! !system offline-stem)
@@ -46,6 +48,7 @@
   (js/fetch
    (str "/offworld-go-online?action-log=" @!action-log "&state=" @!system))
   (flush-replicant!)
+  (reset! 🪐/online? true)
   (reset! !online? true)
   (reset! !system nil)
   (reset! !id->sync-state nil)
@@ -60,6 +63,19 @@
               (render sync-state %4)))
 
 (defn offline-capable [_ hiccup] hiccup)
+
+(defn offline-dispatch [dispatch-data actions]
+  (let [client-nexus      (🪐/get-client-nexus)
+        server-nexus      (🪐/get-server-nexus)
+        client-actions    (filterv #(or (🪐/client-action? client-nexus %)
+                                        (🪐/client-effect? client-nexus %)) actions)
+        server-actions    (filterv #(or (🪐/server-action? server-nexus %)
+                                        (🪐/server-effect? server-nexus %)) actions)
+        {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
+        server-effects    (filterv #(🪐/server-effect? server-nexus %) effects)
+        actions-to-log    (seq (concat server-effects server-actions))]
+    (swap! !action-log (fnil into []) actions-to-log)
+    (nexus/dispatch (🪐/get-client-nexus {:mode :csr}) !system dispatch-data actions)))
 
 (comment
   (go-offline!)

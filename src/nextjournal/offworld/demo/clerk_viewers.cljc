@@ -1,9 +1,9 @@
-(ns nextjournal.table.clerk-viewers
+(ns nextjournal.offworld.demo.clerk-viewers
     (:require
      [nextjournal.clerk :as clerk]
      [replicant.string :as rstr]
-     [nextjournal.table.ui :as ui]
-     [nextjournal.table.ui.nested-grid.util :as ngu]))
+     [nextjournal.offworld.demo.ui :as ui]
+     [nextjournal.offworld.demo.ui.nested-grid.util :as ngu]))
 
 (def replicant-ssr
   {:transform-fn (clerk/update-val (comp clerk/html rstr/render))})

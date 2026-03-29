@@ -1,4 +1,4 @@
-(ns nextjournal.table.ui.nested-grid.util
+(ns nextjournal.offworld.demo.ui.nested-grid.util
   (:require [clojure.string :as str]))
 
 (def branch? sequential?)

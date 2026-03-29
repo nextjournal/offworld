@@ -1,4 +1,4 @@
-(ns nextjournal.table.main
+(ns nextjournal.offworld.demo.main
   (:require
    [babashka.fs :as fs]
    [clojure.string :as str]
@@ -7,10 +7,10 @@
    [starfederation.datastar.clojure.adapter.http-kit :as hk-gen]
    [starfederation.datastar.clojure.brotli :as brotli]
    [nexus.registry :as nxr]
-   [nextjournal.table.nexus :as table.nexus]
-   [nextjournal.table.ui :as ui]
+   [nextjournal.offworld.demo.nexus :as demo.nexus]
+   [nextjournal.offworld.demo.ui :as ui]
    [replicant.string :as rstr]
-   [nextjournal.table.ui.nested-grid :as-alias ng]
+   [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld :as 🪐]
    [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]
@@ -22,7 +22,7 @@
 (def system (atom (demo/init-state {})))
 
 (def nexus+registry
-  (merge-with merge table.nexus/server (nxr/get-registry)))
+  (merge-with merge demo.nexus/server (nxr/get-registry)))
 
 (defn dispatch! [actions]
   (nexus/dispatch nexus+registry system {} actions))

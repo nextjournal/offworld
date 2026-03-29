@@ -1,6 +1,6 @@
-(ns nextjournal.table.scenes
-  (:require [nextjournal.table.ui :as ui]
-            [nextjournal.table.ui.omnibox :as omnibox-ui]
+(ns nextjournal.offworld.demo.scenes
+  (:require [nextjournal.offworld.demo.ui :as ui]
+            [nextjournal.offworld.demo.ui.omnibox :as omnibox-ui]
             [portfolio.replicant :refer-macros [defscene]]
             [replicant.dom :as r]
             [portfolio.ui :as portfolio]))

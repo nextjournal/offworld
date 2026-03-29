@@ -1,19 +1,20 @@
-{:deps    {org.clojure/clojurescript      {:mvn/version "1.12.134"}
-           no.cjohansen/replicant         {:git/url "https://github.com/cjohansen/replicant.git"
-                                           :git/sha "29f7644b2848205b835209b0b71980727aacbd9b"}
-           metosin/reitit                 {:mvn/version "0.9.2"}
-           cheshire/cheshire              {:mvn/version "6.1.0"}
-           no.cjohansen/nexus             {:mvn/version "2025.11.1"}
-           selmer/selmer                  {:mvn/version "1.13.1"}
-           http-kit/http-kit              {:mvn/version "2.8.0"}
-           dev.data-star.clojure/http-kit {:mvn/version "1.0.0-RC8"}
-           dev.data-star.clojure/brotli   {:mvn/version "1.0.0-RC8"}
-           babashka/fs                    {:mvn/version "0.5.28"}}
+{:deps    {}
  :paths   ["src" "resources"]
- :aliases {:dev {:exec-fn     user/start!
-                 :extra-paths ["dev"]
-                 :extra-deps  {no.cjohansen/dataspex       {:mvn/version "2026.01.1"}
-                               no.cjohansen/portfolio      {:mvn/version "2025.08.29"}
-                               thheller/shadow-cljs        {:mvn/version "3.3.6"}
-                               ;; clerk + replicant in sci env, from https://github.com/nextjournal/clerk/pull/794
-                               io.github.nextjournal/clerk {:git/sha "6056c3e3bc2a96a749a0a5f61c3f8d38dbb23a1b"}}}}}
+ :aliases {:dev  {:exec-fn     user/start!
+                  :extra-paths ["dev"]
+                  :extra-deps  {no.cjohansen/dataspex       {:mvn/version "2026.01.1"}
+                                no.cjohansen/portfolio      {:mvn/version "2025.08.29"}
+                                thheller/shadow-cljs        {:mvn/version "3.3.6"}
+                                ;; clerk + replicant in sci env, from https://github.com/nextjournal/clerk/pull/794
+                                io.github.nextjournal/clerk {:git/sha "6056c3e3bc2a96a749a0a5f61c3f8d38dbb23a1b"}}}
+           :demo {:extra-deps {org.clojure/clojurescript      {:mvn/version "1.12.134"}
+                               no.cjohansen/replicant         {:git/url "https://github.com/cjohansen/replicant.git"
+                                                               :git/sha "29f7644b2848205b835209b0b71980727aacbd9b"}
+                               metosin/reitit                 {:mvn/version "0.9.2"}
+                               cheshire/cheshire              {:mvn/version "6.1.0"}
+                               no.cjohansen/nexus             {:mvn/version "2025.11.1"}
+                               selmer/selmer                  {:mvn/version "1.13.1"}
+                               http-kit/http-kit              {:mvn/version "2.8.0"}
+                               dev.data-star.clojure/http-kit {:mvn/version "1.0.0-RC8"}
+                               dev.data-star.clojure/brotli   {:mvn/version "1.0.0-RC8"}
+                               babashka/fs                    {:mvn/version "0.5.28"}}}}}

@@ -1,6 +1,7 @@
-(ns nextjournal.ductile.load-builder
+(ns nextjournal.offworld.demo.load-builder
   (:require
    [clojure.set :as set]
+   [nextjournal.offworld.util]
    [nextjournal.baseline :as k :refer [defq]]))
 
 (defn ->v [x] (if (vector? x) x [x]))

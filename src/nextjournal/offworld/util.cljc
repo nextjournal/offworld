@@ -1,9 +1,9 @@
 (ns nextjournal.offworld.util
   (:require
    [clojure.string :as str]
-   [clojure.walk :as walk]
    [clojure.edn :as edn]
-   #?@(:clj [[ring.util.codec :as codec]
+   #?@(:clj [[clojure.walk :as walk]
+             [ring.util.codec :as codec]
              [cheshire.core :as cheshire]])))
 
 (defonce registry (atom {}))

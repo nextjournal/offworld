@@ -7,7 +7,7 @@
    [clojure.string :as str]
    [nextjournal.baseline :as-alias k]
    [nextjournal.offworld :as-alias 🪐]
-   [nextjournal.offworld.util :as ou]))
+   #?(:clj [nextjournal.offworld.util :as ou])))
 
 (defn init-state [state]
   (merge state {::k/stem state}))
@@ -101,8 +101,8 @@
                   (trace-push! '~sym)
                   (try (apply ~impl args#)
                        (finally (trace-pop!))))))
-          (swap! ou/registry assoc-in [:query-fn ~k] #?(:clj  (var ~sym)
-                                                        :cljs ~sym))
+          #_(swap! ou/registry assoc-in [:query-fn ~k] #?(:clj  (var ~sym)
+                                                          :cljs ~sym))
            #?(:clj  (var ~sym)
                :cljs ~sym)))))
 

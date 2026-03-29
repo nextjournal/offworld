@@ -7,8 +7,8 @@
    [clojure.edn :as edn]
    [nextjournal.clerk :as clerk]
    [replicant.string :as rstr]
-   [nextjournal.table.ui :as ui]
-   [nextjournal.table.clerk-viewers :as viewers]
+   [nextjournal.offworld.demo.ui :as ui]
+   [nextjournal.offworld.demo.clerk-viewers :as viewers]
    [nextjournal.offworld :as 🪐]
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo.biz :as biz]
@@ -646,7 +646,7 @@ so I think our new stack can enable something as nice as "flows" for a-la-carte 
 
 ### Composability
 If one query can invoke another query, then we can express our domain using DRY, reusable pieces.
-The current demo uses `nextjournal.table.ui.holiday` to demonstrate this.
+The current demo uses `nextjournal.offworld.demo.ui.holiday` to demonstrate this.
 
 ### Observability
 Querying a "global" domain can make our UI code very concise. 
@@ -727,9 +727,9 @@ which depends on an *unregistered* query, `:day-missing`:
 
 ^{::clerk/visibility {:code :hide}}
 (clerk/code
-"Missing query: :nextjournal.table.ui.holiday/day-missing
-   :nextjournal.table.ui.holiday/icon-error
-    └─ :nextjournal.table.ui.holiday/day-missing")
+"Missing query: :nextjournal.offworld.demo.ui.holiday/day-missing
+   :nextjournal.offworld.demo.ui.holiday/icon-error
+    └─ :nextjournal.offworld.demo.ui.holiday/day-missing")
 ```
 
 This tells us exactly what handler-fn couldn't be called, as well as a history of dependencies

@@ -1,12 +1,12 @@
-(ns nextjournal.table.ui.omnibox
+(ns nextjournal.offworld.demo.ui.omnibox
   (:require
    [clojure.string :as str]
    [nexus.registry :as nxr]
    [nextjournal.baseline :as k]
    [nextjournal.offworld :as-alias 🪐]
-   [nextjournal.table.filters :as filters]
-   [nextjournal.table.ui.holiday :as 🎄]
-   [nextjournal.table.ui.omnibox :as-alias ob]
+   [nextjournal.offworld.demo.filters :as filters]
+   [nextjournal.offworld.demo.ui.holiday :as 🎄]
+   [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
    #?(:cljs [portfolio.replicant :refer [defscene]])))
 
 (nxr/register-action! ::ob/keydown-input ^::🪐/client

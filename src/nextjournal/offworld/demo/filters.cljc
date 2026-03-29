@@ -1,4 +1,4 @@
-(ns nextjournal.table.filters
+(ns nextjournal.offworld.demo.filters
   (:require [clojure.string :as str])
   #?(:cljs (:refer-global :only [Error] :rename {Error Exception})))
 

@@ -1,13 +1,13 @@
-(ns nextjournal.table.ui
+(ns nextjournal.offworld.demo.ui
   (:require
-   [nextjournal.table.ui.omnibox :as omnibox-ui]
-   [nextjournal.table.ui.nested-grid :as ng]
-   [nextjournal.table.ui.holiday :as holiday]
-   [nextjournal.ductile.load-builder :as lb]
+   [nextjournal.offworld.demo.ui.omnibox :as omnibox-ui]
+   [nextjournal.offworld.demo.ui.nested-grid :as ng]
+   [nextjournal.offworld.demo.ui.holiday :as holiday]
+   [nextjournal.offworld.demo.load-builder :as lb]
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo.mapbox :as mb]
    [nextjournal.offworld.demo.scan :as scan]
-   [nextjournal.offworld.offline :as 🌠]))
+   [nextjournal.offworld.demo.offline :as 🌠]))
 
 (defn render [{:as state ::k/keys [stem]}]
   [:main {:id "app"}

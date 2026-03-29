@@ -6,7 +6,7 @@
    [nextjournal.clerk.view :as clerk-view]
    [ring.adapter.jetty :refer [run-jetty]]
    [org.httpkit.server :as http]
-   [nextjournal.table.main :as main]))
+   [nextjournal.offworld.demo.main :as main]))
 
 (defonce add-datastar-js-include
   (alter-var-root

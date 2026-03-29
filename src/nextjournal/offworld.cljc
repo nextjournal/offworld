@@ -4,12 +4,13 @@
    [datastar :as-alias 🚀]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.baseline :as-alias k]
-   [nextjournal.offworld.offline :as 🌠]
    [nextjournal.offworld.util :as ou]
    #?@(:cljs
        [[nexus.core :as nexus]
         [replicant.dom :as rdom]]))
   #?(:cljs (:require-macros [nextjournal.offworld])))
+
+(def registry (atom {}))
 
 #?(:cljs (def ^:dynamic client-nexus-static {}))
 #?(:cljs (def ^:dynamic client-nexus-registry {}))
@@ -20,7 +21,10 @@
 
 #?(:cljs (defonce memories (js/WeakMap.)))
 
-#?(:cljs (def online? 🌠/!online?))
+#?(:cljs (def online? (atom true)))
+
+#?(:cljs (defn go-online! [] (reset! online? true)))
+#?(:cljs (defn go-offline! [] (reset! online? false)))
 
 (def mode (atom :csr))
 
@@ -134,27 +138,13 @@
                            "They're listed in the nexus as actions, not effects."
                            "In SSR mode, they won't be sent to the server (or executed at all)."
                            "This matches the behavior of CSR mode. By design, actions can't trigger actions."))
-        (when online?
+        (when @online?
           (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
           (ou/serialize (nexus/interpolate client-nexus dispatch-data (vec actions-to-send))))))))
 
 (defn offline? [stem]
   #?(:clj false
      :cljs (::offline? (meta stem))))
-
-#?(:cljs
-   (defn offline-dispatch [dispatch-data actions]
-     (let [client-nexus      (get-client-nexus)
-           server-nexus      (get-server-nexus)
-           client-actions    (filterv #(or (client-action? client-nexus %)
-                                           (client-effect? client-nexus %)) actions)
-           server-actions    (filterv #(or (server-action? server-nexus %)
-                                           (server-effect? server-nexus %)) actions)
-           {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
-           server-effects    (filterv #(server-effect? server-nexus %) effects)
-           actions-to-log    (seq (concat server-effects server-actions))]
-       (swap! 🌠/!action-log (fnil into []) actions-to-log)
-       (nexus/dispatch (get-client-nexus {:mode :csr}) 🌠/!system dispatch-data actions))))
 
 (defn d*-dispatch [actions]
   (str "@get('/replicant-dispatch', {payload: {actions: "
@@ -212,7 +202,7 @@
      (let [k (str (ns-name *ns*) "/" sym)]
        `(do
           (k/defq ~sym ~@decls)
-          (swap! ou/registry assoc-in [:render-fn ~k] #?(:clj  (var ~sym)
+          (swap! registry assoc-in [:render-fn ~k] #?(:clj  (var ~sym)
                                                          :cljs ~sym))
             #?(:clj  (var ~sym)
                :cljs ~sym)))))

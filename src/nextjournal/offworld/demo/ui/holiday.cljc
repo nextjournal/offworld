@@ -1,4 +1,4 @@
-(ns nextjournal.table.ui.holiday
+(ns nextjournal.offworld.demo.ui.holiday
   (:require
    [nexus.registry :as nxr]
    [nextjournal.baseline :as k :refer [defq]]

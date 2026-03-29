@@ -1,6 +1,6 @@
 (ns nextjournal.offworld.demo
   (:require
-   [nextjournal.ductile.load-builder :as lb]
+   [nextjournal.offworld.demo.load-builder :as lb]
    [nextjournal.offworld.demo.scan :as scan]))
 
 (defn init-state [state]

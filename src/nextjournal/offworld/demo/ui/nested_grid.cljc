@@ -1,9 +1,9 @@
-(ns nextjournal.table.ui.nested-grid
+(ns nextjournal.offworld.demo.ui.nested-grid
   (:require
    [nextjournal.baseline :as k]
-   [nextjournal.table.ui.nested-grid :as-alias ng]
-   [nextjournal.table.ui.nested-grid.util :as ngu]
-   [nextjournal.table.ui.holiday :as 🎄]
+   [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
+   [nextjournal.offworld.demo.ui.nested-grid.util :as ngu]
+   [nextjournal.offworld.demo.ui.holiday :as 🎄]
    [nexus.registry :as nxr]
    [nextjournal.offworld :as-alias 🪐]
    [datastar :as-alias 🚀]))
