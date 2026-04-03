@@ -26,7 +26,7 @@
 #?(:cljs (defn go-online! [] (reset! online? true)))
 #?(:cljs (defn go-offline! [] (reset! online? false)))
 
-(def mode (atom :csr))
+(defonce mode (atom :csr))
 
 #?(:cljs (defn recall [node]
            (case @mode
@@ -146,16 +146,20 @@
   #?(:clj false
      :cljs (::offline? (meta stem))))
 
-(defn d*-dispatch [actions]
-  (str "@get('/replicant-dispatch', {payload: {actions: "
+(defn d*-dispatch [actions & {:as extra}]
+  (str "@get('/replicant-dispatch', {payload: {"
+       (apply str (interleave (keys extra) (repeat ": ") (vals extra) (repeat ", ")))
+       "actions: "
        "nextjournal.offworld.divert("
        "'event',"
        "evt, '"
        (ou/serialize actions)
        "')}})"))
 
-(defn d*-dispatch-init [actions signal-name]
-  (str "@get('/replicant-dispatch', {payload: {actions: "
+(defn d*-dispatch-init [actions signal-name & {:as extra}]
+  (str "@get('/replicant-dispatch', {payload: {"
+       (apply str (interleave (keys extra) (repeat ": ") (vals extra) (repeat ", ")))
+       "actions: "
        "nextjournal.offworld.divert("
        "'lifecycle',"
        "$" signal-name ", '"
@@ -181,18 +185,18 @@
 
   {:on {:click [[:my-action]]}}
   {:data-on:click \"@get('/replicant-dispatch', {payload: '[[:my-action]]'})\"}"
-  [m]
+  [m & {:as extra-payload}]
   (into (dissoc m :on)
         (for [[k v] (:on m)
               :let  [{:datastar/keys [modifiers]} (meta v)]]
           [(keyword (apply str "data-on" k (interleave (repeat "__")
                                                        (map name modifiers))))
-           (d*-dispatch v)])))
+           (d*-dispatch v extra-payload)])))
 
-(defn replicant->d* [hiccup]
+(defn replicant->d* [hiccup & {:as extra-payload}]
   (walk/postwalk
-   #(cond-> % (map? %) (-> on-hooks-replicant->d*
-                           attr->d*))
+   (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % extra-payload))
+                                           attr->d*))) ;; FIXME add extra pattern?
    hiccup))
 
 #?(:clj
