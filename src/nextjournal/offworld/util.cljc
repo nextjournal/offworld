@@ -23,8 +23,8 @@
                   codec/form-decode
                   (get "datastar")
                   cheshire/parse-string
-                  walk/keywordize-keys
-                  (update :actions deserialize))))
+                  (get "offworld")
+                  deserialize)))
 
 #?(:clj (defn read-action-log [{:keys [query-string]}]
           (some-> query-string

@@ -33,6 +33,12 @@
              :csr (rdom/recall node)
              :ssr (.get memories node))))
 
+#?(:cljs (def ^:dynamic serialize-fn ou/serialize))
+#?(:cljs (def ^:dynamic deserialize-fn ou/deserialize))
+
+#?(:cljs (defn register-serialize-fn! [f] (set! nextjournal.offworld/serialize-fn f)))
+#?(:cljs (defn register-deserialize-fn! [f] (set! nextjournal.offworld/deserialize-fn f)))
+
 (defn dissoc-handlers [nexus k]
   (let [dissoc-meta #(into {} (remove (comp k meta val)) %)]
     (-> nexus
@@ -100,7 +106,7 @@
 
 #?(:cljs
    (defn build-event-map [e]
-     (let [node  (.-target e)]
+     (let [node (.-target e)]
        (cond-> {:replicant/trigger :replicant.trigger/dom-event
                 :replicant/dom-event e}
          node (assoc :replicant/node node)))))
@@ -113,71 +119,73 @@
                               (.set ^js memories node memory))}))
 
 #?(:cljs
-   (defn divert
-     ([trigger js-data actions-str]
-      (divert (get-client-nexus) (get-server-nexus) trigger js-data actions-str))
-     ([client-nexus server-nexus trigger js-data actions-str]
-      (let [actions           (ou/deserialize actions-str)
-            dispatch-data     (case trigger
-                                "event"     (build-event-map js-data)
-                                "lifecycle" (build-lifecycle-map js-data))
-            client-actions    (filterv #(or (client-action? client-nexus %)
-                                            (client-effect? client-nexus %)) actions)
-            server-actions    (filterv #(or (server-action? server-nexus %)
-                                            (server-effect? server-nexus %)) actions)
-            {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
-            client-effects    (filterv #(client-effect? client-nexus %) effects)
-            server-effects    (filterv #(server-effect? server-nexus %) effects)
-            bad-actions       (filterv #(and (server-action? server-nexus %)
-                                             (not (server-effect? server-nexus %)))
-                                       effects)
-            actions-to-send   (seq (concat server-effects server-actions))]
-        (when (seq bad-actions)
-          (js/console.warn "🪐OFFWORLD: These keys were returned from an action handler: "
-                           (pr-str (mapv first bad-actions))
-                           "They're listed in the nexus as actions, not effects."
-                           "In SSR mode, they won't be sent to the server (or executed at all)."
-                           "This matches the behavior of CSR mode. By design, actions can't trigger actions."))
-        (when @online?
-          (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
-          (ou/serialize (nexus/interpolate client-nexus dispatch-data (vec actions-to-send))))))))
+   (defn divert [actions-str js-data]
+     (let [server-nexus                          (get-server-nexus)
+           client-nexus                          (get-client-nexus)
+           {:keys [actions trigger] :as payload} (deserialize-fn actions-str)
+           dispatch-data                         (case trigger
+                                                   :event     (build-event-map js-data)
+                                                   :lifecycle (build-lifecycle-map js-data)
+                                                   {})
+           client-actions                        (filterv #(or (client-action? client-nexus %)
+                                                               (client-effect? client-nexus %)) actions)
+           server-actions                        (filterv #(or (server-action? server-nexus %)
+                                                               (server-effect? server-nexus %)) actions)
+           {:keys [effects]}                     (nexus/expand-actions client-nexus nil client-actions dispatch-data)
+           client-effects                        (filterv #(client-effect? client-nexus %) effects)
+           server-effects                        (filterv #(server-effect? server-nexus %) effects)
+           bad-actions                           (filterv #(and (server-action? server-nexus %)
+                                                                (not (server-effect? server-nexus %)))
+                                                          effects)
+           actions-to-send                       (seq (concat server-effects server-actions))]
+       (when (seq bad-actions)
+         (js/console.warn "🪐OFFWORLD: These keys were returned from an action handler: "
+                          (pr-str (mapv first bad-actions))
+                          "They're listed in the nexus as actions, not effects."
+                          "In SSR mode, they won't be sent to the server (or executed at all)."
+                          "This matches the behavior of CSR mode. By design, actions can't trigger actions."))
+       (when @online?
+         (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
+         (serialize-fn (merge payload
+                              {:actions (nexus/interpolate client-nexus
+                                                           dispatch-data
+                                                           (vec actions-to-send))}))))))
 
 (defn offline? [stem]
   #?(:clj false
      :cljs (::offline? (meta stem))))
 
-(defn d*-dispatch [actions & {:as extra}]
-  (str "@get('/replicant-dispatch', {payload: {"
-       (apply str (interleave (keys extra) (repeat ": ") (vals extra) (repeat ", ")))
-       "actions: "
-       "nextjournal.offworld.divert("
-       "'event',"
-       "evt, '"
-       (ou/serialize actions)
-       "')}})"))
+(defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-path]
+                              :or   {serialize-fn  ou/serialize
+                                     dispatch-path "/replicant-dispatch"}}]
+  (str "@get('" dispatch-path "', "
+       "{payload: {offworld: nextjournal.offworld.divert("
+       "'" (serialize-fn (merge extra-payload
+                                {:actions actions
+                                 :trigger :event})) "', "
+       "evt" ")}})"))
 
-(defn d*-dispatch-init [actions signal-name & {:as extra}]
-  (str "@get('/replicant-dispatch', {payload: {"
-       (apply str (interleave (keys extra) (repeat ": ") (vals extra) (repeat ", ")))
-       "actions: "
-       "nextjournal.offworld.divert("
-       "'lifecycle',"
-       "$" signal-name ", '"
-       (ou/serialize actions)
-       "')}})"))
+(defn d*-dispatch-init [actions & {:keys [serialize-fn extra-payload dispatch-path]
+                                   :or   {serialize-fn ou/serialize
+                                          dispatch-path "/replicant-dispatch"}}]
+  (str "@get('" dispatch-path "', "
+       "{payload: {offworld: nextjournal.offworld.divert("
+       "'" (serialize-fn (merge extra-payload
+                                {:actions actions
+                                 :trigger :lifecycle})) "', "
+       "$offworld_ref" ")}})"))
 
 (defn attr->d*
   "Converts top-level hiccup attributes to datastar expressions.
   Returns a sorted-map, since datastar depends on some keys appearing
   earlier in the attributes."
-  [{:as m ::🚀/keys [data-init]}]
-  (let [signal-name "offworld-ref"]
-    (if-not data-init
-      m
-      (into (ou/priority-sorted-map [:data-ref])
-            (merge m
-                   {:data-ref  signal-name
-                    :data-init (d*-dispatch-init data-init signal-name)})))))
+  [{:as m ::🚀/keys [data-init]} & {:as opts}]
+  (if-not data-init
+    m
+    (into (ou/priority-sorted-map [:data-ref])
+          (merge m
+                 {:data-ref  "offworld_ref"
+                  :data-init (d*-dispatch-init data-init opts)}))))
 
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
@@ -185,18 +193,18 @@
 
   {:on {:click [[:my-action]]}}
   {:data-on:click \"@get('/replicant-dispatch', {payload: '[[:my-action]]'})\"}"
-  [m & {:as extra-payload}]
+  [m & {:as opts}]
   (into (dissoc m :on)
         (for [[k v] (:on m)
               :let  [{:datastar/keys [modifiers]} (meta v)]]
           [(keyword (apply str "data-on" k (interleave (repeat "__")
                                                        (map name modifiers))))
-           (d*-dispatch v extra-payload)])))
+           (d*-dispatch v opts)])))
 
-(defn replicant->d* [hiccup & {:as extra-payload}]
+(defn replicant->d* [hiccup & {:as opts}]
   (walk/postwalk
-   (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % extra-payload))
-                                           attr->d*))) ;; FIXME add extra pattern?
+   (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
+                                           (#(attr->d* % opts)))))
    hiccup))
 
 #?(:clj
@@ -207,9 +215,9 @@
        `(do
           (k/defq ~sym ~@decls)
           (swap! registry assoc-in [:render-fn ~k] #?(:clj  (var ~sym)
-                                                         :cljs ~sym))
-            #?(:clj  (var ~sym)
-               :cljs ~sym)))))
+                                                      :cljs ~sym))
+          #?(:clj  (var ~sym)
+             :cljs ~sym)))))
 
 (comment
   (require '[nextjournal.baseline :as k])
