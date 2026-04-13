@@ -127,25 +127,42 @@
                               (.set ^js memories node memory))}))
 
 #?(:cljs
-   (defn divert [actions-str js-data]
-     (let [server-nexus                          (get-server-nexus)
-           client-nexus                          (get-client-nexus)
-           {:keys [actions trigger] :as payload} (deserialize-fn actions-str)
-           dispatch-data                         (case trigger
-                                                   :event     (build-event-map js-data)
-                                                   :lifecycle (build-lifecycle-map js-data)
-                                                   {})
-           client-actions                        (filterv #(or (client-action? client-nexus %)
-                                                               (client-effect? client-nexus %)) actions)
-           server-actions                        (filterv #(or (server-action? server-nexus %)
-                                                               (server-effect? server-nexus %)) actions)
-           {:keys [effects]}                     (nexus/expand-actions client-nexus nil client-actions dispatch-data)
-           client-effects                        (filterv #(client-effect? client-nexus %) effects)
-           server-effects                        (filterv #(server-effect? server-nexus %) effects)
-           bad-actions                           (filterv #(and (server-action? server-nexus %)
-                                                                (not (server-effect? server-nexus %)))
-                                                          effects)
-           actions-to-send                       (seq (concat server-effects server-actions))]
+   (defn divert* [{:keys [actions trigger] :as payload} js-data]
+     (let [server-nexus      (get-server-nexus)
+           client-nexus      (get-client-nexus)
+           dispatch-data     (case trigger
+                               :event     (build-event-map js-data)
+                               :lifecycle (build-lifecycle-map js-data)
+                               {})
+           client-actions    (filterv #(or (client-action? client-nexus %)
+                                           (client-effect? client-nexus %)) actions)
+           {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
+           server-effects    (filterv #(server-effect? server-nexus %) effects)
+           server-actions    (filterv #(or (server-action? server-nexus %)
+                                           (server-effect? server-nexus %)) actions)]
+       {:client-effects (filterv #(client-effect? client-nexus %) effects)
+        :client-actions client-actions
+        :server-effects server-effects
+        :server-actions server-actions
+        :bad-actions    (filterv #(and (server-action? server-nexus %)
+                                       (not (server-effect? server-nexus %)))
+                                 effects)
+        :dispatch-data  dispatch-data
+        :server-payload (merge payload
+                               {:actions (nexus/interpolate client-nexus
+                                                            dispatch-data
+                                                            (into server-effects
+                                                                  server-actions))})})))
+
+#?(:cljs
+   (defn divert [payload-arg js-data]
+     (let [server-nexus             (get-server-nexus)
+           client-nexus             (get-client-nexus)
+           payload                  (cond-> payload-arg (string? payload-arg) deserialize-fn)
+           {:keys [client-effects
+                   bad-actions
+                   dispatch-data
+                   server-payload]} (divert* payload js-data)]
        (when (seq bad-actions)
          (js/console.warn "🪐OFFWORLD: These keys were returned from an action handler: "
                           (pr-str (mapv first bad-actions))
@@ -154,10 +171,15 @@
                           "This matches the behavior of CSR mode. By design, actions can't trigger actions."))
        (when @online?
          (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
-         (serialize-fn (merge payload
-                              {:actions (nexus/interpolate client-nexus
-                                                           dispatch-data
-                                                           (vec actions-to-send))}))))))
+         (serialize-fn server-payload)))))
+
+#?(:cljs
+   (defn dispatch! [url actions & {:keys [event extra-payload]}]
+     (when-let [{:keys [server-payload client-effects]}
+                (divert* {:actions actions :trigger :event} event)]
+       (let [d*-json   (js/JSON.stringify #js {:offworld (serialize-fn (merge server-payload extra-payload))})
+             query-url (str url "?datastar=" (js/encodeURIComponent d*-json))]
+         (js/fetch query-url #js {:method "GET"})))))
 
 (defn offline? [stem]
   #?(:clj false
