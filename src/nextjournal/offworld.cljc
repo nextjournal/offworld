@@ -46,34 +46,42 @@
         (update :nexus/effects dissoc-meta)
         (update :nexus/placeholders dissoc-meta))))
 
+(defn call-or-value [x] (if (fn? x) (x) x))
+
 #?(:cljs
    (defn get-client-nexus [& {render-mode :mode :or {render-mode @mode}}]
-     (case render-mode
-       :csr {:nexus/system->state (some :nexus/system->state [client-nexus-static
-                                                              client-nexus-registry])
-             :nexus/actions       (merge (:nexus/actions client-nexus-static)
-                                         (:nexus/actions client-nexus-registry)
-                                         (:nexus/actions server-nexus-static)
-                                         (:nexus/actions server-nexus-registry))
-             :nexus/effects       (merge (:nexus/effects client-nexus-static)
-                                         (:nexus/effects client-nexus-registry)
-                                         (:nexus/effects server-nexus-static)
-                                         (:nexus/effects server-nexus-registry))
-             :nexus/placeholders  (merge (:nexus/placeholders client-nexus-static)
-                                         (:nexus/placeholders client-nexus-registry)
-                                         (:nexus/placeholders server-nexus-static)
-                                         (:nexus/placeholders server-nexus-registry))
-             :nexus/interceptors  ((fnil into [])
-                                   (:nexus/placeholders client-nexus-static)
-                                   (:nexus/interceptors client-nexus-registry))}
-       :ssr (-> (merge-with merge client-nexus-static client-nexus-registry)
-                (dissoc-handlers ::🪐/server)))))
+     (let [client-nexus-static   (call-or-value client-nexus-static)
+           client-nexus-registry (call-or-value client-nexus-registry)
+           server-nexus-static   (call-or-value server-nexus-static)
+           server-nexus-registry (call-or-value server-nexus-registry)]
+       (case render-mode
+         :csr {:nexus/system->state (some :nexus/system->state [client-nexus-static
+                                                                client-nexus-registry])
+               :nexus/actions       (merge (:nexus/actions client-nexus-static)
+                                           (:nexus/actions client-nexus-registry)
+                                           (:nexus/actions server-nexus-static)
+                                           (:nexus/actions server-nexus-registry))
+               :nexus/effects       (merge (:nexus/effects client-nexus-static)
+                                           (:nexus/effects client-nexus-registry)
+                                           (:nexus/effects server-nexus-static)
+                                           (:nexus/effects server-nexus-registry))
+               :nexus/placeholders  (merge (:nexus/placeholders client-nexus-static)
+                                           (:nexus/placeholders client-nexus-registry)
+                                           (:nexus/placeholders server-nexus-static)
+                                           (:nexus/placeholders server-nexus-registry))
+               :nexus/interceptors  ((fnil into [])
+                                     (:nexus/placeholders client-nexus-static)
+                                     (:nexus/interceptors client-nexus-registry))}
+         :ssr (-> (merge-with merge client-nexus-static client-nexus-registry)
+                  (dissoc-handlers ::🪐/server))))))
 
 #?(:cljs
    (defn get-server-nexus []
      (case @mode
        :csr nil
-       :ssr (-> (merge-with merge server-nexus-static server-nexus-registry)
+       :ssr (-> (merge-with merge
+                            (call-or-value server-nexus-static)
+                            (call-or-value server-nexus-registry))
                 (dissoc-handlers ::🪐/client)))))
 
 #?(:cljs
