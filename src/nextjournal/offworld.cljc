@@ -114,7 +114,7 @@
 
 #?(:cljs
    (defn build-event-map [e]
-     (let [node (.-target e)]
+     (let [node (some-> e .-target)]
        (cond-> {:replicant/trigger :replicant.trigger/dom-event
                 :replicant/dom-event e}
          node (assoc :replicant/node node)))))
