@@ -46,8 +46,7 @@
                 scroll-left]
          :or   {scroll-top 0 scroll-left 0}} (k/local state)]
     (if-not size-cache
-      [:div {:replicant/on-mount [[::init-local path]]
-             ::🚀/data-init      [^::🪐/server [::init-local path]]}]
+      [:div {:replicant/on-mount [[::init-local path]]}]
       (let [height 400
             width  600
             {:as            row-traversal

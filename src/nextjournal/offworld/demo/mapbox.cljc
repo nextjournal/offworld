@@ -33,7 +33,6 @@
    [:div {:id                 id
           :data-ignore-morph  true
           :style              {:width "400px" :height "300px"}
-          ::🚀/data-init      [[::init id {:center center}]]
           :replicant/on-mount [[::init id {:center center}]]}
     "[mapbox renders here]"]
    [:button {:on {:click [[::pan-to id 4.89 52.38]

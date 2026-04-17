@@ -1,14 +1,14 @@
 (ns nextjournal.offworld
   (:require
+   #?@(:cljs
+       [[nexus.core :as nexus]
+        [replicant.dom :as rdom]])
    [clojure.string :as str]
    [clojure.walk :as walk]
    [datastar :as-alias 🚀]
-   [nextjournal.offworld :as-alias 🪐]
    [nextjournal.baseline :as-alias k]
-   [nextjournal.offworld.util :as ou]
-   #?@(:cljs
-       [[nexus.core :as nexus]
-        [replicant.dom :as rdom]]))
+   [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld.util :as ou])
   #?(:cljs (:require-macros [nextjournal.offworld])))
 
 (def registry (atom {}))
@@ -113,27 +113,37 @@
   (and (not (::🪐/client (meta action)))
        (contains? (:nexus/effects server-nexus {}) k)))
 
+(declare dispatch!)
+
 #?(:cljs
-   (defn build-event-map [e]
+   (defn build-event-map [e {:keys [dispatch-url conn-id] :as payload}]
      (let [node (some-> e .-target)]
-       (cond-> {:replicant/trigger :replicant.trigger/dom-event
+       (cond-> {:replicant/trigger   :replicant.trigger/dom-event
                 :replicant/dom-event e}
          node (assoc :replicant/node node)))))
 
 #?(:cljs
-   (defn build-lifecycle-map [node]
-     {:replicant/life-cycle :replicant.life-cycle/mount
-      :replicant/node       node
-      :replicant/remember   (fn remember [memory]
-                              (.set ^js memories node memory))}))
+   (defn build-lifecycle-map [node {:keys [lifecycle dispatch-url conn-id] :as payload}]
+     (merge
+      {:replicant/life-cycle lifecycle
+       :replicant/node       node
+       :replicant/remember   (fn remember [memory]
+                               (.set ^js memories node memory))
+       ::🪐/dispatch         (fn [actions]
+                               (dispatch! dispatch-url actions (merge payload
+                                                                      {:event         node
+                                                                       :trigger       :lifecycle
+                                                                       :extra-payload {:conn-id conn-id}})))}
+      (when (not= lifecycle :replicant/mount)
+        {:replicant/memory (recall node)}))))
 
 #?(:cljs
-   (defn divert* [{:keys [actions trigger] :as payload} js-data]
+   (defn divert* [{:keys [actions trigger lifecycle dispatch-url] :as payload} js-data]
      (let [server-nexus      (get-server-nexus)
            client-nexus      (get-client-nexus)
            dispatch-data     (case trigger
-                               :event     (build-event-map js-data)
-                               :lifecycle (build-lifecycle-map js-data)
+                               :event     (build-event-map js-data payload)
+                               :lifecycle (build-lifecycle-map js-data payload)
                                {})
            client-actions    (filterv #(or (client-action? client-nexus %)
                                            (client-effect? client-nexus %)) actions)
@@ -175,9 +185,9 @@
          (serialize-fn server-payload)))))
 
 #?(:cljs
-   (defn dispatch! [url actions & {:keys [event extra-payload]}]
+   (defn dispatch! [url actions & {:keys [event extra-payload trigger]}]
      (when-let [{:keys [server-payload client-effects]}
-                (divert* {:actions actions :trigger :event} event)]
+                (divert* {:actions actions :trigger trigger} event)]
        (let [d*-json   (js/JSON.stringify #js {:offworld (serialize-fn (merge server-payload extra-payload))})
              query-url (str url "?datastar=" (js/encodeURIComponent d*-json))]
          (js/fetch query-url #js {:method "GET"})))))
@@ -186,51 +196,69 @@
   #?(:clj false
      :cljs (::offline? (meta stem))))
 
-(defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-path]
+(defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn  ou/serialize
-                                     dispatch-path "/replicant-dispatch"}}]
-  (str "@get('" dispatch-path "', "
+                                     dispatch-url "/replicant-dispatch"}}]
+  (str "@get('" dispatch-url "', "
        "{payload: {offworld: nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions actions
                                  :trigger :event})) "', "
        "evt" ")}})"))
 
-(defn d*-dispatch-init [actions & {:keys [serialize-fn extra-payload dispatch-path]
-                                   :or   {serialize-fn ou/serialize
-                                          dispatch-path "/replicant-dispatch"}}]
-  (str "@get('" dispatch-path "', "
+(defn d*-dispatch-init [actions & {:keys [serialize-fn extra-payload dispatch-url]
+                                   :or   {serialize-fn  ou/serialize
+                                          dispatch-url "/replicant-dispatch"}}]
+  (str "@get('" dispatch-url "', "
        "{payload: {offworld: nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
-                                {:actions actions
-                                 :trigger :lifecycle})) "', "
+                                {:actions   actions
+                                 :trigger   :lifecycle
+                                 :lifecycle :replicant/mount})) "', "
        "$offworld_ref" ")}})"))
 
-(defn d*-on-unmount [actions & {:keys [serialize-fn extra-payload dispatch-path]
+(defn d*-on-unmount [actions & {:keys [serialize-fn extra-payload dispatch-url]
                                 :or   {serialize-fn  ou/serialize
-                                       dispatch-path "/replicant-dispatch"}}]
+                                       dispatch-url "/replicant-dispatch"}}]
   (let [serialized (serialize-fn (merge extra-payload
-                                        {:actions actions
-                                         :trigger :lifecycle}))]
+                                        {:actions   actions
+                                         :trigger   :lifecycle
+                                         :lifecycle :replicant/unmount}))]
     (str "new MutationObserver(function(ms,obs){"
          "for(var m of ms){for(var n of m.removedNodes){"
          "if(n===$offworld_ref||n.contains($offworld_ref)){"
          "var sp=nextjournal.offworld.divert('" serialized "',$offworld_ref);"
-         "if(sp)fetch('" dispatch-path "?datastar='+encodeURIComponent(JSON.stringify({offworld:sp})));"
+         "if(sp)fetch('" dispatch-url "?datastar='+encodeURIComponent(JSON.stringify({offworld:sp})));"
          "obs.disconnect();}}}})"
          ".observe($offworld_ref.parentNode,{childList:true,subtree:true})")))
+
+
+(defn d*-on-mount [actions & {:keys [serialize-fn extra-payload dispatch-url]
+                              :or   {serialize-fn  ou/serialize
+                                     dispatch-url "/replicant-dispatch"}}]
+  (let [serialized (serialize-fn (merge extra-payload
+                                        {:actions   actions
+                                         :trigger   :lifecycle
+                                         :lifecycle :replicant/unmount}))]
+    (str "@get('" dispatch-url "', "
+         "{payload: {offworld: nextjournal.offworld.divert("
+         "'" (serialize-fn (merge extra-payload
+                                  {:actions   actions
+                                   :trigger   :lifecycle
+                                   :lifecycle :replicant/mount})) "', "
+         "$offworld_ref" ")}})")))
 
 (defn attr->d*
   "Converts top-level hiccup attributes to datastar expressions.
   Returns a sorted-map, since datastar depends on some keys appearing
   earlier in the attributes."
-  [{:as m ::🚀/keys [data-init] :replicant/keys [on-unmount]} & {:as opts}]
-  (if-not (or data-init on-unmount)
+  [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
+  (if-not (or on-unmount on-mount)
     m
     (into (ou/priority-sorted-map [:data-ref])
           (merge m
                  {:data-ref  "offworld_ref"
-                  :data-init (str/join "; " (filter some? [(when data-init (d*-dispatch-init data-init opts))
+                  :data-init (str/join "; " (filter some? [(when on-mount (d*-on-mount on-mount opts))
                                                            (when on-unmount (d*-on-unmount on-unmount opts))]))}))))
 
 (defn on-hooks-replicant->d*
@@ -247,11 +275,12 @@
                                                        (map name modifiers))))
            (d*-dispatch v opts)])))
 
-(defn replicant->d* [hiccup & {:as opts}]
-  (walk/postwalk
-   (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
-                                           (#(attr->d* % opts)))))
-   hiccup))
+(defn replicant->d* [hiccup & {:keys [dispatch-url] :as opts}]
+  (let [opts (assoc-in opts [:extra-payload :dispatch-url] dispatch-url)]
+    (walk/postwalk
+     (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
+                                             (#(attr->d* % opts)))))
+     hiccup)))
 
 #?(:clj
    (defmacro defc
