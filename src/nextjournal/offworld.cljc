@@ -1,5 +1,6 @@
 (ns nextjournal.offworld
   (:require
+   [clojure.string :as str]
    [clojure.walk :as walk]
    [datastar :as-alias 🚀]
    [nextjournal.offworld :as-alias 🪐]
@@ -205,17 +206,32 @@
                                  :trigger :lifecycle})) "', "
        "$offworld_ref" ")}})"))
 
+(defn d*-on-unmount [actions & {:keys [serialize-fn extra-payload dispatch-path]
+                                :or   {serialize-fn  ou/serialize
+                                       dispatch-path "/replicant-dispatch"}}]
+  (let [serialized (serialize-fn (merge extra-payload
+                                        {:actions actions
+                                         :trigger :lifecycle}))]
+    (str "new MutationObserver(function(ms,obs){"
+         "for(var m of ms){for(var n of m.removedNodes){"
+         "if(n===$offworld_ref||n.contains($offworld_ref)){"
+         "var sp=nextjournal.offworld.divert('" serialized "',$offworld_ref);"
+         "if(sp)fetch('" dispatch-path "?datastar='+encodeURIComponent(JSON.stringify({offworld:sp})));"
+         "obs.disconnect();}}}})"
+         ".observe($offworld_ref.parentNode,{childList:true,subtree:true})")))
+
 (defn attr->d*
   "Converts top-level hiccup attributes to datastar expressions.
   Returns a sorted-map, since datastar depends on some keys appearing
   earlier in the attributes."
-  [{:as m ::🚀/keys [data-init]} & {:as opts}]
-  (if-not data-init
+  [{:as m ::🚀/keys [data-init] :replicant/keys [on-unmount]} & {:as opts}]
+  (if-not (or data-init on-unmount)
     m
     (into (ou/priority-sorted-map [:data-ref])
           (merge m
                  {:data-ref  "offworld_ref"
-                  :data-init (d*-dispatch-init data-init opts)}))))
+                  :data-init (str/join "; " (filter some? [(when data-init (d*-dispatch-init data-init opts))
+                                                           (when on-unmount (d*-on-unmount on-unmount opts))]))}))))
 
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
