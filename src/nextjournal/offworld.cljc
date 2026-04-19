@@ -159,11 +159,11 @@
                                        (not (server-effect? server-nexus %)))
                                  effects)
         :dispatch-data  dispatch-data
-        :server-payload (merge payload
-                               {:actions (nexus/interpolate client-nexus
-                                                            dispatch-data
-                                                            (into server-effects
-                                                                  server-actions))})})))
+        :server-payload (when-let [actions-to-send (seq (concat server-actions server-effects))]
+                          (merge payload
+                                 {:actions (nexus/interpolate client-nexus
+                                                              dispatch-data
+                                                              actions-to-send)}))})))
 
 #?(:cljs
    (defn divert [payload-arg js-data]
@@ -181,8 +181,10 @@
                           "In SSR mode, they won't be sent to the server (or executed at all)."
                           "This matches the behavior of CSR mode. By design, actions can't trigger actions."))
        (when @online?
-         (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects)
-         (serialize-fn server-payload)))))
+         (when (seq client-effects)
+           (nexus/dispatch client-nexus (atom {}) dispatch-data client-effects))
+         (when server-payload
+           (serialize-fn server-payload))))))
 
 #?(:cljs
    (defn dispatch! [url actions & {:keys [event extra-payload trigger]}]
@@ -199,23 +201,23 @@
 (defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn  ou/serialize
                                      dispatch-url "/replicant-dispatch"}}]
-  (str "@get('" dispatch-url "', "
-       "{payload: {offworld: nextjournal.offworld.divert("
+  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+       "(nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions actions
-                                 :trigger :event})) "', "
-       "evt" ")}})"))
+                                 :trigger :event})) "',"
+       "evt))"))
 
 (defn d*-dispatch-init [actions & {:keys [serialize-fn extra-payload dispatch-url]
                                    :or   {serialize-fn  ou/serialize
                                           dispatch-url "/replicant-dispatch"}}]
-  (str "@get('" dispatch-url "', "
-       "{payload: {offworld: nextjournal.offworld.divert("
+  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+       "(nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions   actions
                                  :trigger   :lifecycle
-                                 :lifecycle :replicant/mount})) "', "
-       "$offworld_ref" ")}})"))
+                                 :lifecycle :replicant/mount})) "',"
+       "$offworld_ref))"))
 
 (defn d*-on-unmount [actions & {:keys [serialize-fn extra-payload dispatch-url]
                                 :or   {serialize-fn  ou/serialize
@@ -224,29 +226,28 @@
                                         {:actions   actions
                                          :trigger   :lifecycle
                                          :lifecycle :replicant/unmount}))]
-    (str "new MutationObserver(function(ms,obs){"
-         "for(var m of ms){for(var n of m.removedNodes){"
-         "if(n===$offworld_ref||n.contains($offworld_ref)){"
-         "var sp=nextjournal.offworld.divert('" serialized "',$offworld_ref);"
-         "if(sp)fetch('" dispatch-url "?datastar='+encodeURIComponent(JSON.stringify({offworld:sp})));"
-         "obs.disconnect();}}}})"
-         ".observe($offworld_ref.parentNode,{childList:true,subtree:true})")))
+    (str "(function(_node){"
+         "_node.__offworld_cleanup=function(){"
+         "var sp=nextjournal.offworld.divert('" serialized "',_node);"
+         "if(sp)fetch('" dispatch-url "?datastar='+encodeURIComponent(JSON.stringify({offworld:sp})));};"
+         "new MutationObserver(function(ms,obs){"
+         "if(!document.contains(_node)){"
+         "if(_node.__offworld_cleanup){_node.__offworld_cleanup();_node.__offworld_cleanup=null;}"
+         "obs.disconnect();}})"
+         ".observe(document.body,{childList:true,subtree:true})"
+         "})($offworld_ref)")))
 
 
 (defn d*-on-mount [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn  ou/serialize
                                      dispatch-url "/replicant-dispatch"}}]
-  (let [serialized (serialize-fn (merge extra-payload
-                                        {:actions   actions
-                                         :trigger   :lifecycle
-                                         :lifecycle :replicant/unmount}))]
-    (str "@get('" dispatch-url "', "
-         "{payload: {offworld: nextjournal.offworld.divert("
-         "'" (serialize-fn (merge extra-payload
-                                  {:actions   actions
-                                   :trigger   :lifecycle
-                                   :lifecycle :replicant/mount})) "', "
-         "$offworld_ref" ")}})")))
+  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+       "(nextjournal.offworld.divert("
+       "'" (serialize-fn (merge extra-payload
+                                {:actions   actions
+                                 :trigger   :lifecycle
+                                 :lifecycle :replicant/mount})) "',"
+       "$offworld_ref))"))
 
 (defn attr->d*
   "Converts top-level hiccup attributes to datastar expressions.
@@ -255,11 +256,14 @@
   [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
   (if-not (or on-unmount on-mount)
     m
-    (into (ou/priority-sorted-map [:data-ref])
-          (merge m
-                 {:data-ref  "offworld_ref"
-                  :data-init (str/join "; " (filter some? [(when on-mount (d*-on-mount on-mount opts))
-                                                           (when on-unmount (d*-on-unmount on-unmount opts))]))}))))
+    (let [cleanup-preamble (when on-unmount
+                             "if($offworld_ref.__offworld_cleanup){$offworld_ref.__offworld_cleanup();$offworld_ref.__offworld_cleanup=null;}")
+          mount-expr       (when on-mount (d*-on-mount on-mount opts))
+          unmount-expr     (when on-unmount (d*-on-unmount on-unmount opts))]
+      (into (ou/priority-sorted-map [:data-ref])
+            (merge m
+                   {:data-ref  "offworld_ref"
+                    :data-init (str/join "; " (filter some? [cleanup-preamble mount-expr unmount-expr]))})))))
 
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
