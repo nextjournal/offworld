@@ -27,6 +27,11 @@
 #?(:cljs (defn go-online! [] (reset! online? true)))
 #?(:cljs (defn go-offline! [] (reset! online? false)))
 
+;; Microtask batching: collapse multiple dispatches from the same browser
+;; task into a single network request, preserving event handler ordering.
+#?(:cljs (def ^:private pending-dispatch (atom nil)))
+#?(:cljs (def ^:private flush-scheduled? (atom false)))
+
 (defonce mode (atom :csr))
 
 #?(:cljs (defn recall [node]
@@ -39,6 +44,31 @@
 
 #?(:cljs (defn register-serialize-fn! [f] (set! nextjournal.offworld/serialize-fn f)))
 #?(:cljs (defn register-deserialize-fn! [f] (set! nextjournal.offworld/deserialize-fn f)))
+
+#?(:cljs
+   (defn flush-pending! []
+     (let [{:keys [url payload]} @pending-dispatch]
+       (reset! pending-dispatch nil)
+       (reset! flush-scheduled? false)
+       (when payload
+         (let [d*-json   (js/JSON.stringify #js {:offworld payload})
+               query-url (str url "?datastar=" (js/encodeURIComponent d*-json))]
+           (js/fetch query-url #js {:method "GET"}))))))
+
+#?(:cljs
+   (defn enqueue-dispatch! [url serialized-payload]
+     (swap! pending-dispatch
+            (fn [prev]
+              (if prev
+                ;; TODO: avoid repeated deserialize/serialize on each swap!
+                ;; by storing decoded payloads here and serializing once in flush-pending!
+                (let [prev-p (deserialize-fn (:payload prev))
+                      new-p  (deserialize-fn serialized-payload)]
+                  {:url     url
+                   :payload (serialize-fn (update prev-p :actions into (:actions new-p)))})
+                {:url url :payload serialized-payload})))
+     (when (compare-and-set! flush-scheduled? false true)
+       (js/requestAnimationFrame flush-pending!))))
 
 (defn dissoc-handlers [nexus k]
   (let [dissoc-meta #(into {} (remove (comp k meta val)) %)]
@@ -190,9 +220,7 @@
    (defn dispatch! [url actions & {:keys [event extra-payload trigger]}]
      (when-let [{:keys [server-payload client-effects]}
                 (divert* {:actions actions :trigger trigger} event)]
-       (let [d*-json   (js/JSON.stringify #js {:offworld (serialize-fn (merge server-payload extra-payload))})
-             query-url (str url "?datastar=" (js/encodeURIComponent d*-json))]
-         (js/fetch query-url #js {:method "GET"})))))
+       (enqueue-dispatch! url (serialize-fn (merge server-payload extra-payload))))))
 
 (defn offline? [stem]
   #?(:clj false
@@ -201,7 +229,7 @@
 (defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn  ou/serialize
                                      dispatch-url "/replicant-dispatch"}}]
-  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+  (str "((_sp)=>_sp&&nextjournal.offworld.enqueue_dispatch_BANG_('" dispatch-url "',_sp))"
        "(nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions actions
@@ -211,7 +239,7 @@
 (defn d*-dispatch-init [actions & {:keys [serialize-fn extra-payload dispatch-url]
                                    :or   {serialize-fn  ou/serialize
                                           dispatch-url "/replicant-dispatch"}}]
-  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+  (str "((_sp)=>_sp&&nextjournal.offworld.enqueue_dispatch_BANG_('" dispatch-url "',_sp))"
        "(nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions   actions
@@ -229,7 +257,7 @@
     (str "(function(_node){"
          "_node.__offworld_cleanup=function(){"
          "var sp=nextjournal.offworld.divert('" serialized "',_node);"
-         "if(sp)fetch('" dispatch-url "?datastar='+encodeURIComponent(JSON.stringify({offworld:sp})));};"
+         "if(sp)nextjournal.offworld.enqueue_dispatch_BANG_('" dispatch-url "',sp);};"
          "new MutationObserver(function(ms,obs){"
          "if(!document.contains(_node)){"
          "if(_node.__offworld_cleanup){_node.__offworld_cleanup();_node.__offworld_cleanup=null;}"
@@ -241,7 +269,7 @@
 (defn d*-on-mount [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn  ou/serialize
                                      dispatch-url "/replicant-dispatch"}}]
-  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+  (str "((_sp)=>_sp&&nextjournal.offworld.enqueue_dispatch_BANG_('" dispatch-url "',_sp))"
        "(nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions   actions
