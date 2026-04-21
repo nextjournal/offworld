@@ -198,6 +198,12 @@
   #?(:clj false
      :cljs (::offline? (meta stem))))
 
+(defn with-modifiers [k v]
+  (let [{:datastar/keys [modifiers]} (meta v)]
+    (if-not modifiers
+      k
+      (keyword (apply str (name k) (interleave (repeat "__") (map name modifiers)))))))
+
 (defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn  ou/serialize
                                      dispatch-url "/replicant-dispatch"}}]
@@ -225,8 +231,10 @@
   earlier in the attributes."
   [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
   (cond-> m
-    on-mount   (assoc :data-init (d*-lifecycle on-mount :replicant/mount opts))
-    on-unmount (assoc :data-on-remove (d*-lifecycle on-unmount :replicant/unmount opts))))
+    on-mount   (assoc (with-modifiers :data-init on-mount)
+                      (d*-lifecycle on-mount :replicant/mount opts))
+    on-unmount (assoc (with-modifiers :data-on-remove on-unmount)
+                      (d*-lifecycle on-unmount :replicant/unmount opts))))
 
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
@@ -236,11 +244,8 @@
   {:data-on:click \"@get('/replicant-dispatch', {payload: '[[:my-action]]'})\"}"
   [m & {:as opts}]
   (into (dissoc m :on)
-        (for [[k v] (:on m)
-              :let  [{:datastar/keys [modifiers]} (meta v)]]
-          [(keyword (apply str "data-on" k (interleave (repeat "__")
-                                                       (map name modifiers))))
-           (d*-dispatch v opts)])))
+        (for [[k v] (:on m)]
+          [(with-modifiers (keyword (str "data-on" k)) v) (d*-dispatch v opts)])))
 
 (defn replicant->d* [hiccup & {:keys [dispatch-url] :as opts}]
   (let [opts (assoc-in opts [:extra-payload :dispatch-url] dispatch-url)]
