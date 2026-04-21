@@ -217,7 +217,7 @@
                                 {:actions   actions
                                  :trigger   :lifecycle
                                  :lifecycle :replicant/mount})) "',"
-       "$offworld_ref))"))
+       "el))"))
 
 (defn d*-on-unmount [actions & {:keys [serialize-fn extra-payload dispatch-url]
                                 :or   {serialize-fn  ou/serialize
@@ -226,16 +226,14 @@
                                         {:actions   actions
                                          :trigger   :lifecycle
                                          :lifecycle :replicant/unmount}))]
-    (str "(function(_node){"
-         "_node.__offworld_cleanup=function(){"
-         "var sp=nextjournal.offworld.divert('" serialized "',_node);"
-         "if(sp)fetch('" dispatch-url "?datastar='+encodeURIComponent(JSON.stringify({offworld:sp})));};"
+    (str "el.__offworld_cleanup=function(){"
+         "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+         "(nextjournal.offworld.divert('" serialized "',el));};"
          "new MutationObserver(function(ms,obs){"
-         "if(!document.contains(_node)){"
-         "if(_node.__offworld_cleanup){_node.__offworld_cleanup();_node.__offworld_cleanup=null;}"
+         "if(!document.contains(el)){"
+         "if(el.__offworld_cleanup){el.__offworld_cleanup();el.__offworld_cleanup=null;}"
          "obs.disconnect();}})"
-         ".observe(document.body,{childList:true,subtree:true})"
-         "})($offworld_ref)")))
+         ".observe(document.body,{childList:true,subtree:true})")))
 
 
 (defn d*-on-mount [actions & {:keys [serialize-fn extra-payload dispatch-url]
@@ -247,7 +245,7 @@
                                 {:actions   actions
                                  :trigger   :lifecycle
                                  :lifecycle :replicant/mount})) "',"
-       "$offworld_ref))"))
+       "el))"))
 
 (defn attr->d*
   "Converts top-level hiccup attributes to datastar expressions.
@@ -257,13 +255,10 @@
   (if-not (or on-unmount on-mount)
     m
     (let [cleanup-preamble (when on-unmount
-                             "if($offworld_ref.__offworld_cleanup){$offworld_ref.__offworld_cleanup();$offworld_ref.__offworld_cleanup=null;}")
+                             "if(el.__offworld_cleanup){el.__offworld_cleanup();el.__offworld_cleanup=null;}")
           mount-expr       (when on-mount (d*-on-mount on-mount opts))
           unmount-expr     (when on-unmount (d*-on-unmount on-unmount opts))]
-      (into (ou/priority-sorted-map [:data-ref])
-            (merge m
-                   {:data-ref  "offworld_ref"
-                    :data-init (str/join "; " (filter some? [cleanup-preamble mount-expr unmount-expr]))})))))
+      (assoc m :data-init (str/join "; " (filter some? [cleanup-preamble mount-expr unmount-expr]))))))
 
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
