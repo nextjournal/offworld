@@ -208,43 +208,15 @@
                                  :trigger :event})) "',"
        "evt))"))
 
-(defn d*-dispatch-init [actions & {:keys [serialize-fn extra-payload dispatch-url]
-                                   :or   {serialize-fn  ou/serialize
-                                          dispatch-url "/replicant-dispatch"}}]
+(defn d*-lifecycle [actions lifecycle & {:keys [serialize-fn extra-payload dispatch-url]
+                                         :or   {serialize-fn  ou/serialize
+                                                dispatch-url "/replicant-dispatch"}}]
   (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
        "(nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions   actions
                                  :trigger   :lifecycle
-                                 :lifecycle :replicant/mount})) "',"
-       "el))"))
-
-(defn d*-on-unmount [actions & {:keys [serialize-fn extra-payload dispatch-url]
-                                :or   {serialize-fn  ou/serialize
-                                       dispatch-url "/replicant-dispatch"}}]
-  (let [serialized (serialize-fn (merge extra-payload
-                                        {:actions   actions
-                                         :trigger   :lifecycle
-                                         :lifecycle :replicant/unmount}))]
-    (str "el.__offworld_cleanup=function(){"
-         "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
-         "(nextjournal.offworld.divert('" serialized "',el));};"
-         "new MutationObserver(function(ms,obs){"
-         "if(!document.contains(el)){"
-         "if(el.__offworld_cleanup){el.__offworld_cleanup();el.__offworld_cleanup=null;}"
-         "obs.disconnect();}})"
-         ".observe(document.body,{childList:true,subtree:true})")))
-
-
-(defn d*-on-mount [actions & {:keys [serialize-fn extra-payload dispatch-url]
-                              :or   {serialize-fn  ou/serialize
-                                     dispatch-url "/replicant-dispatch"}}]
-  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
-       "(nextjournal.offworld.divert("
-       "'" (serialize-fn (merge extra-payload
-                                {:actions   actions
-                                 :trigger   :lifecycle
-                                 :lifecycle :replicant/mount})) "',"
+                                 :lifecycle lifecycle})) "',"
        "el))"))
 
 (defn attr->d*
@@ -252,13 +224,9 @@
   Returns a sorted-map, since datastar depends on some keys appearing
   earlier in the attributes."
   [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
-  (if-not (or on-unmount on-mount)
-    m
-    (let [cleanup-preamble (when on-unmount
-                             "if(el.__offworld_cleanup){el.__offworld_cleanup();el.__offworld_cleanup=null;}")
-          mount-expr       (when on-mount (d*-on-mount on-mount opts))
-          unmount-expr     (when on-unmount (d*-on-unmount on-unmount opts))]
-      (assoc m :data-init (str/join "; " (filter some? [cleanup-preamble mount-expr unmount-expr]))))))
+  (cond-> m
+    on-mount   (assoc :data-init (d*-lifecycle on-mount :replicant/mount opts))
+    on-unmount (assoc :data-on-remove (d*-lifecycle on-unmount :replicant/unmount opts))))
 
 (defn on-hooks-replicant->d*
   "Converts a map containing replicant-style :on attributes to
