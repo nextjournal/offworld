@@ -1,7 +1,8 @@
 (ns nextjournal.offworld
   (:require
    #?@(:cljs
-       [[nexus.core :as nexus]
+       [[nextjournal.offworld.order :as 📈]
+        [nexus.core :as nexus]
         [replicant.dom :as rdom]])
    [clojure.string :as str]
    [clojure.walk :as walk]
@@ -150,7 +151,8 @@
            {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
            server-effects    (filterv #(server-effect? server-nexus %) effects)
            server-actions    (filterv #(or (server-action? server-nexus %)
-                                           (server-effect? server-nexus %)) actions)]
+                                           (server-effect? server-nexus %)) actions)
+           payload-actions   (concat server-actions server-effects)]
        {:client-effects (filterv #(client-effect? client-nexus %) effects)
         :client-actions client-actions
         :server-effects server-effects
@@ -159,11 +161,11 @@
                                        (not (server-effect? server-nexus %)))
                                  effects)
         :dispatch-data  dispatch-data
-        :server-payload (when-let [actions-to-send (seq (concat server-actions server-effects))]
+        :server-payload (when (seq payload-actions)
                           (merge payload
-                                 {:actions (nexus/interpolate client-nexus
-                                                              dispatch-data
-                                                              actions-to-send)}))})))
+                                 {:actions (-> (nexus/interpolate client-nexus dispatch-data payload-actions)
+                                               (with-meta (meta actions))
+                                               📈/propose!)}))})))
 
 #?(:cljs
    (defn divert [payload-arg js-data]
