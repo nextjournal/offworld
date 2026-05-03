@@ -98,13 +98,6 @@
 #?(:cljs (defscene filter-button-scene []
            (filter-button {:value ""})))
 
-(defn id [path & suffixes]
-  (->> (concat path suffixes)
-       flatten
-       (map name)
-       (interpose "-")
-       (apply str)))
-
 (defn choice-id [parent-id index]
   (str parent-id index))
 
@@ -213,8 +206,8 @@
         config            (merge
                            {:choices    choices
                             :filters    filters
-                            :popover-id (id path :popover)
-                            :anchor-id  (id path :anchor)}
+                            :popover-id (k/id path :popover)
+                            :anchor-id  (k/id path :anchor)}
                            (when-not (str/blank? value)
                              {:filters-to-add
                               [(filters/text->filter value)]}))]

@@ -9,6 +9,13 @@
    [nextjournal.offworld :as-alias 🪐]
    #?(:clj [nextjournal.offworld.util :as ou])))
 
+(defn id [path & suffixes]
+  (->> (concat path suffixes)
+       flatten
+       (map name)
+       (interpose "-")
+       (apply str)))
+
 (defn init-state [state]
   (merge state {::k/stem state}))
 
