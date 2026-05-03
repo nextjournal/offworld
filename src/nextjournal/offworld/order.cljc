@@ -36,11 +36,12 @@
   "Apply the ordering policy tagged on actions to actor-state.
   Returns {:fx [...] :state new-actor-state}."
   [actor-state actions]
-  (let [policy                     (get-policy actions)
-        state                      (get actor-state policy)
-        {:as res new-state :state} (check* state actions)
-        new-actor-state            (assoc actor-state policy new-state)]
-    (assoc res :state new-actor-state)))
+  (let [policy (get-policy actions)
+        state  (get actor-state policy)
+        res    (check* state actions)]
+    (assoc res :state (cond-> actor-state
+                        (contains? res :state)
+                        (assoc policy (:state res))))))
 
 (defmulti propose
   "Stamp actions with sequence metadata for the given policy. Called on the
@@ -61,8 +62,7 @@
 (defmethod propose :default [_ _])
 
 (defmethod check* :default [state actions]
-  {:fx    [[:dispatch actions]]
-   :state state})
+  {:fx [[:dispatch actions]]})
 
 (defmethod propose :seq-gate [state actions]
   (let [[& {k :key}] (get-args actions)
@@ -76,8 +76,7 @@
     (if (= sn next-num)
       {:fx    [[:dispatch actions]]
        :state (assoc state k next-num)}
-      {:fx    [[:drop]]
-       :state state})))
+      {:fx [[:drop]]})))
 
 (defmethod propose :bounded-buffer [state actions]
   (let [[& {:as opts k :key}] (get-args actions)
@@ -96,33 +95,33 @@
                  time-bound]
           :or   {size-bound 3
                  time-bound 500}}] (get-args actions)
-        {sn  :seq-num
-         buf :buf
-         :or {sn -1}}              (get state k)
+        {sn  :seq-num buf :buf
+         :or {sn -1}
+         :as substate}             (get state k)
         new-buf                    (sort-by seq-num (conjv buf actions))
         status                     (cond
                                      (contiguous?
                                       (conj (map seq-num new-buf) sn)) :contiguous
                                      (<= (seq-num actions) sn)         :stale
                                      (> (count new-buf) size-bound)    :overflow
-                                     :else                             :gap)]
+                                     :else                             :gap)
+        gen                        (when (= status :gap)
+                                     (inc (get-in state [k :timeout-gen] -1)))]
     {:policy :bounded-buffer
      :status status
      :state  (->> (case status
-                    :stale        {:buf     buf
-                                   :seq-num sn}
-                    :gap          {:buf     new-buf
-                                   :seq-num sn}
+                    :stale        substate
+                    :gap          {:buf         new-buf
+                                   :seq-num     sn
+                                   :timeout-gen gen}
                     (:overflow
-                     :contiguous) {:buf     nil
-                                   :seq-num (->> new-buf
-                                                 (map seq-num)
-                                                 (apply max))})
+                     :contiguous) {:seq-num (apply max (map seq-num new-buf))})
                   (assoc state k))
      :fx     (case status
-               :gap          [[:timeout {:policy :bounded-buffer
-                                         :key    k
-                                         :ms     time-bound}]]
+               :gap          [[:timeout {:policy      :bounded-buffer
+                                         :key         k
+                                         :ms          time-bound
+                                         :timeout-gen gen}]]
                :stale        [[:drop]]
                (:overflow
                 :contiguous) [[:dispatch (apply concat new-buf)]])}))
@@ -130,12 +129,16 @@
 (defn handle-timeout
   "Called when a scheduled timeout fires. Re-reads the current buffer from
   actor-state and flushes it if non-empty. Returns {:fx [...] :state new-actor-state},
-  or {:state actor-state} if the buffer was already flushed."
-  [actor-state {k :key :keys [policy]}]
-  (let [buf (get-in actor-state [policy k :buf])]
-    (if-not (seq buf)
-      {:state actor-state}
+  or {:state actor-state} if the buffer was already flushed.
+
+  Uses a generation counter to detect preempted timeouts: if a newer gap was
+  detected after this timeout was scheduled, the generation won't match and
+  the timeout is a no-op."
+  [actor-state {k :key :keys [policy timeout-gen]}]
+  (let [{buf :buf gen :timeout-gen} (get-in actor-state [policy k])]
+    (if (and (seq buf) (= timeout-gen gen))
       {:state (assoc-in actor-state
-                        [policy k] {:buf     nil
-                                    :seq-num (seq-num (last buf))})
-       :fx    [[:dispatch (apply concat buf)]]})))
+                        [policy k] {:seq-num     (seq-num (last buf))
+                                    :timeout-gen timeout-gen})
+       :fx    [[:dispatch (apply concat buf)]]}
+      {:state actor-state})))
