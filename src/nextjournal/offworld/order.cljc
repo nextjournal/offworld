@@ -100,10 +100,10 @@
          :as substate}             (get state k)
         new-buf                    (sort-by seq-num (conjv buf actions))
         status                     (cond
-                                     (contiguous?
-                                      (conj (map seq-num new-buf) sn)) :contiguous
                                      (<= (seq-num actions) sn)         :stale
                                      (> (count new-buf) size-bound)    :overflow
+                                     (contiguous?
+                                      (conj (map seq-num new-buf) sn)) :contiguous
                                      :else                             :gap)
         gen                        (when (= status :gap)
                                      (inc (get-in state [k :timeout-gen] -1)))]
