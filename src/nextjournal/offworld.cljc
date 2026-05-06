@@ -146,12 +146,13 @@
                                :event     (build-event-map js-data payload)
                                :lifecycle (build-lifecycle-map js-data payload)
                                {})
+           actions'          (nexus/interpolate client-nexus dispatch-data actions)
            client-actions    (filterv #(or (client-action? client-nexus %)
-                                           (client-effect? client-nexus %)) actions)
+                                           (client-effect? client-nexus %)) actions')
            {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
            server-effects    (filterv #(server-effect? server-nexus %) effects)
            server-actions    (filterv #(or (server-action? server-nexus %)
-                                           (server-effect? server-nexus %)) actions)
+                                           (server-effect? server-nexus %)) actions')
            payload-actions   (concat server-actions server-effects)]
        {:client-effects (filterv #(client-effect? client-nexus %) effects)
         :client-actions client-actions
@@ -163,8 +164,8 @@
         :dispatch-data  dispatch-data
         :server-payload (when (seq payload-actions)
                           (merge payload
-                                 {:actions (-> (nexus/interpolate client-nexus dispatch-data payload-actions)
-                                               (with-meta (meta actions))
+                                 {:actions (-> payload-actions
+                                               (with-meta (meta actions'))
                                                📈/propose!)}))})))
 
 #?(:cljs
