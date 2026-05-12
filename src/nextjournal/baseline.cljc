@@ -7,6 +7,7 @@
    [clojure.string :as str]
    [nextjournal.baseline :as-alias k]
    [nextjournal.offworld :as-alias 🪐]
+   [nexus.registry :as nxr]
    #?(:clj [nextjournal.offworld.util :as ou])))
 
 (defn id [path & suffixes]
@@ -15,6 +16,14 @@
        (map name)
        (interpose "-")
        (apply str)))
+
+#?(:cljs
+   (nxr/register-placeholder! ::k/el
+     (fn [_ path-or-id]
+       (js/document.getElementById
+        (cond
+          (string? path-or-id)     path-or-id
+          (sequential? path-or-id) (id path-or-id))))))
 
 (defn init-state [state]
   (merge state {::k/stem state}))

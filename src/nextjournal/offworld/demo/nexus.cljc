@@ -15,15 +15,15 @@
      {:nexus/system->state deref
       :nexus/effects
       {:event/prevent-default #(.preventDefault (get-evt %))
-       :dom-node/focus        (fn [ctx _ & {:keys [node]}] (.focus (or node (get-node ctx))))
-       :dom-node/blur         (fn [ctx _ & {:keys [node]}] (.blur (or node (get-node ctx))))
-       :dom-node/show-popover (fn [ctx _ & {:keys [node]}] (.showPopover (or node (get-node ctx))))
-       :dom-node/hide-popover (fn [ctx _ & {:keys [node]}] (.hidePopover (or node (get-node ctx))))
-       :dom-node/show-modal   (fn [ctx]
+       :node/focus        (fn [ctx _ & {:keys [node]}] (.focus (or node (get-node ctx))))
+       :node/blur         (fn [ctx _ & {:keys [node]}] (.blur (or node (get-node ctx))))
+       :node/show-popover (fn [ctx _ & [node]] (.showPopover (or node (get-node ctx))))
+       :node/hide-popover (fn [ctx _ & [node]] (.hidePopover (or node (get-node ctx))))
+       :node/show-modal   (fn [ctx]
                                 (get-node ctx)
                                 (.showModal (get-node ctx)))
        :browser/alert         (fn [_ _ s] (js/alert s))
-       :dom-node/set-checked  (fn [ctx _ & {:keys [node value]}]
+       :node/set-checked  (fn [ctx _ & {:keys [node value]}]
                                 (set! (.-checked (or node (get-node ctx))) value))
        :input/clear           (fn [ctx _ & {:keys [node value]}]
                                 (set! (.-value (or node (get-node ctx))) value))}

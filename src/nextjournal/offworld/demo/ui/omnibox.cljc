@@ -14,42 +14,42 @@
           mods  :key-modifiers}]
     (cond
       (= key "Escape")    [[:event/prevent-default]
-                           [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                           [:input/clear {:node [:document/element-by-id popover-id]}]
+                           [:node/hide-popover [::k/el popover-id]]
+                           [:input/clear [::k/el popover-id]]
                            [:effects/save (conj path :value) ""]]
       (= key "ArrowDown") [[:event/prevent-default]
                            (when choice-id
-                             [:dom-node/focus {:node [:document/element-by-id choice-id]}])]
+                             [:node/focus [::k/el choice-id]])]
       (= key "Enter")     [[:event/prevent-default]
-                           [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                           [:input/clear {:node [:document/element-by-id anchor-id]}]
+                           [:node/hide-popover [::k/el popover-id]]
+                           [:input/clear [::k/el anchor-id]]
                            [:effects/save (conj path :value) ""]
                            [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
       (and (mods :shift)
-           (= key "Tab")) [[:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]]
+           (= key "Tab")) [[:node/hide-popover [::k/el popover-id]]]
       :else               nil)))
 
 (nxr/register-action! ::ob/keydown-choice-item ^::🪐/client
   (fn [_ {:keys [key popover-id prev-id next-id choice-id anchor-id filters-to-add path]}]
     (case key
       "Escape"    [[:event/prevent-default]
-                   [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                   [:dom-node/blur]]
+                   [:node/hide-popover [::k/el popover-id]]
+                   [:node/blur]]
       "Enter"     [[:event/prevent-default]
-                   [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}]
-                   [:dom-node/blur {:node [:document/element-by-id anchor-id]}]
-                   [:dom-node/set-checked {:node  [:document/element-by-id choice-id]
-                                           :value true}]
+                   [:node/hide-popover [::k/el popover-id]]
+                   [:node/blur [::k/el anchor-id]]
+                   [:node/set-checked {:node  [::k/el choice-id]
+                                       :value true}]
                    [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
       "ArrowUp"   [[:event/prevent-default]
                    (if prev-id
-                     [:dom-node/focus {:node [:document/element-by-id prev-id]}]
-                     [:dom-node/focus {:node [:document/element-by-id anchor-id]}])]
+                     [:node/focus [::k/el prev-id]]
+                     [:node/focus [::k/el anchor-id]])]
       "ArrowDown" [[:event/prevent-default]
                    (when next-id
-                     [:dom-node/focus {:node [:document/element-by-id next-id]}])]
+                     [:node/focus [::k/el next-id]])]
       "Tab"       [(when-not next-id
-                     [:dom-node/hide-popover {:node [:document/element-by-id popover-id]}])]
+                     [:node/hide-popover [::k/el popover-id]])]
       nil)))
 
 (nxr/register-action! ::ob/add-filter ^::🪐/server
@@ -112,8 +112,7 @@
                   "bg-white"]
     :style       {:anchor-name (str "--" anchor-id)}
     :placeholder (str "Filter..." (🎄/get-icon stem))
-    :on          {:focus   [[:dom-node/show-popover
-                             {:node [:document/element-by-id popover-id]}]]
+    :on          {:focus   [[:node/show-popover [::k/el popover-id]]]
                   :input   [[:effects/save (conj path :value) [:event.target/value]]]
                   :keydown [[::keydown-input
                              {:choice-id      (choice-id popover-id 0)

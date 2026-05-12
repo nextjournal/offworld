@@ -88,7 +88,7 @@
                                  :top       "50%"
                                  :left      "50%"
                                  :transform "translate(-50%, -50%)"}
-            :replicant/on-mount [[:dom-node/show-modal]]}
+            :replicant/on-mount [[:node/show-modal]]}
    "OFFLINE MODE:"
    (apply game args)])
 
