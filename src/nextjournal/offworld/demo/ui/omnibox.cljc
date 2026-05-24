@@ -6,8 +6,7 @@
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.demo.filters :as filters]
    [nextjournal.offworld.demo.ui.holiday :as 🎄]
-   [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
-   #?(:cljs [portfolio.replicant :refer [defscene]])))
+   [nextjournal.offworld.demo.ui.omnibox :as-alias ob]))
 
 (nxr/register-action! ::ob/keydown-input ^::🪐/client
   (fn [_ {:keys [key popover-id choice-id anchor-id filters-to-add path]
@@ -87,16 +86,10 @@
     :on    {:click [[::remove-filter]]}}
    "×"])
 
-#?(:cljs (defscene remove-filter-scene []
-           (remove-filter-button {})))
-
 (defn filter-button [{:keys [label]}]
   [:div
    {:class ["ring-1" "ring-slate-300" "bg-white" "text-[12px]" "px-[6px]" "py-[3px]" "rounded-[3px]" "group"]}
    label])
-
-#?(:cljs (defscene filter-button-scene []
-           (filter-button {:value ""})))
 
 (defn choice-id [parent-id index]
   (str parent-id index))
@@ -122,9 +115,6 @@
                               :path           path
                               :anchor-id      anchor-id
                               :popover-id     popover-id}]]}}])
-
-#?(:cljs (defscene anchor-scene []
-           (anchor {})))
 
 (defn popover [{:keys    [choices filters-to-add filters anchor-id popover-id]
                 ::k/keys [path]}]

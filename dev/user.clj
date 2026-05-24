@@ -15,7 +15,7 @@
      (fn [state]
        (concat (include-css+js-orig state)
                [[:script {:type "module"
-                          :src  "http://localhost:8000/js/datastar.js"}]])))))
+                          :src  "http://localhost:8000/datastar.js"}]])))))
 
 (defn start-clerk! []
   ;; keep clerk start available on a different port if needed

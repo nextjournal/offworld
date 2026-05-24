@@ -1,9 +1,20 @@
 {:deps   {:aliases [:dev]}
- :builds {:app {:target      :browser
-                :modules     {:main {:init-fn nextjournal.offworld.demo.main/main}}
-                :build-hooks [(shadow.cljs.build-report/hook)]
-                :dev         {:output-dir "resources/public/js"}
-                :release     {:compiler-options {:portfolio/enabled? false}}}
+ :builds {:app              {:target      :browser
+                             :modules     {:main {:init-fn nextjournal.offworld.demo.main/main}}
+                             :output-dir  "resources/public/js"
+                             :build-hooks [(shadow.cljs.build-report/hook {:output-to "report.html"})]}
+          :app-lite         {:target      :browser
+                             :modules     {:main-lite {:init-fn nextjournal.offworld.demo.main/main}}
+                             :build-hooks [(shadow.cljs.build-report/hook {:output-to "lite-mode-report.html"})]
+                             :output-dir  "resources/public/js"
+                             :release     {:compiler-options {:lite-mode       true
+                                                              :elide-to-string true}}}
+          :app-pseudo-names {:target     :browser
+                             :modules    {:main-pseudo-names {:init-fn nextjournal.offworld.demo.main/main}}
+                             :output-dir "resources/public/js"
+                             :release    {:compiler-options {:lite-mode       true
+                                                             :elide-to-string true
+                                                             :pseudo-names    true}}}
           :portfolio
           {:target  :browser
            :modules {:main {:init-fn nextjournal.offworld.demo.scenes/main}}
