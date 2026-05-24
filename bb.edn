@@ -1,2 +1,2 @@
 {:tasks
- {dev (clojure "-X:dev")}}
+ {dev (clojure "-X:dev:demo")}}
