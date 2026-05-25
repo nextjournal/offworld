@@ -14,8 +14,4 @@
                              :output-dir "resources/public/js"
                              :release    {:compiler-options {:lite-mode       true
                                                              :elide-to-string true
-                                                             :pseudo-names    true}}}
-          :portfolio
-          {:target  :browser
-           :modules {:main {:init-fn nextjournal.offworld.demo.scenes/main}}
-           :dev     {:output-dir "resources/public/portfolio-js"}}}}
+                                                             :pseudo-names    true}}}}}

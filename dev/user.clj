@@ -29,8 +29,7 @@
 
 (defn start-shadow! []
   (shadow-server/start!)
-  (shadow/watch :app)
-  (shadow/watch :portfolio))
+  (shadow/watch :app))
 
 (defn start! [& [_opts]]
   (start-shadow!)
