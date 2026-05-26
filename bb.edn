@@ -1,6 +1,81 @@
 {:tasks
- {:requires     ([babashka.fs :as fs] [clojure.set :as set])
-  :init         (do (defn size-kb [path] (str (int (/ (fs/size path) 1024)) "k")))
+ {:requires     ([babashka.fs :as fs]
+                 [clojure.set :as set]
+                 [clojure.string :as str]
+                 [cheshire.core :as json]
+                 [clojure.java.shell :as jsh])
+  :init
+  (do
+    (defn size-kb [path] (str (int (/ (fs/size path) 1024)) "k"))
+
+    ;; Banned cljs.core function names — direct references to persistent types
+    ;; or functions that pull in chunked seqs or the printer infrastructure.
+    ;; Values are suggested replacements shown in the report.
+    (def +banned-fns+
+      {"set"         "(reduce conj #{} coll)"
+       "hash-map"    "{k v ...} literal"
+       "array-map"   "{k v ...} literal"
+       "sorted-map"  "avoid sorted-map"
+       "sorted-set"  "avoid sorted-set"
+       "zipmap"      "(into {} (map vector ks vs))"
+       "frequencies" "inline with reduce"
+       "group-by"    "inline with reduce"
+       "doseq"       "(run! fn coll)"
+       "for"         "(map fn coll)"
+       "ex-info"     "js/Error. + (set! (.-data e) data)"
+       "pr-str"      "custom serializer or js/console.log"
+       "prn"         "js/console.log"
+       "println"     "js/console.log (str x)"
+       "vec"         "(or (:key m) []) or [] literal — vec-lite's else branch leaks"})
+
+    ;; Artifact-level patterns — what mangled pseudo-names to look for in the JS.
+    ;; Parallel to +banned-fns+ but operates on the compiled output.
+    (def +artifact-banned+
+      {"cljs$core$set$$"         "set"
+       "cljs$core$hash_map$$"    "hash-map"
+       "cljs$core$array_map$$"   "array-map"
+       "cljs$core$sorted_map$$"  "sorted-map"
+       "cljs$core$sorted_set$$"  "sorted-set"
+       "cljs$core$zipmap$$"      "zipmap"
+       "cljs$core$frequencies$$" "frequencies"
+       "cljs$core$group_by$$"    "group-by"
+       "cljs$core$doseq$$"       "doseq"
+       "cljs$core$ex_info$$"     "ex-info"
+       "cljs$core$pr_str$$"      "pr-str"
+       "cljs$core$prn$$"         "prn"
+       "cljs$core$println$$"     "println"})
+
+    (def +dirty-pattern+ (re-pattern "Persistent|ChunkedSeq|ChunkedCons"))
+
+    ;; Parse the source map, resolve project source files under src/, run
+    ;; clj-kondo analysis on only those files, and return var-usages of
+    ;; banned cljs.core functions with exact row/col.
+    (defn lite-kondo [map-path]
+      (when (fs/exists? map-path)
+        (let [m        (json/parse-string (slurp map-path))
+              srcs     (get-in m ["sections" 0 "map" "sources"])
+              files    (->> srcs
+                            (map (fn [s] (str "src/" s)))
+                            (filter (fn [f] (fs/exists? f)))
+                            vec)]
+          (when (seq files)
+            (let [args   (into ["clj-kondo"
+                                "--config" "{:output {:analysis true :format :json}}"
+                                "--lint"] files)
+                  result (apply jsh/sh args)
+                  data   (json/parse-string (:out result) true)]
+              (->> (get-in data [:analysis :var-usages])
+                   (filter (fn [{:keys [to name]}]
+                             (and (contains? #{"cljs.core" "clojure.core"} (str to))
+                                  (contains? +banned-fns+ (str name)))))
+                   (map (fn [{:keys [filename row col name]}]
+                          {:file    (str/replace (str filename)
+                                                 (re-pattern "^.*/src/") "src/")
+                           :line    row
+                           :col     col
+                           :fn-name (str name)}))
+                   (sort-by (juxt :file :line)))))))))
+
   clean         (do
                   (fs/delete-tree "resources/public/js")
                   (fs/delete-tree ".shadow-cljs"))
@@ -21,7 +96,76 @@
                       (run! println removed)))
                   (spit prev-file (pr-str names))
                   (println "Wrote" (count names) "names to" prev-file))
-  measure-build (let [[lite-path lite-brotli-path reg-path reg-brotli-path :as paths]
+
+  ;; Build the diagnostic artifact into target/lite-diag/ (isolated from the app build).
+  ;; Compiles with :lite-mode :elide-to-string :pseudo-names :source-map all enabled.
+  ;; Run this before bb lite-check.
+  lite-build    (do
+                  (fs/create-dirs "target/lite-diag")
+                  (println "Building app-diag release…")
+                  (clojure "-M:demo:shadow" "release" "app-diag")
+                  (let [js "target/lite-diag/main-diag.js"]
+                    (when (fs/exists? js)
+                      (shell "brotli" "-9" "-f" js "-o" (str js ".br"))
+                      (println (str "Done: " (size-kb js) "  "
+                                   (size-kb (str js ".br")) " brotli"))))
+                  (println "Run 'bb lite-check' to analyse."))
+
+  ;; Analyse the artifact produced by bb lite-build.
+  ;; Checks for persistent/chunked type leaks, banned function calls in the
+  ;; artifact, and uses clj-kondo + source map to find call sites in only the
+  ;; source files that actually contributed to the build (no DCE'd noise).
+  lite-check    (let [js-path  "target/lite-diag/main-diag.js"
+                      br-path  "target/lite-diag/main-diag.js.br"
+                      map-path "target/lite-diag/main-diag.js.map"]
+                  (when-not (fs/exists? js-path)
+                    (println "No artifact — run 'bb lite-build' first.")
+                    (System/exit 1))
+                  (let [js    (slurp js-path)
+                        names (->> (re-seq (re-pattern "\\$[a-zA-Z0-9$]+\\$\\$") js)
+                                   (into (sorted-set)))
+                        leaked (->> names
+                                    (filter (fn [n] (re-find +dirty-pattern+ n)))
+                                    sort)
+                        found-banned (->> +artifact-banned+
+                                          (filter (fn [[k _]] (str/includes? js k)))
+                                          (into (sorted-map)))
+                        violations (lite-kondo map-path)]
+                    (println (str "\n=== Lite-mode diagnostic: " js-path " ==="))
+                    (print (str "Size: " (size-kb js-path)))
+                    (when (fs/exists? br-path) (print (str " | " (size-kb br-path) " brotli")))
+                    (println "\n")
+                    (if (empty? leaked)
+                      (println "CLEAN — no Persistent/Chunked types in artifact\n")
+                      (do (println (str "DIRTY — " (count leaked) " leaked type(s):"))
+                          (run! (fn [n] (println (str "  " n))) leaked)
+                          (println)))
+                    (when (seq found-banned)
+                      (println "Banned functions in artifact:")
+                      (doseq [[k fn-name] found-banned]
+                        (println (str "  " k))
+                        (println (str "    → replace " fn-name " with: " (get +banned-fns+ fn-name "?"))))
+                      (println))
+                    (when (seq violations)
+                      (println "Source violations (clj-kondo, compiled files only):")
+                      (doseq [[file hits] (->> violations (group-by :file) (sort-by key))]
+                        (println (str "  " file))
+                        (doseq [{:keys [line col fn-name]} hits]
+                          (println (str "    :" line ":" col "  (" fn-name ")  → "
+                                        (get +banned-fns+ fn-name "?")))))
+                      (println))
+                    (let [prev-file "prev-names.edn"]
+                      (print (str "Names: " (count names)))
+                      (when (fs/exists? prev-file)
+                        (let [prev    (into (sorted-set) (read-string (slurp prev-file)))
+                              added   (set/difference names prev)
+                              removed (set/difference prev names)]
+                          (print (str " | prev " (count prev)
+                                      " | Δ +" (count added)
+                                      " added, -" (count removed) " removed"))))
+                      (println))))
+
+  measure-build (let [[lite-path lite-brotli-path reg-path reg-brotli-path]
                       ["resources/public/js/main-lite.js"
                        "resources/public/js/main-lite.js.brotli"
                        "resources/public/js/main.js"
@@ -33,4 +177,4 @@
                   (shell "brotli" "-9" lite-path "-o" lite-brotli-path)
                   (clojure "-M:demo:shadow" "release" "app-pseudo-names")
                   (println "Lite Mode:" (size-kb lite-path) ",	" (size-kb lite-brotli-path) "brotli.")
-                    (println "CLJS adv.:" (size-kb reg-path)",	" (size-kb reg-brotli-path) "brotli."))}}
+                  (println "CLJS adv.:" (size-kb reg-path) ",	" (size-kb reg-brotli-path) "brotli."))}}
