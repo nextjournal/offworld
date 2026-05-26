@@ -6,7 +6,8 @@
    [nextjournal.clerk.view :as clerk-view]
    [ring.adapter.jetty :refer [run-jetty]]
    [org.httpkit.server :as http]
-   [nextjournal.offworld.demo.main :as main]))
+   [nextjournal.offworld.demo.main :as main]
+   [babashka.fs :as fs]))
 
 (defonce add-datastar-js-include
   (alter-var-root
@@ -29,9 +30,18 @@
 
 (defn start-shadow! []
   (shadow-server/start!)
-  (shadow/watch :app))
+  (shadow/watch :app-lite))
 
 (defn start! [& [_opts]]
   (start-shadow!)
   (start-http-kit!)
   (start-clerk!))
+
+(defn size-kb [path] (str (int (/ (fs/size path) 1024)) "k"))
+
+(defn measure! []
+  (shadow/release :app-lite)
+  (println (size-kb "/home/kk/offworld/resources/public/js/main-lite.js")))
+
+(defn pseudo! []
+  (shadow/release :app-pseudo-names))

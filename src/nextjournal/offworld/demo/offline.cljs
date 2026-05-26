@@ -4,7 +4,7 @@
    [nextjournal.baseline :as k]
    [nextjournal.offworld :as 🪐]
    [nexus.core :as nexus]
-   [replicant.dom :as rdom]))
+))
 
 (def !online? (atom true))
 (def !action-log (atom nil))
@@ -18,16 +18,16 @@
         state     {::k/stem (merge (or new-stem stem)
                                    {::🪐/offline?         true
                                     ::🪐/last-server-stem stem})}]
-    (rdom/render (.-firstElementChild dom-node)
+    #_(rdom/render (.-firstElementChild dom-node)
                  (render-fn (k/+ state path config)))))
 
 (defn flush-replicant!
   "Clear replicant's vdom - otherwise, any morphs done
   since the last render could break replicant's reconciler."
   []
-  (vreset! rdom/state {}))
+  #_(vreset! rdom/state {}))
 
-(defn go-offline! []
+#_(defn go-offline! []
   (let [nodes          (array-seq (js/document.querySelectorAll "[data-offworld-sync]"))
         sync-states    (for [node nodes]
                          (merge (ou/deserialize (.getAttribute node "data-offworld-sync"))
@@ -54,13 +54,13 @@
   (reset! !id->sync-state nil)
   (reset! !action-log nil))
 
-(defonce connection-listeners
+#_(defonce connection-listeners
   (do (.addEventListener js/window "online" go-online!)
       (.addEventListener js/window "offline" go-offline!)))
 
 (add-watch !system ::offline-render
-           #(doseq [sync-state (vals @!id->sync-state)]
-              (render sync-state %4)))
+           #(run! (fn [sync-state] (render sync-state %4))
+                  (vals @!id->sync-state)))
 
 (defn offline-capable [_ hiccup] hiccup)
 
@@ -78,7 +78,7 @@
     (nexus/dispatch (🪐/get-client-nexus {:mode :csr}) !system dispatch-data actions)))
 
 (comment
-  (go-offline!)
+  #_(go-offline!)
   (go-online!)
   @!action-log
   nil)

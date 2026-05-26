@@ -1,9 +1,9 @@
 (ns nextjournal.offworld.demo
-  (:require
-   [nextjournal.offworld.demo.load-builder :as lb]
-   [nextjournal.offworld.demo.scan :as scan]))
+  #_ (:require
+      [nextjournal.offworld.demo.load-builder :as lb]
+      [nextjournal.offworld.demo.scan :as scan]))
 
 (defn init-state [state]
   (-> state
-      lb/init-state
-      scan/init-state))
+      #_lb/init-state
+      #_scan/init-state))

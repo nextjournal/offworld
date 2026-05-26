@@ -1,22 +1,12 @@
 (ns nextjournal.offworld.util
-  (:require
-   [clojure.string :as str]
-   [clojure.edn :as edn]
-   #?@(:clj [[clojure.walk :as walk]
-             [ring.util.codec :as codec]
-             [cheshire.core :as cheshire]])))
+  #?(:clj (:require
+           [clojure.string :as str]
+           [ring.util.codec :as codec]
+           [cheshire.core :as cheshire])))
 
-(defonce registry (atom {}))
+(defn serialize [actions])
 
-(defn serialize [actions]
-  (binding [*print-meta* true]
-  (-> (pr-str actions)
-      (str/replace  "\"" "%22"))))
-
-(defn deserialize [s]
-  (-> s
-      (str/replace  "%22" "\"")
-      edn/read-string))
+(defn deserialize [s])
 
 #?(:clj (defn read-dispatch [{:keys [query-string]}]
           (some-> query-string
@@ -35,19 +25,7 @@
 (defn select-paths [m paths]
   (reduce #(assoc-in %1 %2 (get-in m %2)) {} paths))
 
-(defn priority-sorted-map
-  [priority-keys]
-  (let [rank         (zipmap priority-keys (range))
-        default-rank (count priority-keys)]
-    (sorted-map-by
-     (fn [a b]
-       (let [ra (get rank a default-rank)
-             rb (get rank b default-rank)]
-         (if (= ra rb)
-           (compare a b)
-           (compare ra rb)))))))
-
-(defn fn-ref->str [x]
-  (->> (meta x)
-       ((juxt :ns :name))
-       (clojure.string/join "/")))
+#?(:clj (defn fn-ref->str [x]
+          (->> (meta x)
+               ((juxt :ns :name))
+               (clojure.string/join "/"))))

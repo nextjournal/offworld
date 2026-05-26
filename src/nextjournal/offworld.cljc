@@ -1,18 +1,17 @@
 (ns nextjournal.offworld
   (:require
    #?@(:cljs
-       [[nextjournal.offworld.order :as 📈]
-        [nexus.core :as nexus]
-        [replicant.dom :as rdom]])
-   [clojure.string :as str]
-   [clojure.walk :as walk]
+       [#_[nextjournal.offworld.order :as 📈]
+        [cljs.core :refer [IFn]]
+        [nexus.core :as nexus]])
+   #?(:clj [clojure.walk :as walk])
    [datastar :as-alias 🚀]
+   [nexus.registry :as nxr]
    [nextjournal.baseline :as-alias k]
    [nextjournal.offworld :as-alias 🪐]
-   [nextjournal.offworld.util :as ou])
-  #?(:cljs (:require-macros [nextjournal.offworld])))
+   [nextjournal.offworld.util :as ou]))
 
-(def registry (atom {}))
+(def registry (volatile! {}))
 
 #?(:cljs (def ^:dynamic client-nexus-static {}))
 #?(:cljs (def ^:dynamic client-nexus-registry {}))
@@ -28,11 +27,11 @@
 #?(:cljs (defn go-online! [] (reset! online? true)))
 #?(:cljs (defn go-offline! [] (reset! online? false)))
 
-(defonce mode (atom :csr))
+(defonce mode (volatile! :csr))
 
 #?(:cljs (defn recall [node]
            (case @mode
-             :csr (rdom/recall node)
+             :csr nil
              :ssr (.get memories node))))
 
 #?(:cljs (def ^:dynamic serialize-fn ou/serialize))
@@ -48,55 +47,51 @@
         (update :nexus/effects dissoc-meta)
         (update :nexus/placeholders dissoc-meta))))
 
-(defn call-or-value [x] (if (fn? x) (x) x))
-
 #?(:cljs
-   (defn get-client-nexus [& {render-mode :mode :or {render-mode @mode}}]
-     (let [client-nexus-static   (call-or-value client-nexus-static)
-           client-nexus-registry (call-or-value client-nexus-registry)
-           server-nexus-static   (call-or-value server-nexus-static)
-           server-nexus-registry (call-or-value server-nexus-registry)]
-       (case render-mode
-         :csr {:nexus/system->state (some :nexus/system->state [client-nexus-static
-                                                                client-nexus-registry])
-               :nexus/actions       (merge (:nexus/actions client-nexus-static)
-                                           (:nexus/actions client-nexus-registry)
-                                           (:nexus/actions server-nexus-static)
-                                           (:nexus/actions server-nexus-registry))
-               :nexus/effects       (merge (:nexus/effects client-nexus-static)
-                                           (:nexus/effects client-nexus-registry)
-                                           (:nexus/effects server-nexus-static)
-                                           (:nexus/effects server-nexus-registry))
-               :nexus/placeholders  (merge (:nexus/placeholders client-nexus-static)
-                                           (:nexus/placeholders client-nexus-registry)
-                                           (:nexus/placeholders server-nexus-static)
-                                           (:nexus/placeholders server-nexus-registry))
-               :nexus/interceptors  ((fnil into [])
-                                     (:nexus/placeholders client-nexus-static)
-                                     (:nexus/interceptors client-nexus-registry))}
-         :ssr (-> (merge-with merge client-nexus-static client-nexus-registry)
-                  (dissoc-handlers ::🪐/server))))))
+   (defn get-client-nexus
+     ([] (get-client-nexus {:mode @mode}))
+     ([opts]
+      (let [render-mode (:mode opts)]
+      #_(let []
+        (case render-mode
+          :csr {:nexus/system->state (some :nexus/system->state [client-nexus-static
+                                                                     client-nexus-registry])
+                    :nexus/actions       (merge (:nexus/actions client-nexus-static)
+                                                (:nexus/actions client-nexus-registry)
+                                                (:nexus/actions server-nexus-static)
+                                                (:nexus/actions server-nexus-registry))
+                    :nexus/effects       (merge (:nexus/effects client-nexus-static)
+                                                (:nexus/effects client-nexus-registry)
+                                                (:nexus/effects server-nexus-static)
+                                                (:nexus/effects server-nexus-registry))
+                    :nexus/placeholders  (merge (:nexus/placeholders client-nexus-static)
+                                                (:nexus/placeholders client-nexus-registry)
+                                                (:nexus/placeholders server-nexus-static)
+                                                (:nexus/placeholders server-nexus-registry))
+                    :nexus/interceptors  ((fnil into [])
+                                          (:nexus/placeholders client-nexus-static)
+                                          (:nexus/interceptors client-nexus-registry))}
+          :ssr     (-> (merge-with merge client-nexus-static client-nexus-registry)
+                       (dissoc-handlers ::🪐/server))))))))
 
 #?(:cljs
    (defn get-server-nexus []
      (case @mode
        :csr nil
        :ssr (-> (merge-with merge
-                            (call-or-value server-nexus-static)
-                            (call-or-value server-nexus-registry))
+                            (fval server-nexus-static)
+                            (fval server-nexus-registry))
                 (dissoc-handlers ::🪐/client)))))
 
 #?(:cljs
    (defn register-client-nexus! [client-nexus & [registry]]
      (set! nextjournal.offworld/client-nexus-registry registry)
-     (set! nextjournal.offworld/client-nexus-static client-nexus)
-     (get-client-nexus)))
+     (set! nextjournal.offworld/client-nexus-static client-nexus)))
 
 #?(:cljs
    (defn register-server-nexus! [server-nexus & [registry]]
      (set! nextjournal.offworld/server-nexus-registry registry)
-     (set! nextjournal.offworld/server-nexus-static server-nexus)
-     (get-server-nexus)))
+     (set! nextjournal.offworld/server-nexus-static server-nexus)))
 
 (defn client-action? [client-nexus [k :as action]]
   (and (not (::🪐/server (meta action)))
@@ -166,7 +161,7 @@
                           (merge payload
                                  {:actions (-> payload-actions
                                                (with-meta (meta actions'))
-                                               📈/propose!)}))})))
+                                            #_   📈/propose!)}))})))
 
 #?(:cljs
    (defn divert [payload-arg js-data]
@@ -178,7 +173,7 @@
                    dispatch-data
                    server-payload]} (divert* payload js-data)]
        (when (seq bad-actions)
-         (js/console.warn "🪐OFFWORLD: These keys were returned from an action handler: "
+         #_(js/console.warn "🪐OFFWORLD: These keys were returned from an action handler: "
                           (pr-str (mapv first bad-actions))
                           "They're listed in the nexus as actions, not effects."
                           "In SSR mode, they won't be sent to the server (or executed at all)."
@@ -201,11 +196,12 @@
   #?(:clj false
      :cljs (::offline? (meta stem))))
 
-(defn with-modifiers [k v]
-  (let [{:datastar/keys [modifiers]} (meta v)]
-    (if-not modifiers
-      k
-      (keyword (apply str (name k) (interleave (repeat "__") (map name modifiers)))))))
+#?(:clj
+   (defn with-modifiers [k v]
+     (let [{:datastar/keys [modifiers]} (meta v)]
+       (if-not modifiers
+         k
+         (keyword (apply str (name k) (interleave (repeat "__") (map name modifiers))))))))
 
 (defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn  ou/serialize
@@ -239,23 +235,25 @@
     on-unmount (assoc (with-modifiers :data-on-remove on-unmount)
                       (d*-lifecycle on-unmount :replicant/unmount opts))))
 
-(defn on-hooks-replicant->d*
-  "Converts a map containing replicant-style :on attributes to
+#?(:clj
+   (defn on-hooks-replicant->d*
+     "Converts a map containing replicant-style :on attributes to
   a map containing datastar expressions. E.g.:
 
   {:on {:click [[:my-action]]}}
   {:data-on:click \"@get('/replicant-dispatch', {payload: '[[:my-action]]'})\"}"
-  [m & {:as opts}]
-  (into (dissoc m :on)
-        (for [[k v] (:on m)]
-          [(with-modifiers (keyword (str "data-on" k)) v) (d*-dispatch v opts)])))
+     [m & {:as opts}]
+     (into (dissoc m :on)
+           (for [[k v] (:on m)]
+             [(with-modifiers (keyword (str "data-on" k)) v) (d*-dispatch v opts)]))))
 
-(defn replicant->d* [hiccup & {:keys [dispatch-url] :as opts}]
-  (let [opts (assoc-in opts [:extra-payload :dispatch-url] dispatch-url)]
-    (walk/postwalk
-     (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
-                                             (#(attr->d* % opts)))))
-     hiccup)))
+#?(:clj 
+   (defn replicant->d* [hiccup & {:keys [dispatch-url] :as opts}]
+     (let [opts (assoc-in opts [:extra-payload :dispatch-url] dispatch-url)]
+       (walk/postwalk
+        (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
+                                                (#(attr->d* % opts)))))
+        hiccup))))
 
 #?(:clj
    (defmacro defc
@@ -264,18 +262,6 @@
      (let [k (str (ns-name *ns*) "/" sym)]
        `(do
           (k/defq ~sym ~@decls)
-          (swap! registry assoc-in [:render-fn ~k] #?(:clj  (var ~sym)
+          #_(swap! registry assoc-in [:render-fn ~k] #?(:clj  (var ~sym)
                                                       :cljs ~sym))
-          #?(:clj  (var ~sym)
-             :cljs ~sym)))))
-
-(comment
-  (require '[nextjournal.baseline :as k])
-
-  (k/defq a [stem] true)
-
-  (k/defq b {::k/deps `a} [stem] (when (a stem) (:b stem)))
-
-  (defc render-fn {::k/deps `b} [stem] (b stem))
-
-  (k/trace (render-fn {})))
+          ))))

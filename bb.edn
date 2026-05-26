@@ -1,19 +1,5 @@
 {:tasks
- {:requires     ([babashka.fs :as fs])
-  :init         (do (defn size-kb [path] (str (int (/ (fs/size path) 1024)) "k")))
-  clean         (do
+ {clean         (do
                   (fs/delete-tree "resources/public/js")
                   (fs/delete-tree ".shadow-cljs"))
-  dev           (clojure "-X:dev:demo")
-  measure-build (let [[lite-path lite-brotli-path reg-path reg-brotli-path :as paths]
-                      ["resources/public/js/main-lite.js"
-                       "resources/public/js/main-lite.js.brotli"
-                       "resources/public/js/main.js"
-                       "resources/public/js/main.js.brotli"]]
-                  (run 'clean)
-                  (clojure "-M:demo:shadow" "release" "app")
-                  (shell "brotli" "-9" reg-path "-o" reg-brotli-path)
-                  (clojure "-M:demo:shadow" "release" "app-lite")
-                  (shell "brotli" "-9" lite-path "-o" lite-brotli-path)
-                  (println "Lite Mode:" (size-kb lite-path) ",	" (size-kb lite-brotli-path) "brotli.")
-                  (println "CLJS adv.:" (size-kb reg-path)",	" (size-kb reg-brotli-path) "brotli."))}}
+  dev           (clojure "-X:dev:demo")}}

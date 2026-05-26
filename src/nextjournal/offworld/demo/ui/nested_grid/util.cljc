@@ -82,7 +82,7 @@
                                    show-after?  (or show-branch-cells? (get (get-header-spec node) :show?))
                                    add-after?   (and (not hide?) children?)
                                    after-child  [(first node)]
-                                   children     (vec children)
+                                   children     (into [] children)
                                    all-children (cond-> children
                                                   (and show-after? add-after?) (conj after-child))]
                                (if skippable?
@@ -222,27 +222,10 @@
 (defn visible-to-sort? [{:keys [show? leaf? branch-end?]}]
   (and (not branch-end?) (or show? leaf?)))
 
-(defn sort-header-tree [{:keys [sort-fn header-tree dimension]}]
-  (let [dim-k  (case dimension :row :row-path :column :column-path :header-path)
-        {:keys [header-paths]} (window {:header-tree header-tree})
-        path->meta             (zipmap header-paths (map meta header-paths))]
-    (make-tree
-     (filter (comp visible-to-sort? path->meta)
-             (sort-by #(sort-fn {:path % dim-k %}) header-paths)))))
-
-(comment
-  (window {:header-tree [:a [:b] [:c]]})
-  (assert
-   (= (window {:header-tree  [:a :b :c]
-               :window-start 0
-               :window-end   19})
-      {:depth           2
-       :header-paths    [[:a] [:a :b]]
-       :keypaths        [[0] [1]]
-       :nodes-traversed [[:a :b :c] :a :b :c]
-       :positions       [0 0]
-       :sizes           [0 20]
-       :spans           {[:a] 2}
-       :sum-size        40
-       :window-end      19
-       :window-start    0})))
+#_(defn sort-header-tree [{:keys [sort-fn header-tree dimension]}]
+    (let [dim-k  (case dimension :row :row-path :column :column-path :header-path)
+          {:keys [header-paths]} (window {:header-tree header-tree})
+          path->meta             (zipmap header-paths (map meta header-paths))]
+      (make-tree
+       (filter (comp visible-to-sort? path->meta)
+               (sort-by #(sort-fn {:path % dim-k %}) header-paths)))))

@@ -2,16 +2,11 @@
   (:require
    [nextjournal.baseline :as k]
    [nextjournal.offworld :as 🪐 :refer [defc]]
-   [nextjournal.offworld.util :as ou]
    [nexus.registry :as nxr]))
 
 (defn rand-plate []
-  (let [letters      (mapv char (range 65 91))
-        rand-letters (fn [n] (apply str (repeatedly n #(rand-nth letters))))
-        rand-digits  (fn [n] (apply str (repeatedly n #(rand-int 10))))]
-    (str (rand-nth ["NL" "DE" "FR" "BE" "ES" "IT" "PL" "CZ" "DK" "SE"])
-         "-" (rand-letters 2)
-         "-" (rand-digits 4))))
+  (rand-nth ["NL-AS-1829" "DE-BC-3829" "FR-FG-3173" "BE-DX-3882" "ES-ZX-5934" "IT-AG-3847"
+             "PL-GS-2210" "CZ0-AZ-3939" "DK-39-1119" "SE-30-1199"]))
 
 (defn init-state [state]
   (assoc state ::plates (take 9 (repeatedly rand-plate))))
@@ -24,36 +19,36 @@
   (fn [_ plate]
     [[:effects/save [::scans plate] :canceled]]))
 
-(k/defq get-plates
+(defn get-plates
   {::k/paths #{[::plates]}}
   [stem]
   (::plates stem))
 
-(k/defq get-scans
+(defn get-scans
   {::k/paths #{[::scans]}}
   [stem]
   (::scans stem))
 
-(k/defq get-scan
+(defn get-scan
   {::k/deps #{`get-scans}}
   [stem plate]
   (some-> stem get-scans (get plate)))
 
 (defn wrap-interest [{:keys [id label]} & children]
-  (let [id          id
-        pop-id      (str id "-pop")
-        anchor-name (str "--" id)]
-    [:button {:id          id
-              :interestfor pop-id
-              :style       {:anchor-name anchor-name}}
-     children
-     [:div.bg-amber-200.rounded-md.text-xs
-      {:id      pop-id
-       :popover :auto
-       :style   {:position        :fixed
-                 :position-anchor anchor-name
-                 :position-area   "bottom center"}}
-      label]]))
+    (let [id          id
+          pop-id      [id "-pop"]
+          anchor-name ["--" id]]
+      [:button {:id          id
+                :interestfor pop-id
+                :style       {:anchor-name anchor-name}}
+       children
+       [:div.bg-amber-200.rounded-md.text-xs
+        {:id      pop-id
+         :popover :auto
+         :style   {:position        :fixed
+                   :position-anchor anchor-name
+                   :position-area   "bottom center"}}
+        label]]))
 
 (defn status-icon [scan]
   (case scan
@@ -77,11 +72,11 @@
 
 (defc game [{::k/keys [path stem] :as state}]
   [:div.flex.flex-wrap.items-start.max-w-160
-   (map #(wrap-interest
-          {:id    %
-           :label "Click to \"scan\""}
-          (truck (k/+ state (conj path %) {:plate %})))
-        (get-plates stem))])
+   (let [x (first (get-plates stem))]
+     (wrap-interest
+      {:id    x
+       :label "Click to \"scan\""}
+      (truck (k/+ state (conj path x) {:plate x}))))])
 
 (defc offline-game [& args]
   [:dialog {:style              {:position  "fixed"
@@ -92,14 +87,5 @@
    "OFFLINE MODE:"
    (apply game args)])
 
-(comment
-  (let [offline-state
-        (-> (js/document.getElementById "scan-game-offline")
-            (.getAttribute "data-offworld-sync")
-            ou/deserialize)
-        {:keys    [queries render-fn local id]
-         ::k/keys [path stem config]} offline-state
-        render-fn                     (get @🪐/render-fn-registry render-fn)]
-    (def offline-state offline-state)
-    (def stem stem) (def path path) (def config config)
-    (render-fn (k/+ {::k/stem stem} path config))))
+(game {})
+(offline-game {})
