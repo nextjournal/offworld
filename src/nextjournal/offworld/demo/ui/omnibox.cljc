@@ -37,8 +37,7 @@
       "Enter"     [[:event/prevent-default]
                    [:node/hide-popover [::k/el popover-id]]
                    [:node/blur [::k/el anchor-id]]
-                   [:node/set-checked {:node  [::k/el choice-id]
-                                       :value true}]
+                   [:node/set-checked [::k/el choice-id] true]
                    [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
       "ArrowUp"   [[:event/prevent-default]
                    (if prev-id
@@ -118,7 +117,7 @@
 
 (defn popover [{:keys    [choices filters-to-add filters anchor-id popover-id]
                 ::k/keys [path]}]
-  (let [child-indices (vec (range (count (concat filters-to-add choices))))]
+  (let [child-indices (into [] (range (count (concat filters-to-add choices))))]
     [:div.w-full.p-1
      {:id      popover-id
       :popover :manual
@@ -128,53 +127,54 @@
                 :position-area   "bottom center"
                 :max-height      212
                 :overflow        :auto}}
-     (for [i    (range (count filters-to-add))
-           :let [{:keys [label]} (nth filters-to-add i)
-                 id      (choice-id  popover-id i)
-                 next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
-                 prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))]]
-       [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
-        {:on {:click [[::add-filter path (first filters-to-add)]]}}
-        [:span.flex.mt-1.focus:outline-none
-         {:id       id
-          :tabindex 0
-          :on       {:keydown [[::keydown-choice-item
+     (map (fn [i] (let [{:keys [label]} (nth filters-to-add i)
+                        id      (choice-id  popover-id i)
+                        next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
+                        prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))]
+                    [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
+                     {:on {:click [[::add-filter path (first filters-to-add)]]}}
+                     [:span.flex.mt-1.focus:outline-none
+                      {:id       id
+                       :tabindex 0
+                       :on       {:keydown [[::keydown-choice-item
+                                             {:anchor-id      anchor-id
+                                              :choice-id      id
+                                              :filters-to-add filters-to-add
+                                              :key            [:event/key]
+                                              :next-id        next-id
+                                              :path           path
+                                              :popover-id     popover-id
+                                              :prev-id        prev-id}]]}}
+                      [:div.w-4.h-4.text-slate-400 icon-filter]]
+                     label]))
+          (range (count filters-to-add)))
+     (map (fn [ci]
+            (let [choice  (nth (into [] choices) ci)
+                  i       (+ ci (count filters-to-add))
+                  id      (choice-id popover-id i)
+                  next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
+                  prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))
+                  filter  (filters/build-equals-filter choice)]
+              [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
+               {:on {:change  [(if (contains? filters filter)
+                                 [::remove-filter path filter]
+                                 [::add-filter path filter])]
+                     :keydown [[::keydown-choice-item
                                 {:anchor-id      anchor-id
                                  :choice-id      id
-                                 :filters-to-add filters-to-add
+                                 :filters-to-add [filter]
                                  :key            [:event/key]
                                  :next-id        next-id
                                  :path           path
                                  :popover-id     popover-id
                                  :prev-id        prev-id}]]}}
-         [:div.w-4.h-4.text-slate-400 icon-filter]]
-        label])
-     (for [ci   (range (count choices))
-           :let [choice  (nth (vec choices) ci)
-                 i       (+ ci (count filters-to-add))
-                 id      (choice-id popover-id i)
-                 next-id (some-> child-indices (get (inc i)) (#(str popover-id %)))
-                 prev-id (some-> child-indices (get (dec i)) (#(str popover-id %)))
-                 filter  (filters/build-equals-filter choice)]]
-       [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400
-        {:on {:change  [(if (contains? filters filter)
-                          [::remove-filter path filter]
-                          [::add-filter path filter])]
-              :keydown [[::keydown-choice-item
-                         {:anchor-id      anchor-id
-                          :choice-id      id
-                          :filters-to-add [filter]
-                          :key            [:event/key]
-                          :next-id        next-id
-                          :path           path
-                          :popover-id     popover-id
-                          :prev-id        prev-id}]]}}
-        [:input.focus:outline-none
-         {:type :checkbox
-          :id   id}]
-        [:label {:for   id
-                 :style {:user-select :none}}
-         choice]])]))
+               [:input.focus:outline-none
+                {:type :checkbox
+                 :id   id}]
+               [:label {:for   id
+                        :style {:user-select :none}}
+                choice]]))
+          (range (count choices)))]))
 
 (defn filter-pill [{{:keys [label] :as this-filter}
                     :filter ::k/keys [path]}]

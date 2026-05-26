@@ -4,18 +4,18 @@
      (:require-macros
       [nextjournal.baseline :refer [trace trace-me defq]]))
   (:require
-   [clojure.string :as str]
+   #?(:clj [clojure.string :as str]) 
    [nextjournal.baseline :as-alias k]
    [nextjournal.offworld :as-alias 🪐]
    [nexus.registry :as nxr]
-   #?(:clj [nextjournal.offworld.util :as ou])))
+   #_(:clj [nextjournal.offworld.util :as ou])))
 
 (defn id [path & suffixes]
-  (->> (concat path suffixes)
-       flatten
-       (map name)
-       (interpose "-")
-       (apply str)))
+  #_(->> (concat path suffixes)
+         flatten
+         (map name)
+         (interpose "-")
+         (apply str)))
 
 #?(:cljs
    (nxr/register-placeholder! ::k/el
@@ -42,14 +42,14 @@
                    (into [::local] (remove #{::local}) path)
                    [::local path])}))
 
-(defn explain-trace [{:keys [stack]}]
-  (->> stack
-       (map-indexed
-        (fn [i k]
-          (str (apply str (repeat (* 2 i) " "))
-               (if (zero? i) "" "└─ ")
-               k)))
-       (str/join "\n")))
+#?(:clj (defn explain-trace [{:keys [stack]}]
+          (->> stack
+               (map-indexed
+                (fn [i k]
+                  (str (apply str (repeat (* 2 i) " "))
+                       (if (zero? i) "" "└─ ")
+                       k)))
+               (str/join "\n"))))
 
 (def ^:dynamic *trace* nil)
 
@@ -67,7 +67,7 @@
 (defn static-trace-push! [sym {::k/keys [deps]}]
   (cond-> *trace*
     deps
-    (swap! update :static assoc sym (if (coll? deps) (set deps) #{deps}))))
+    (swap! update :static assoc sym (if (coll? deps) (into {} deps) #{deps}))))
 
 (defn trace-pop! []
   (swap! *trace* update :stack pop))
@@ -119,29 +119,5 @@
                        (finally (trace-pop!))))))
           #_(swap! ou/registry assoc-in [:query-fn ~k] #?(:clj  (var ~sym)
                                                           :cljs ~sym))
-           #?(:clj  (var ~sym)
-               :cljs ~sym)))))
-
-(def ^:dynamic *stem* nil)
-
-(comment
-  (defn get-b [stem] (:b stem))
-  (defn get-a [stem] (when (q stem get-b) (:a stem)))
-  (defn render-a [stem] (q stem get-a))
-
-  (defn get-y [stem] (trace-me `get-y (:y stem)))
-  (defn get-x [stem] (trace-me `get-x (when (get-y stem) (:x stem))))
-  (defn render-x [stem] (get-x stem))
-
-  (defq get-i {:x 1} [stem] (:i stem))
-  (defq get-j {::k/deps `get-i} [stem] (when (get-i stem) (:j stem)))
-  (defn render-j [stem] (get-j stem))
-
-  (trace (q {:a 1} get-a))
-  (trace (render-a {:a 1}))
-
-  (trace (get-x {:x 1}))
-  (trace (render-x {:x 1}))
-
-  (trace (get-j {:i 1 :j 2}))
-  (trace (render-j {:j 1})))
+          #?(:clj  (var ~sym)
+             :cljs ~sym)))))

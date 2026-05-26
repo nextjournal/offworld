@@ -1,10 +1,26 @@
 {:tasks
- {:requires     ([babashka.fs :as fs])
+ {:requires     ([babashka.fs :as fs] [clojure.set :as set])
   :init         (do (defn size-kb [path] (str (int (/ (fs/size path) 1024)) "k")))
   clean         (do
                   (fs/delete-tree "resources/public/js")
                   (fs/delete-tree ".shadow-cljs"))
   dev           (clojure "-X:dev:demo")
+  pseudo-names  (let [js (slurp "resources/public/js/main-pseudo-names.js")
+                      names (->> (re-seq (re-pattern "\\$[a-zA-Z0-9$]+\\$\\$") js)
+                                 (into (sorted-set)))
+                      prev-file "prev-names.edn"]
+                  (println (count names) "current names:")
+                  (run! println names)
+                  (when (fs/exists? prev-file)
+                    (let [prev (into (sorted-set) (read-string (slurp prev-file)))
+                          added   (set/difference names prev)
+                          removed (set/difference prev names)]
+                      (println (count added) "added:")
+                      (run! println added)
+                      (println (count removed) "removed:")
+                      (run! println removed)))
+                  (spit prev-file (pr-str names))
+                  (println "Wrote" (count names) "names to" prev-file))
   measure-build (let [[lite-path lite-brotli-path reg-path reg-brotli-path :as paths]
                       ["resources/public/js/main-lite.js"
                        "resources/public/js/main-lite.js.brotli"
@@ -15,5 +31,6 @@
                   (shell "brotli" "-9" reg-path "-o" reg-brotli-path)
                   (clojure "-M:demo:shadow" "release" "app-lite")
                   (shell "brotli" "-9" lite-path "-o" lite-brotli-path)
+                  (clojure "-M:demo:shadow" "release" "app-pseudo-names")
                   (println "Lite Mode:" (size-kb lite-path) ",	" (size-kb lite-brotli-path) "brotli.")
-                  (println "CLJS adv.:" (size-kb reg-path)",	" (size-kb reg-brotli-path) "brotli."))}}
+                    (println "CLJS adv.:" (size-kb reg-path)",	" (size-kb reg-brotli-path) "brotli."))}}

@@ -34,7 +34,7 @@
 (nxr/register-action! ::randomize ^::🪐/client
   (fn [_ key-mods season]
     (let [path        [::path :to :season]
-          reset?      (contains? (set key-mods) :shift)
+          reset?      (contains? (into #{} key-mods) :shift)
           rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
       (if reset?
         [[:browser/alert "Holiday season has been reset."]
@@ -80,8 +80,3 @@
    (when-let [day (get-day state)]
      [:div "It's " (name day) "."])
    (randomize-button state)])
-
-(comment
-  (get-season {})
-  (get-icon {::path {:to {:holiday-mode? true}}})
-  (k/trace (get-icon {::path {:to {:holiday-mode? true}}})))

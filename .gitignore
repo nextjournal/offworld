@@ -9,5 +9,6 @@
 /.clj-kondo/
 /.lsp/
 /resources/public/
+/target/
 **~
 **#

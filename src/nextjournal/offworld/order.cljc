@@ -19,7 +19,7 @@
 
 (defn- contiguous? [xs] (every? #{1 -1} (map - (rest xs) xs)))
 
-(defn- ->v [x] (if (sequential? x) (vec x) [x]))
+(defn- ->v [x] (if (sequential? x) (into [] x) [x]))
 
 (def ^:private get-order (comp ->v ::🪐/order meta))
 

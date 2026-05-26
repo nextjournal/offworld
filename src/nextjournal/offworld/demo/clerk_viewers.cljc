@@ -1,12 +1,12 @@
 (ns nextjournal.offworld.demo.clerk-viewers
     (:require
      [nextjournal.clerk :as clerk]
-     [replicant.string :as rstr]
+     #?(:clj [replicant.string :as rstr])
      [nextjournal.offworld.demo.ui :as ui]
      [nextjournal.offworld.demo.ui.nested-grid.util :as ngu]))
 
-(def replicant-ssr
-  {:transform-fn (clerk/update-val (comp clerk/html rstr/render))})
+#?(:clj (def replicant-ssr
+          {:transform-fn (clerk/update-val (comp clerk/html rstr/render))}))
 
 (defn nested-grid->clerk-table [{:keys [row-depth col-depth corner-viewer
                 col-viewer row-viewer cell-viewer
@@ -18,11 +18,11 @@
                                         (repeat ri)
                                         (range row-depth))
                                   (mapv (resolve col-viewer)
-                                        (mapv #(vec (take (inc ri) %)) col-paths))))
+                                        (mapv #(into [] (take (inc ri) %)) col-paths))))
                           (range col-depth))
         nested-rows (mapv (fn [rp]
                             (into (mapv (resolve row-viewer)
-                                        (mapv #(vec (take (inc %) rp)) (range col-depth)))
+                                        (mapv #(into [] (take (inc %) rp) (range col-depth)))
                                   (mapv (resolve cell-viewer)
                                         (repeat data)
                                         (repeat rp)

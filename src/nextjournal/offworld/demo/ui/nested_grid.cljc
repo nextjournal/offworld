@@ -33,11 +33,11 @@
 (def demo-row-tree (demo-header-tree :row))
 (def demo-col-tree (demo-header-tree :row))
 
-(nxr/register-action! ::init-local
+(nxr/register-action! ::init-local ^::🪐/server
   (fn [_ path]
     [[:effects/save path {:size-cache (volatile! {})}]]))
 
-(defn nested-grid [{:as      state
+#?(:clj (defn nested-grid [{:as      state
                     ::k/keys [stem path]
                     :keys    [row-tree column-tree overscan]
                     :or      {overscan 100}}]
@@ -99,3 +99,5 @@
                   (:id (last row-path)) " "
                   (:id (last col-path))
                   (🎄/get-icon stem)]))]))))
+   :cljs (defn nested-grid [& _]))
+
