@@ -2,4 +2,6 @@
  {clean         (do
                   (fs/delete-tree "resources/public/js")
                   (fs/delete-tree ".shadow-cljs"))
-  dev           (clojure "-X:dev:demo")}}
+  dev           (clojure "-X:dev:demo")
+  test-clj      (clojure "-M:test-clj")
+  test-cljs     (clojure "-M:test:demo" "-m" "shadow.cljs.devtools.cli" "compile" "test")}}
