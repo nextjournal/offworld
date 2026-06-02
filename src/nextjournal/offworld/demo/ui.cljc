@@ -10,8 +10,7 @@
    #_[nextjournal.offworld.demo.offline :as 🌠]))
 
 (defn render [{:as state ::k/keys [stem]}]
-  [:div]
-  #_[:main {:id "app"}
+  [:main {:id "app"}
    [:div.flex
     (mb/mapbox (k/+ state [:mapbox]))
     [:div

@@ -4,6 +4,7 @@
    [nextjournal.baseline :as k]
    [nextjournal.offworld :as 🪐]
    [nexus.core :as nexus]
+   [nexus.registry :as nxr]
 ))
 
 (def !online? (atom true))
@@ -65,17 +66,19 @@
 (defn offline-capable [_ hiccup] hiccup)
 
 (defn offline-dispatch [dispatch-data actions]
-  (let [client-nexus      (🪐/get-client-nexus)
-        server-nexus      (🪐/get-server-nexus)
-        client-actions    (filterv #(or (🪐/client-action? client-nexus %)
-                                        (🪐/client-effect? client-nexus %)) actions)
-        server-actions    (filterv #(or (🪐/server-action? server-nexus %)
-                                        (🪐/server-effect? server-nexus %)) actions)
-        {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
-        server-effects    (filterv #(🪐/server-effect? server-nexus %) effects)
-        actions-to-log    (seq (concat server-effects server-actions))]
-    (swap! !action-log (fnil into []) actions-to-log)
-    (nexus/dispatch (🪐/get-client-nexus {:mode :csr}) !system dispatch-data actions)))
+  (let [nexus          (nxr/get-registry)
+        ux             (🪐/get-ux)
+        client-ax?     #(🪐/client-handled? ux :nexus/actions nexus %)
+        client-fx?     #(🪐/client-handled? ux :nexus/effects nexus %)
+        server-ax?     #(🪐/server-handled? ux :nexus/actions nexus %)
+        server-fx?     #(🪐/server-handled? ux :nexus/effects nexus %)
+        client-ax-fx   (filterv #(or (client-ax? %) (client-fx? %)) actions)
+        server-ax-fx   (filterv #(or (server-ax? %) (server-fx? %)) actions)
+        xp-fx          (:effects (nexus/expand-actions nexus nil client-ax-fx dispatch-data))
+        server-xp-fx   (filterv server-fx? xp-fx)
+        actions-to-log (into server-xp-fx server-ax-fx)]
+    (swap! !action-log #(into (or % []) actions-to-log))
+    (nexus/dispatch nexus !system dispatch-data actions)))
 
 (comment
   #_(go-offline!)

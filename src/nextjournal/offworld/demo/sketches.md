@@ -978,13 +978,13 @@ _No need to read all this_, I'll deconstruct it below.
 
 ```clojure
 (clerk/code {::clerk/opts {:language "html"}}
-"<input type=\"text\" data-on:blur=\"@get(\\\"/replicant-dispatch\\\", {payload: {actions: nextjournal.offworld.divert(nextjournal.offworld.user_nexus, evt, \\\"[[:change-field :email [:event.target/value]] [:prevent-default]]\\\")}})\" />")
+"<input type=\"text\" data-on:blur=\"@get(\\\"/offworld-dispatch\\\", {payload: {actions: nextjournal.offworld.divert(nextjournal.offworld.user_nexus, evt, \\\"[[:change-field :email [:event.target/value]] [:prevent-default]]\\\")}})\" />")
 ```
 
 The `data-on:blur` attribute is a datastar expression. Here's a readable view of it:
 
 ```clojure
-(clerk/code {::clerk/opts {:language "js"}} "@get(\"/replicant-dispatch\",
+(clerk/code {::clerk/opts {:language "js"}} "@get(\"/offworld-dispatch\",
      {payload:
       {actions:
        nextjournal.offworld.divert(

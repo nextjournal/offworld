@@ -16,5 +16,5 @@
                     ::k/stem       (ou/select-paths stem (into [] (concat select-paths [path])))
                     ::k/path       path}]
     [:div {:id                 id
-           :data-offworld-sync (ou/serialize sync-state)}
+           :data-offworld-sync (ou/encode sync-state)}
      hiccup]))

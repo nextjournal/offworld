@@ -141,9 +141,9 @@
                    [:load/id {}]
                    [:fahrzeug/parking-spot {}]])
 
-(defq get-transports [stem] (::transports stem))
+(defn get-transports [stem] (::transports stem))
 
-(defq get-filters [stem]
+(defn get-filters [stem]
   (let [transports (get-transports stem)]
     (into {:fahrzeug/priorities [:checkbox "🤝"]}
           (map (fn [[k opts]] [k [:omnibox
@@ -151,9 +151,9 @@
                                   opts]])
                base-filters))))
 
-(defq get-header-fields [stem] (::header-fields stem))
+(defn get-header-fields [stem] (::header-fields stem))
 
-(defq get-choices [stem id]
+(defn get-choices [stem id]
   (-> stem get-filters (get-in [id 1])))
 
 (defn init-state [state]

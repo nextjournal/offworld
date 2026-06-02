@@ -10,12 +10,17 @@
    [nexus.registry :as nxr]
    #_(:clj [nextjournal.offworld.util :as ou])))
 
-(defn id [path & suffixes]
-  #_(->> (concat path suffixes)
-         flatten
-         (map name)
-         (interpose "-")
-         (apply str)))
+(defn ->v [x] (if (sequential? x) (into [] x) [x]))
+
+(defn id
+  ([path] (id path []))
+  ([path suffixes]
+   #_(->> (->v path)
+          (into suffixes)
+          flatten
+          (map name)
+          (interpose "-")
+          (apply str))))
 
 #?(:cljs
    (nxr/register-placeholder! ::k/el
@@ -39,7 +44,7 @@
   (merge config-state
          {::stem stem
           ::path (if (sequential? path)
-                   (into [::local] (remove #{::local}) path)
+                   (into [::local] (filterv #(not= % ::local) path))
                    [::local path])}))
 
 #?(:clj (defn explain-trace [{:keys [stack]}]
@@ -64,10 +69,11 @@
               :always
               (update :stack conj f)))))
 
-(defn static-trace-push! [sym {::k/keys [deps]}]
-  (cond-> *trace*
-    deps
-    (swap! update :static assoc sym (if (coll? deps) (into {} deps) #{deps}))))
+(defn static-trace-push! [sym m]
+  (let [deps (::k/deps m)]
+    (cond-> *trace*
+      deps
+      (swap! update :static assoc sym (if (coll? deps) (into {} deps) #{deps})))))
 
 (defn trace-pop! []
   (swap! *trace* update :stack pop))
@@ -109,15 +115,6 @@
            impl                (symbol (str sym "--nextjournal--baseline--impl"))
            k                   (str (ns-name *ns*) "/" sym)]
        `(do
-          (defn ~impl ~@decls)
-          (defn ~sym [& args#]
-            (if-not *trace*
-              (apply ~impl args#)
-              (do (static-trace-push! '~sym ~attr-map)
-                  (trace-push! '~sym)
-                  (try (apply ~impl args#)
-                       (finally (trace-pop!))))))
-          #_(swap! ou/registry assoc-in [:query-fn ~k] #?(:clj  (var ~sym)
-                                                          :cljs ~sym))
+          (defn ~sym ~@decls)
           #?(:clj  (var ~sym)
              :cljs ~sym)))))

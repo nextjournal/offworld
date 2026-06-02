@@ -195,8 +195,8 @@
         config            (merge
                            {:choices    choices
                             :filters    filters
-                            :popover-id (k/id path :popover)
-                            :anchor-id  (k/id path :anchor)}
+                            :popover-id (k/id path [:popover])
+                            :anchor-id  (k/id path [:anchor])}
                            (when-not (str/blank? value)
                              {:filters-to-add
                               [(filters/text->filter value)]}))]

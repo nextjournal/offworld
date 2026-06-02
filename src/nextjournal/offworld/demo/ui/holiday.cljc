@@ -16,19 +16,19 @@
    :fall   :squash-day
    :winter :gift-day})
 
-(defq get-holiday-mode? [stem]
+(defn get-holiday-mode? [stem]
   (get-in stem [::path :to :holiday-mode?]))
 
 (nxr/register-action! ::toggle
   (fn [_ ?] [[:effects/save [::path :to :holiday-mode?] ?]]))
 
-(defq get-season [stem]
+(defn get-season [stem]
   (get-in stem [::path :to :season] :spring))
 
 (nxr/register-action! ::season
   (fn [_ s] [[:effects/save [::path :to :season] (keyword s)]]))
 
-(defq get-day {::k/deps #{`get-season}} [stem]
+(defn get-day {::k/deps #{`get-season}} [stem]
   (season->holiday (get-season stem)))
 
 (nxr/register-action! ::randomize ^::🪐/client
@@ -41,7 +41,7 @@
          [:effects/save path :spring]]
         [[:effects/save path rand-season]]))))
 
-(defq get-icon {::k/deps #{`get-holiday-mode? `get-day}} [stem]
+(defn get-icon {::k/deps #{`get-holiday-mode? `get-day}} [stem]
   (when (get-holiday-mode? stem)
     (day->icon (get-day stem))))
 
