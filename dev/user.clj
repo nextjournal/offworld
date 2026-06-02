@@ -4,10 +4,11 @@
    [shadow.cljs.devtools.server :as shadow-server]
    [nextjournal.clerk :as clerk]
    [nextjournal.clerk.view :as clerk-view]
-   [ring.adapter.jetty :refer [run-jetty]]
    [org.httpkit.server :as http]
    [nextjournal.offworld.demo.main :as main]
-   [babashka.fs :as fs]))
+   [babashka.fs :as fs]
+   [nrepl.server :as nrepl]
+   [cider.nrepl :refer [cider-nrepl-handler]]))
 
 (defonce add-datastar-js-include
   (alter-var-root
@@ -30,18 +31,14 @@
 
 (defn start-shadow! []
   (shadow-server/start!)
-  (shadow/watch :app-lite))
+  (shadow/watch :app))
+
+(defn start-nrepl! []
+  (nrepl/start-server :port 7888 :handler cider-nrepl-handler)
+  (println "nREPL server started on port 7888"))
 
 (defn start! [& [_opts]]
+  #_(start-nrepl!)
   (start-shadow!)
   (start-http-kit!)
   (start-clerk!))
-
-(defn size-kb [path] (str (int (/ (fs/size path) 1024)) "k"))
-
-(defn measure! []
-  (shadow/release :app-lite)
-  (println (size-kb "/home/kk/offworld/resources/public/js/main-lite.js")))
-
-(defn pseudo! []
-  (shadow/release :app-pseudo-names))

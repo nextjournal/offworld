@@ -10,10 +10,10 @@
    [nexus.registry :as nxr]
    #_[nextjournal.offworld.demo.offline :as 🌠]
    #_[nextjournal.baseline :as k]
-#_   [nextjournal.offworld.demo :as demo]))
+   [nextjournal.offworld.demo :as demo]))
 
-#_(defonce system
-    (atom (demo/init-state {})))
+(defonce system
+  (atom (demo/init-state {})))
 
 #_(js/console.log (walk/postwalk inc [1 2 3 [1 2 3]]))
 
@@ -45,51 +45,15 @@
 #_(defn ^:dev/after-load after-load []
   (swap! system update :dev/load inc))
 
-#_(defn main []
-  (reset! 🪐/mode :ssr #_(if (str/includes? js/document.location.search "?ssr=true") :ssr :csr))
-  #_(when (= :csr @🪐/mode)
+(defn main []
+  (🪐/set-mode! (if (.includes js/document.location.search "?ssr=true") :ssr :csr))
+  (when (= :csr (🪐/get-mode))
     (add-watch system
                ::render
                (fn [_ _ _ new-state]
-                 (r/render root-el (ui/render (k/init-state new-state)))))
-    (after-load)))
+                 #_(r/render root-el (ui/render (k/init-state new-state)))))
+    #_(after-load)))
 
 #_(nxr/register-action! :x (fn [] (js/console.log "hi")))
 
 
-#_(defn- postwalk [f x]
-  (f (cond
-       (vector? x) (mapv #(postwalk f %) x)
-       (map? x)
-       (when-let [s (.-strobj ^js x)]
-         (let [t #js {}]
-           (.forEach (js/Object.keys s) #(aset t % (postwalk f (aget s %))))
-           (set! (.-strobj ^js x) t)
-           x))
-       :else x)))
-
-#_(js/console.log (postwalk identity [1 2 3 [1 2 3 {:x 1}]]))
-
-  (defn- postwalk [f x]
-    (f (cond
-         (vector? x) (mapv #(postwalk f %) x)
-         (map? x)
-         (when-let [s (.-strobj ^js x)]
-           (let [t #js {}]
-             (.forEach (js/Object.keys s) #(aset t % (postwalk f (aget s %))))
-             (set! (.-strobj ^js x) t)
-             x))
-         :else x)))
-
-;; simulate interpolate-1: replace [:upper s] placeholder with (str/upper-case s)
-(let [placeholders {:upper (fn [_ s] (.toUpperCase s))}
-      action       [:my-action {:label [:upper "hello"]} [:upper "world"]]]
-  (postwalk (fn [x]
-              (if-let [f (when (vector? x) (get placeholders (first x)))]
-                (apply f nil (rest x))
-                x))
-            action))
-
-(vec [])
-
-(defn main [])

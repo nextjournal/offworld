@@ -29,13 +29,17 @@
 
 (defonce mode (volatile! :csr))
 
+(defn set-mode! [k] (vreset! mode k))
+
+(def get-mode deref)
+
 #?(:cljs (defn recall [node]
-           (case @mode
+           (case (get-mode)
              :csr nil
              :ssr (.get memories node))))
 
-#?(:cljs (def ^:dynamic serialize-fn ou/serialize))
-#?(:cljs (def ^:dynamic deserialize-fn ou/deserialize))
+#?(:cljs (def serialize-fn ou/serialize))
+#?(:cljs (def deserialize-fn ou/deserialize))
 
 #?(:cljs (defn register-serialize-fn! [f] (set! nextjournal.offworld/serialize-fn f)))
 #?(:cljs (defn register-deserialize-fn! [f] (set! nextjournal.offworld/deserialize-fn f)))
@@ -49,7 +53,7 @@
 
 #?(:cljs
    (defn get-client-nexus
-     ([] (get-client-nexus {:mode @mode}))
+     ([] (get-client-nexus {:mode (get-mode)}))
      ([opts]
       (let [render-mode (:mode opts)]
       #_(let []
@@ -74,9 +78,11 @@
           :ssr     (-> (merge-with merge client-nexus-static client-nexus-registry)
                        (dissoc-handlers ::🪐/server))))))))
 
+(defn fval [x] (if (fn? x) (x) x))
+
 #?(:cljs
    (defn get-server-nexus []
-     (case @mode
+     (case (get-mode)
        :csr nil
        :ssr (-> (merge-with merge
                             (fval server-nexus-static)
@@ -224,16 +230,17 @@
                                  :lifecycle lifecycle})) "',"
        "el))"))
 
-(defn attr->d*
-  "Converts top-level hiccup attributes to datastar expressions.
+#?(:clj
+   (defn attr->d*
+     "Converts top-level hiccup attributes to datastar expressions.
   Returns a sorted-map, since datastar depends on some keys appearing
   earlier in the attributes."
-  [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
-  (cond-> m
-    on-mount   (assoc (with-modifiers :data-init on-mount)
-                      (d*-lifecycle on-mount :replicant/mount opts))
-    on-unmount (assoc (with-modifiers :data-on-remove on-unmount)
-                      (d*-lifecycle on-unmount :replicant/unmount opts))))
+     [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
+     (cond-> m
+       on-mount   (assoc (with-modifiers :data-init on-mount)
+                         (d*-lifecycle on-mount :replicant/mount opts))
+       on-unmount (assoc (with-modifiers :data-on-remove on-unmount)
+                         (d*-lifecycle on-unmount :replicant/unmount opts)))))
 
 #?(:clj
    (defn on-hooks-replicant->d*
