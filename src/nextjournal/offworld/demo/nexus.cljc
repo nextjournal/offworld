@@ -48,7 +48,11 @@
       :nexus/effects       {:effects/save
                             ^:nexus/batch
                             (fn [_ system path-vs]
-                              (swap! system inc))
+                              (swap! system
+                                     (fn [state]
+                                       (reduce (fn [acc [path v]]
+                                                 (assoc-in acc path v))
+                                               state path-vs))))
                             :effects/conj
                             ^:nexus/batch
                             (fn [_ system path-vs]
