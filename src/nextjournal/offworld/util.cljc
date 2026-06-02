@@ -1,6 +1,6 @@
 (ns nextjournal.offworld.util
   (:require
-   #?@(:cljs [[nextjournal.offworld.transit-lite :as tx]])
+   #?@(:cljs [[nextjournal.transit-lite :as tx]])
    #?@(:clj [[clojure.string :as str]
              [ring.util.codec :as codec]
              [cheshire.core :as cheshire]

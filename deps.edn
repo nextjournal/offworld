@@ -16,6 +16,7 @@
                                  cheshire/cheshire              {:mvn/version "6.1.0"}
                                  no.cjohansen/nexus             {:local/root "../nexus"}        #_ {:mvn/version "2025.11.1"}
                                  com.cognitect/transit-cljs     {:local/root "../transit-cljs"} #_ {:mvn/version "0.8.280"}
+                                 nextjournal/transit-cljs-lite  {:local/root "../transit-cljs-lite"}
                                  selmer/selmer                  {:mvn/version "1.13.1"}
                                  http-kit/http-kit              {:mvn/version "2.8.0"}
                                  dev.data-star.clojure/http-kit {:mvn/version "1.0.0-RC8"}
