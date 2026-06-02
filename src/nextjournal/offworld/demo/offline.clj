@@ -2,7 +2,7 @@
   (:require
    [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]
-   [nextjournal.offworld :as-alias 🪐]))
+   [nextjournal.offworld :as-alias ow]))
 
 (defn offline-capable
   [{:keys    [id render-fn select-paths config cache-queries]

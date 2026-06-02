@@ -2,9 +2,8 @@
   (:require
    [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]
-   [nextjournal.offworld :as 🪐]
-   [nexus.core :as nexus]
-   [replicant.dom :as rdom]))
+   [nextjournal.offworld :as ow]
+   [nexus.core :as nexus]))
 
 (def !online? (atom true))
 (def !action-log (atom nil))
@@ -14,10 +13,10 @@
 (defn render [{::k/keys [stem path config]
                :keys    [render-fn dom-node]}
               & [new-stem]]
-  (let [render-fn (get-in @🪐/registry [:render-fn render-fn])
+  #_(let [render-fn (get-in @ow/registry [:render-fn render-fn])
         state     {::k/stem (merge (or new-stem stem)
-                                   {::🪐/offline?         true
-                                    ::🪐/last-server-stem stem})}]
+                                   {::ow/offline?         true
+                                    ::ow/last-server-stem stem})}]
     (rdom/render (.-firstElementChild dom-node)
                  (render-fn (k/+ state path config)))))
 
@@ -25,7 +24,7 @@
   "Clear replicant's vdom - otherwise, any morphs done
   since the last render could break replicant's reconciler."
   []
-  (vreset! rdom/state {}))
+  #_(vreset! rdom/state {}))
 
 (defn go-offline! []
   (let [nodes          (array-seq (js/document.querySelectorAll "[data-offworld-sync]"))
@@ -38,7 +37,7 @@
                                {}
                                sync-states)]
     (flush-replicant!)
-    (reset! 🪐/online? false)
+    (reset! ow/online? false)
     (reset! !online? false)
     (reset! !id->sync-state id->sync-state)
     (reset! !system offline-stem)
@@ -48,7 +47,7 @@
   (js/fetch
    (str "/offworld-go-online?action-log=" @!action-log "&state=" @!system))
   (flush-replicant!)
-  (reset! 🪐/online? true)
+  (reset! ow/online? true)
   (reset! !online? true)
   (reset! !system nil)
   (reset! !id->sync-state nil)
@@ -65,17 +64,17 @@
 (defn offline-capable [_ hiccup] hiccup)
 
 (defn offline-dispatch [dispatch-data actions]
-  (let [client-nexus      (🪐/get-client-nexus)
-        server-nexus      (🪐/get-server-nexus)
-        client-actions    (filterv #(or (🪐/client-action? client-nexus %)
-                                        (🪐/client-effect? client-nexus %)) actions)
-        server-actions    (filterv #(or (🪐/server-action? server-nexus %)
-                                        (🪐/server-effect? server-nexus %)) actions)
+  (let [client-nexus      (ow/get-client-nexus)
+        server-nexus      (ow/get-server-nexus)
+        client-actions    (filterv #(or (ow/client-action? client-nexus %)
+                                        (ow/client-effect? client-nexus %)) actions)
+        server-actions    (filterv #(or (ow/server-action? server-nexus %)
+                                        (ow/server-effect? server-nexus %)) actions)
         {:keys [effects]} (nexus/expand-actions client-nexus nil client-actions dispatch-data)
-        server-effects    (filterv #(🪐/server-effect? server-nexus %) effects)
+        server-effects    (filterv #(ow/server-effect? server-nexus %) effects)
         actions-to-log    (seq (concat server-effects server-actions))]
     (swap! !action-log (fnil into []) actions-to-log)
-    (nexus/dispatch (🪐/get-client-nexus {:mode :csr}) !system dispatch-data actions)))
+    (nexus/dispatch (ow/get-client-nexus {:mode :csr}) !system dispatch-data actions)))
 
 (comment
   (go-offline!)

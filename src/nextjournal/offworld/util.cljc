@@ -1,7 +1,6 @@
 (ns nextjournal.offworld.util
   (:require
    [clojure.string :as str]
-   [clojure.edn :as edn]
    #?@(:clj [[clojure.walk :as walk]
              [ring.util.codec :as codec]
              [cheshire.core :as cheshire]])))
@@ -15,8 +14,7 @@
 
 (defn deserialize [s]
   (-> s
-      (str/replace  "%22" "\"")
-      edn/read-string))
+      (str/replace  "%22" "\"")))
 
 #?(:clj (defn read-dispatch [{:keys [query-string]}]
           (some-> query-string

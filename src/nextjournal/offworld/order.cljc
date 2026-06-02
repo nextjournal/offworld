@@ -1,7 +1,7 @@
 (ns nextjournal.offworld.order
   "Action ordering policies for offworld SSE connections.
 
-  Policies are attached to actions as metadata (::🪐/order). The client
+  Policies are attached to actions as metadata (::ow/order). The client
   stamps actions via propose!/propose; the server checks them via check,
   returning {:fx [...] :state new-state}.
 
@@ -11,7 +11,7 @@
 
   Built-in policies: :seq-gate, :bounded-buffer."
   (:require
-   [nextjournal.offworld :as-alias 🪐]))
+   [nextjournal.offworld :as-alias ow]))
 
 #?(:cljs (def proposal-system (atom {})))
 
@@ -21,7 +21,7 @@
 
 (defn- ->v [x] (if (sequential? x) (vec x) [x]))
 
-(def ^:private get-order (comp ->v ::🪐/order meta))
+(def ^:private get-order (comp ->v ::ow/order meta))
 
 (def ^:private get-policy (comp first get-order))
 
@@ -57,7 +57,7 @@
         (when (contains? proposal :state)
           (swap! system assoc policy state))
         (cond-> actions
-          (contains? proposal :args) (vary-meta assoc ::🪐/order (into [policy] args)))))))
+          (contains? proposal :args) (vary-meta assoc ::ow/order (into [policy] args)))))))
 
 (defmethod propose :default [_ _])
 

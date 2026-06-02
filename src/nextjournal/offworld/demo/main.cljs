@@ -5,24 +5,23 @@
    [nexus.registry :as nxr]
    [nextjournal.offworld.demo.nexus :as demo.nexus]
    [nextjournal.offworld.demo.ui :as ui]
-   [replicant.dom :as r]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
-   [nextjournal.offworld :as 🪐]
-   [nextjournal.offworld.demo.offline :as 🌠]
+   [nextjournal.offworld :as ow]
+   [nextjournal.offworld.demo.offline :as oo]
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo :as demo]))
 
 (defonce system
   (atom (demo/init-state {})))
 
-(🪐/register-client-nexus! demo.nexus/client (nxr/get-registry))
-(🪐/register-server-nexus! demo.nexus/server (nxr/get-registry))
+(ow/register-client-nexus! demo.nexus/client (nxr/get-registry))
+(ow/register-server-nexus! demo.nexus/server (nxr/get-registry))
 
-(r/set-dispatch!
- (fn [dispatch-data actions]
-   (if @🪐/online?
-     (nexus/dispatch (🪐/get-client-nexus) system dispatch-data actions)
-     (🌠/offline-dispatch dispatch-data actions))))
+#_(r/set-dispatch!
+         (fn [dispatch-data actions]
+           (if @ow/online?
+             (nexus/dispatch (ow/get-client-nexus) system dispatch-data actions)
+             (oo/offline-dispatch dispatch-data actions))))
 
 (defonce root-el
   (js/document.getElementById "app"))
@@ -31,8 +30,8 @@
   (swap! system update :dev/load inc))
 
 (defn main []
-  (reset! 🪐/mode (if (str/includes? js/document.location.search "?ssr=true") :ssr :csr))
-  (when (= :csr @🪐/mode)
+  (reset! ow/mode (if (str/includes? js/document.location.search "?ssr=true") :ssr :csr))
+  (when (= :csr @ow/mode)
     (add-watch system
                ::render
                (fn [_ _ _ new-state]

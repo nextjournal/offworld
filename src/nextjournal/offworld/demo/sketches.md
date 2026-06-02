@@ -9,7 +9,7 @@
    [replicant.string :as rstr]
    [nextjournal.offworld.demo.ui :as ui]
    [nextjournal.offworld.demo.clerk-viewers :as viewers]
-   [nextjournal.offworld :as 🪐]
+   [nextjournal.offworld :as ow]
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo.biz :as biz]
    [nexus.core :as nexus]
@@ -942,11 +942,11 @@ To distinguish handlers which can only run on the client, we'll mark them with `
 ```clojure
 {:nexus/effects      {:save            (fn [_ store path value]
                                          (swap! store assoc-in path value))
-:prevent-default ^::🪐/client (fn [{{:keys [dom-event]} :dispatch-data}]
+:prevent-default ^::ow/client (fn [{{:keys [dom-event]} :dispatch-data}]
                                                      (.preventDefault dom-event))}
  :nexus/actions      {:change-field (fn [state id value] [(when-not (get-in state [:fields id :disabled?])
                                                             [:save [:fields id] value])])}
- :nexus/placeholders {:event.target/value ^::🪐/client (fn [{:replicant/keys [dom-event]}]
+ :nexus/placeholders {:event.target/value ^::ow/client (fn [{:replicant/keys [dom-event]}]
                                                         (some-> dom-event .-target .-value))}}
 ```
 
@@ -1000,7 +1000,7 @@ fulfill the clientside state requirement. We also pass along the nexus, which th
 using a registry function: 
 
 ```clojure
-(clerk/code "(🪐/register-nexus! my-nexus)")
+(clerk/code "(ow/register-nexus! my-nexus)")
 ```
 
 ```clojure
@@ -1015,7 +1015,7 @@ Then, it invokes `divert` - this inspects the nexus to decide which actions to d
   [nexus dom-event actions-str]
   (let [actions        (edn/read-string actions-str)
         dispatch-data  (replicant/build-event-map dom-event)
-        select-client  #(into {} (filter (comp ::🪐/client meta val)) %)
+        select-client  #(into {} (filter (comp ::ow/client meta val)) %)
         client-action? (select-client
                         (merge (:nexus/effects nexus)
                                (:nexus/actions nexus)))
@@ -1064,8 +1064,8 @@ Here's a new addition to what we do in Concept A:
 - Pre-interpolate actions on the client 🌎
   - Expand client actions on the client 🌎
 	- Execute client effects 🌎
-  - Expand server actions on the server 🪐
-	- Execute server effects 🪐
+  - Expand server actions on the server ow
+	- Execute server effects ow
     - NEW✨: Send client effects back the client, via SSE 🌎
 
 We can achieve this with minimal infra. Just add this to the static HTML:
@@ -1073,7 +1073,7 @@ We can achieve this with minimal infra. Just add this to the static HTML:
 `<script data-effect="nexus.core.dispatch($server_initiated_actions)" />`
 
 After expanding actions on the server, offworld intercepts the return value. 
-It separates out any effects marked `^::🪐client`, serializes them and pushes an SSE `data-patch-signals` event, updating the `$server_initiated_actions` signal.
+It separates out any effects marked `^::owclient`, serializes them and pushes an SSE `data-patch-signals` event, updating the `$server_initiated_actions` signal.
 
 #### Problem: we can't send identical events, since `data-effect` only runs when the signal changes.
 Yes, but we can salt the signal value with a gensym.
@@ -1139,21 +1139,21 @@ No need for any extra wiring.
   - Expand client actions on the client 🌎
 	- Execute client effects 🌎
     - NEW✨: Group server-effects into the server-actions, via SSE 🌎
-  - Expand server actions on the server 🪐
-	- Execute server effects 🪐
+  - Expand server actions on the server ow
+	- Execute server effects ow
 
 Here's an example:
 
 ```clojure
 (nxr/register-action! ::randomize
-  ^::🪐/client
+  ^::ow/client
   (fn [_ key-mods season]
     (let [path        [::k/domain ::path :to :season]
           reset?      (contains? (set key-mods) :shift)
           rand-season (first (rand-nth (seq (dissoc season->holiday season))))
           new-season  (if reset? :spring rand-season)]
       [[:browser/alert "A new holiday is here!"]
-       ^::🪐/ssr
+       ^::ow/ssr
        [:effects/save path new-season]])))
 
 (defn randomize-button [state]
@@ -1163,21 +1163,21 @@ Here's an example:
    "Randomize (shift-click to reset)"])
 ```
 
-We see the usual `^::🪐/client` meta, indicating that this handler must always be executed on the client. The handler receives two inputs: `key-mods`, derived from client state via a placeholder, and `season`, derived from the server's system-state at render time. Now, here's the new part:
+We see the usual `^::ow/client` meta, indicating that this handler must always be executed on the client. The handler receives two inputs: `key-mods`, derived from client state via a placeholder, and `season`, derived from the server's system-state at render time. Now, here's the new part:
 
 The handler returns two effects. Offworld separates these, sending the first to the client and the second to the server.
 
 I'm not confident I've found the perfect way to indicate this behavior, but here's an attempt:
 
-1. `^::🪐/client` can be attached to an action *handler*, indicating it must be executed on the client.
+1. `^::ow/client` can be attached to an action *handler*, indicating it must be executed on the client.
 
-2. `^::🪐/ssr` can be attached to an action *vector*, indicating it must be executed on the server, when in SSR mode, and on the client when in client-only mode.
+2. `^::ow/ssr` can be attached to an action *vector*, indicating it must be executed on the server, when in SSR mode, and on the client when in client-only mode.
 
 > 🤔 **mk**
 >
-> I'm wondering if an alternative to needing both `^::🪐/client` and `^::🪐/ssr` metadata could be to move the client-only effects to a separate map, with both the client and the server nexus knowing about its keys.
+> I'm wondering if an alternative to needing both `^::ow/client` and `^::ow/ssr` metadata could be to move the client-only effects to a separate map, with both the client and the server nexus knowing about its keys.
 >
-> Could you then just use these keys to decide what needs to be run where, elimating the need to flag individual action/effect vectors with `^::🪐/ssr`? 
+> Could you then just use these keys to decide what needs to be run where, elimating the need to flag individual action/effect vectors with `^::ow/ssr`? 
 
 Worth a try. The declarations would be more readable. I think I see how we can do it.
 
@@ -1190,9 +1190,9 @@ What about the nexus registry? Will offworld need to take over that responsibili
 #### Problem: can effects be actions? Do we need to wrap them?
 Maybe we'll need to wrap them:
 ```clojure
-[[::🪐/server-effect [:effects/save '...]]]
+[[::ow/server-effect [:effects/save '...]]]
 
-(nxr/register-action! ::🪐/server-effect
+(nxr/register-action! ::ow/server-effect
  (fn [_ effect] effect))
 ```
 
@@ -1201,13 +1201,13 @@ Our helper-fn `divert` can handle this wrapping, so it doesn't impact the librar
 
 ### SSR concept F: Client placeholder, Server action, Client effect
 - Pre-interpolate on the client 🌎
-- Push actions to the server 🌎->🪐
-- Expand all actions on the server 🪐
-  - Push client effects to the client (with placeholders) 🪐->🌎
+- Push actions to the server 🌎->ow
+- Expand all actions on the server ow
+  - Push client effects to the client (with placeholders) ow->🌎
 	- Interpolate client effects 🌎
 	- Execute client effects 🌎
-	- Acknowledge client effects 🌎->🪐
-  - Execute server effects 🪐
+	- Acknowledge client effects 🌎->ow
+  - Execute server effects ow
 
 Here we accept that we can't pass a js-only value through the full chain from actions to effects. Instead, we'd use placeholders in the effects we send back to the client.
 
@@ -1304,7 +1304,7 @@ Since static trace is available at runtime[^render-trace], we might get away wit
 
 ```clojure
 ^{::clerk/visibility {:code :hide}}
-(clerk/code "(🌠/offline-capable (truck-scanner (k/+ state my-path {:config true})))")
+(clerk/code "(oo/offline-capable (truck-scanner (k/+ state my-path {:config true})))")
 ```
 
 [^static-deps]: [scan.cljc#L38](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld/demo/scan.cljc#L38)

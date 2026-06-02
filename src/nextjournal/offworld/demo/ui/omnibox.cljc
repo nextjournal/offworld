@@ -3,12 +3,12 @@
    [clojure.string :as str]
    [nexus.registry :as nxr]
    [nextjournal.baseline :as k]
-   [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld :as-alias ow]
    [nextjournal.offworld.demo.filters :as filters]
-   [nextjournal.offworld.demo.ui.holiday :as 🎄]
+   [nextjournal.offworld.demo.ui.holiday :as holiday]
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]))
 
-(nxr/register-action! ::ob/keydown-input ^::🪐/client
+(nxr/register-action! ::ob/keydown-input ^::ow/client
   (fn [_ {:keys [key popover-id choice-id anchor-id filters-to-add path]
           mods  :key-modifiers}]
     (cond
@@ -28,7 +28,7 @@
            (= key "Tab")) [[:node/hide-popover [::k/el popover-id]]]
       :else               nil)))
 
-(nxr/register-action! ::ob/keydown-choice-item ^::🪐/client
+(nxr/register-action! ::ob/keydown-choice-item ^::ow/client
   (fn [_ {:keys [key popover-id prev-id next-id choice-id anchor-id filters-to-add path]}]
     (case key
       "Escape"    [[:event/prevent-default]
@@ -51,21 +51,21 @@
                      [:node/hide-popover [::k/el popover-id]])]
       nil)))
 
-(nxr/register-action! ::ob/add-filter ^::🪐/server
+(nxr/register-action! ::ob/add-filter ^::ow/server
   (fn [state path value]
     (let [p           (conj path :filters)
           old-filters (get-in state p #{})
           new-filters (conj old-filters value)]
       [[:effects/save p new-filters]])))
 
-(nxr/register-action! ::ob/remove-filter ^::🪐/server
+(nxr/register-action! ::ob/remove-filter ^::ow/server
   (fn [state path value]
     (let [p           (conj path :filters)
           old-filters (get-in state p #{})
           new-filters (disj old-filters value)]
       [[:effects/save (conj path :filters) new-filters]])))
 
-(nxr/register-action! ::ob/toggle-choice ^::🪐/server
+(nxr/register-action! ::ob/toggle-choice ^::ow/server
   (fn [state {:keys [path k value]}]
     (let [old-set (get-in state path #{})
           new-set (if value
@@ -104,7 +104,7 @@
                   "focus:outline-none" "focus:ring-2" "focus:ring-blue-500" "sm:leading-6"
                   "bg-white"]
     :style       {:anchor-name (str "--" anchor-id)}
-    :placeholder (str "Filter..." (🎄/get-icon stem))
+    :placeholder (str "Filter..." (holiday/get-icon stem))
     :on          {:focus   [[:node/show-popover [::k/el popover-id]]]
                   :input   [[:effects/save (conj path :value) [:event.target/value]]]
                   :keydown [[::keydown-input

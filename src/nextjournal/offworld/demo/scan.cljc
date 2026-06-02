@@ -1,7 +1,7 @@
 (ns nextjournal.offworld.demo.scan
   (:require
    [nextjournal.baseline :as k]
-   [nextjournal.offworld :as 🪐 :refer [defc]]
+   [nextjournal.offworld :as ow :refer [defc]]
    [nextjournal.offworld.util :as ou]
    [nexus.registry :as nxr]))
 
@@ -16,11 +16,11 @@
 (defn init-state [state]
   (assoc state ::plates (take 9 (repeatedly rand-plate))))
 
-(nxr/register-action! ::scan ^::🪐/client
+(nxr/register-action! ::scan ^::ow/client
   (fn [_ plate]
     [[:effects/save [::scans plate] :scanned]]))
 
-(nxr/register-action! ::cancel ^::🪐/client
+(nxr/register-action! ::cancel ^::ow/client
   (fn [_ plate]
     [[:effects/save [::scans plate] :canceled]]))
 
@@ -62,7 +62,7 @@
     :canceled "❌"))
 
 (defn truck [{:keys [plate] ::k/keys [stem]}]
-  (let [{::🪐/keys [offline? last-server-stem]}
+  (let [{::ow/keys [offline? last-server-stem]}
         stem
         scan        (get-scan stem plate)
         server-scan (if offline? (get-scan last-server-stem plate) scan)]
@@ -99,7 +99,7 @@
             ou/deserialize)
         {:keys    [queries render-fn local id]
          ::k/keys [path stem config]} offline-state
-        render-fn                     (get @🪐/render-fn-registry render-fn)]
+        render-fn                     (get @ow/render-fn-registry render-fn)]
     (def offline-state offline-state)
     (def stem stem) (def path path) (def config config)
     (render-fn (k/+ {::k/stem stem} path config))))

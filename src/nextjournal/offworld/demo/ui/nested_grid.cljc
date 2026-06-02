@@ -3,17 +3,16 @@
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld.demo.ui.nested-grid.util :as ngu]
-   [nextjournal.offworld.demo.ui.holiday :as 🎄]
+   [nextjournal.offworld.demo.ui.holiday :as holiday]
    [nexus.registry :as nxr]
-   [nextjournal.offworld :as-alias 🪐]
-   [datastar :as-alias 🚀]))
+   [nextjournal.offworld :as-alias ow]))
 
-(nxr/register-action! ::ng/scroll ^::🪐/server
+(nxr/register-action! ::ng/scroll ^::ow/server
   (fn [_ path top left]
     [[:effects/save (concat path [:scroll-top]) top]
      [:effects/save (concat path [:scroll-left]) left]]))
 
-(nxr/register-action! ::ng/resize ^::🪐/server
+(nxr/register-action! ::ng/resize ^::ow/server
   (fn [_ width height]
     [[:effects/save [:grid :width] width]
      [:effects/save [:grid :height] height]]))
@@ -68,7 +67,7 @@
             showing?                   (comp (some-fn :show? :leaf?) meta)]
         [:div {:id    :grid
                :on    {:scroll
-                       ^{::🚀/modifiers [:throttle.100ms]}
+                       ^{:datastar/modifiers [:throttle.100ms]}
                        [[::ng/scroll path
                          [:event.target/scroll-top]
                          [:event.target/scroll-left]]]}
@@ -98,4 +97,4 @@
                                         :grid-column-start col-grid-name}}
                   (:id (last row-path)) " "
                   (:id (last col-path))
-                  (🎄/get-icon stem)]))]))))
+                  (holiday/get-icon stem)]))]))))

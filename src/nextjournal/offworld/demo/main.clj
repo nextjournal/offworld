@@ -11,7 +11,7 @@
    [nextjournal.offworld.demo.ui :as ui]
    [replicant.string :as rstr]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
-   [nextjournal.offworld :as 🪐]
+   [nextjournal.offworld :as ow]
    [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo :as demo]
@@ -69,7 +69,7 @@
       :lines [["elements" (-> new-state
                               k/init-state
                               ui/render
-                              🪐/replicant->d*
+                              ow/replicant->d*
                               rstr/render)]]}))))
 
 (defn replicant-dispatch-handler [req]
@@ -92,7 +92,7 @@
           :main       (-> @system
                           k/init-state
                           ui/render
-                          🪐/replicant->d*
+                          ow/replicant->d*
                           rstr/render)})))}))
 
 (defn offworld-go-online-handler [req]

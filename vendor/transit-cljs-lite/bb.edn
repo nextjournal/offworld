@@ -1,0 +1,3 @@
+{:tasks
+ {test-clj   (clojure "-M:test-clj")
+  test-cljs  (clojure "-M:test" "-m" "shadow.cljs.devtools.cli" "compile" "test")}}

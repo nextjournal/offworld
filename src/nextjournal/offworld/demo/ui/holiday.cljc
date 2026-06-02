@@ -2,7 +2,7 @@
   (:require
    [nexus.registry :as nxr]
    [nextjournal.baseline :as k :refer [defq]]
-   [nextjournal.offworld :as-alias 🪐]))
+   [nextjournal.offworld :as-alias ow]))
 
 (def day->icon
   {:gift-day   "🎁"
@@ -31,7 +31,7 @@
 (defq get-day {::k/deps #{`get-season}} [stem]
   (season->holiday (get-season stem)))
 
-(nxr/register-action! ::randomize ^::🪐/client
+(nxr/register-action! ::randomize ^::ow/client
   (fn [_ key-mods season]
     (let [path        [::path :to :season]
           reset?      (contains? (set key-mods) :shift)

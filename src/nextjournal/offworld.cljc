@@ -1,16 +1,14 @@
 (ns nextjournal.offworld
   (:require
    #?@(:cljs
-       [[nextjournal.offworld.order :as 📈]
-        [nexus.core :as nexus]
-        [replicant.dom :as rdom]])
+       [[nextjournal.offworld.order :as ooo]
+        [nexus.core :as nexus]])
    [clojure.string :as str]
-   [clojure.walk :as walk]
-   [datastar :as-alias 🚀]
+   #?(:clj [clojure.walk :as walk])
    [nextjournal.baseline :as-alias k]
-   [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld :as-alias ow]
    [nextjournal.offworld.util :as ou])
-  #?(:cljs (:require-macros [nextjournal.offworld])))
+  #_#?(:cljs (:require-macros [nextjournal.offworld])))
 
 (def registry (atom {}))
 
@@ -32,7 +30,7 @@
 
 #?(:cljs (defn recall [node]
            (case @mode
-             :csr (rdom/recall node)
+             :csr nil #_(rdom/recall node)
              :ssr (.get memories node))))
 
 #?(:cljs (def ^:dynamic serialize-fn ou/serialize))
@@ -75,7 +73,7 @@
                                      (:nexus/placeholders client-nexus-static)
                                      (:nexus/interceptors client-nexus-registry))}
          :ssr (-> (merge-with merge client-nexus-static client-nexus-registry)
-                  (dissoc-handlers ::🪐/server))))))
+                  (dissoc-handlers ::ow/server))))))
 
 #?(:cljs
    (defn get-server-nexus []
@@ -84,7 +82,7 @@
        :ssr (-> (merge-with merge
                             (call-or-value server-nexus-static)
                             (call-or-value server-nexus-registry))
-                (dissoc-handlers ::🪐/client)))))
+                (dissoc-handlers ::ow/client)))))
 
 #?(:cljs
    (defn register-client-nexus! [client-nexus & [registry]]
@@ -99,19 +97,19 @@
      (get-server-nexus)))
 
 (defn client-action? [client-nexus [k :as action]]
-  (and (not (::🪐/server (meta action)))
+  (and (not (::ow/server (meta action)))
        (contains? (:nexus/actions client-nexus {}) k)))
 
 (defn client-effect? [client-nexus [k :as action]]
-  (and (not (::🪐/server (meta action)))
+  (and (not (::ow/server (meta action)))
        (contains? (:nexus/effects client-nexus {}) k)))
 
 (defn server-action? [server-nexus [k :as action]]
-  (and (not (::🪐/client (meta action)))
+  (and (not (::ow/client (meta action)))
        (contains? (:nexus/actions server-nexus {}) k)))
 
 (defn server-effect? [server-nexus [k :as action]]
-  (and (not (::🪐/client (meta action)))
+  (and (not (::ow/client (meta action)))
        (contains? (:nexus/effects server-nexus {}) k)))
 
 (declare dispatch!)
@@ -130,7 +128,7 @@
        :replicant/node       node
        :replicant/remember   (fn remember [memory]
                                (.set ^js memories node memory))
-       ::🪐/dispatch         (fn [actions]
+       ::ow/dispatch         (fn [actions]
                                (dispatch! dispatch-url actions (merge payload
                                                                       {:event         node
                                                                        :trigger       :lifecycle
@@ -166,7 +164,7 @@
                           (merge payload
                                  {:actions (-> payload-actions
                                                (with-meta (meta actions'))
-                                               📈/propose!)}))})))
+                                               ooo/propose!)}))})))
 
 #?(:cljs
    (defn divert [payload-arg js-data]
@@ -178,7 +176,7 @@
                    dispatch-data
                    server-payload]} (divert* payload js-data)]
        (when (seq bad-actions)
-         (js/console.warn "🪐OFFWORLD: These keys were returned from an action handler: "
+         (js/console.warn "owOFFWORLD: These keys were returned from an action handler: "
                           (pr-str (mapv first bad-actions))
                           "They're listed in the nexus as actions, not effects."
                           "In SSR mode, they won't be sent to the server (or executed at all)."
@@ -250,12 +248,12 @@
         (for [[k v] (:on m)]
           [(with-modifiers (keyword (str "data-on" k)) v) (d*-dispatch v opts)])))
 
-(defn replicant->d* [hiccup & {:keys [dispatch-url] :as opts}]
-  (let [opts (assoc-in opts [:extra-payload :dispatch-url] dispatch-url)]
-    (walk/postwalk
-     (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
-                                             (#(attr->d* % opts)))))
-     hiccup)))
+#?(:clj (defn replicant->d* [hiccup & {:keys [dispatch-url] :as opts}]
+          (let [opts (assoc-in opts [:extra-payload :dispatch-url] dispatch-url)]
+            (walk/postwalk
+             (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
+                                                     (#(attr->d* % opts)))))
+             hiccup))))
 
 #?(:clj
    (defmacro defc

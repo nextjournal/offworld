@@ -1,12 +1,12 @@
 (ns nextjournal.baseline
   (:refer-clojure :exclude [+])
-  #?(:cljs
-     (:require-macros
-      [nextjournal.baseline :refer [trace trace-me defq]]))
+  #_#?(:cljs
+       (:require-macros
+        [nextjournal.baseline :refer [trace trace-me defq]]))
   (:require
    [clojure.string :as str]
    [nextjournal.baseline :as-alias k]
-   [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld :as-alias ow]
    [nexus.registry :as nxr]
    #?(:clj [nextjournal.offworld.util :as ou])))
 
@@ -92,35 +92,34 @@
         (do (trace-push! ~f)
             (try (do ~@body) (finally (trace-pop!)))))))
 
-#?(:clj
-   (defmacro defq
-     {:clj-kondo/lint-as 'clojure.core/defn}
-     [sym & decls]
-     (let [[_doc-string decls] (if (string? (first decls))
-                                 [(first decls) (next decls)]
-                                 [nil decls])
-           [attr-map decls]    (if (map? (first decls))
-                                 [(first decls) (next decls)]
-                                 [nil decls])
-           attr-map            (if (and (list? (first decls))
-                                        (map? (last decls)))
-                                 (last decls)
-                                 attr-map)
-           impl                (symbol (str sym "--nextjournal--baseline--impl"))
-           k                   (str (ns-name *ns*) "/" sym)]
-       `(do
-          (defn ~impl ~@decls)
-          (defn ~sym [& args#]
-            (if-not *trace*
-              (apply ~impl args#)
-              (do (static-trace-push! '~sym ~attr-map)
-                  (trace-push! '~sym)
-                  (try (apply ~impl args#)
-                       (finally (trace-pop!))))))
-          #_(swap! ou/registry assoc-in [:query-fn ~k] #?(:clj  (var ~sym)
-                                                          :cljs ~sym))
-           #?(:clj  (var ~sym)
-               :cljs ~sym)))))
+(defmacro defq
+  {:clj-kondo/lint-as 'clojure.core/defn}
+  [sym & decls]
+  (let [[_doc-string decls] (if (string? (first decls))
+                              [(first decls) (next decls)]
+                              [nil decls])
+        [attr-map decls]    (if (map? (first decls))
+                              [(first decls) (next decls)]
+                              [nil decls])
+        attr-map            (if (and (list? (first decls))
+                                     (map? (last decls)))
+                              (last decls)
+                              attr-map)
+        impl                (symbol (str sym "--nextjournal--baseline--impl"))
+        k                   (str (ns-name *ns*) "/" sym)]
+    `(do
+       (defn ~impl ~@decls)
+       (defn ~sym [& args#]
+         (if-not *trace*
+           (apply ~impl args#)
+           (do (static-trace-push! '~sym ~attr-map)
+               (trace-push! '~sym)
+               (try (apply ~impl args#)
+                    (finally (trace-pop!))))))
+       #_(swap! ou/registry assoc-in [:query-fn ~k] #?(:clj  (var ~sym)
+                                                       :cljs ~sym))
+       #?(:clj  (var ~sym)
+          :cljs ~sym))))
 
 (def ^:dynamic *stem* nil)
 

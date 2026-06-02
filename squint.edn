@@ -1,0 +1,4 @@
+{:paths      ["src" "vendor/nexus/src" "vendor/transit-cljs-lite/src"]
+ :output-dir "resources/public/js"
+ :extension  "js"
+ :main       [nextjournal.offworld.demo.main]}

@@ -1,14 +1,13 @@
 (ns nextjournal.offworld.demo.mapbox
   (:require
-   [nextjournal.offworld :as 🪐]
+   [nextjournal.offworld :as ow]
    [nexus.registry :as nxr]
-   [nextjournal.baseline :as k]
-   [datastar :as-alias 🚀])
+   [nextjournal.baseline :as k])
   #?(:cljs
      (:require-global [maplibregl.Map :as Map])))
 
 #?(:cljs
-   (nxr/register-effect! ::init ^::🪐/client
+   (nxr/register-effect! ::init ^::ow/client
      (fn [{{:replicant/keys [remember]} :dispatch-data} _ id & {:keys [center]}]
          (remember
           (Map.
@@ -18,9 +17,9 @@
                      :zoom      4}))))))
 
 #?(:cljs
-   (nxr/register-effect! ::pan-to ^::🪐/client
+   (nxr/register-effect! ::pan-to ^::ow/client
      (fn [_ _ id e n]
-       (let [^js map-ref (🪐/recall (js/document.getElementById id))]
+       (let [^js map-ref (ow/recall (js/document.getElementById id))]
          (.panTo map-ref (clj->js [e n]))))))
 
 (defn mapbox [& {:as      state
