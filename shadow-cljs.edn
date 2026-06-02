@@ -1,9 +1,9 @@
-{:deps   {:aliases [:dev]}
+{:deps   {:aliases [:dev :demo]}
  :builds {:test {:target    :node-test
                  :output-to "target/test.js"
                  :ns-regexp "-test$"
                  :autorun   true}
-          :app {:target      :browser
-                :modules     {:main {:init-fn nextjournal.offworld.demo.main/main}}
-                :output-dir  "resources/public/js"
-                :build-hooks [(shadow.cljs.build-report/hook {:output-to "report.html"})]}}}
+          :app  {:target      :browser
+                 :modules     {:main {:init-fn nextjournal.offworld.demo.main/main}}
+                 :output-dir  "resources/public/js"
+                 :build-hooks [(shadow.cljs.build-report/hook {:output-to "report.html"})]}}}
