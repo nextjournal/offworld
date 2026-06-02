@@ -8,9 +8,13 @@
    #_[nextjournal.offworld.demo.ui :as ui]
    [nextjournal.offworld :as 🪐]
    [nexus.registry :as nxr]
+   [nextjournal.offworld.util :as ou]
    #_[nextjournal.offworld.demo.offline :as 🌠]
    #_[nextjournal.baseline :as k]
    [nextjournal.offworld.demo :as demo]))
+
+(js/console.log (ou/serialize ^:hi {:a {:b 2}}))
+(js/console.log (ou/deserialize (ou/serialize ^:hi {:a {:b 2}})))
 
 (defonce system
   (atom (demo/init-state {})))

@@ -31,7 +31,7 @@
 
 (defn set-mode! [k] (vreset! mode k))
 
-(def get-mode deref)
+(defn get-mode [] @mode)
 
 #?(:cljs (defn recall [node]
            (case (get-mode)

@@ -1,12 +1,31 @@
 (ns nextjournal.offworld.util
-  #?(:clj (:require
-           [clojure.string :as str]
-           [ring.util.codec :as codec]
-           [cheshire.core :as cheshire])))
+  (:require
+   #?@(:cljs [[nextjournal.offworld.transit-lite :as tx]])
+   #?@(:clj [[clojure.string :as str]
+             [ring.util.codec :as codec]
+             [cheshire.core :as cheshire]
+             [cognitecht.transit :as tx]]))
+  #?(:clj (:import (java.io ByteArrayInputStream ByteArrayOutputStream))))
 
-(defn serialize [actions])
 
-(defn deserialize [s])
+(defn serialize [data]
+  #?(:clj
+     (let [baos (ByteArrayOutputStream.)
+           w    (tx/writer baos :json {:transform tx/write-meta})
+           _    (tx/write w data)
+           ret  (.toString baos "utf-8")]
+       (.reset baos)
+       ret)
+     :cljs
+     (tx/write-str (tx/write-meta data))))
+
+(defn deserialize [s]
+  #?(:clj
+     (let [bais   (ByteArrayInputStream. (.getBytes s))
+           reader (tx/reader bais :json)]
+       (tx/read reader))
+     :cljs
+     (tx/read-str s)))
 
 #?(:clj (defn read-dispatch [{:keys [query-string]}]
           (some-> query-string
