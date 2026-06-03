@@ -6,6 +6,7 @@
    [nextjournal.offworld.demo.ui.holiday :as 🎄]
    [nexus.registry :as nxr]
    [nextjournal.offworld :as-alias 🪐]
+   [core.lite :as 🪶]
    [datastar :as-alias 🚀]))
 
 (nxr/register-action! ::ng/scroll ^::🪐/server
@@ -27,8 +28,8 @@
                                                    :row "r"
                                                    (:column :col) "c") a b))
                              :size (rand-nth [20 25 30 35 40])}))
-                     (range 10))))
-        (range 50)))
+                     (🪶/range 10))))
+        (🪶/range 50)))
 
 (def demo-row-tree (demo-header-tree :row))
 (def demo-col-tree (demo-header-tree :row))

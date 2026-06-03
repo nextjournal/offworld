@@ -1,6 +1,6 @@
 (ns nextjournal.offworld.demo.main
   (:require
-   [lite.core :refer [assoc-in*]]
+   [core.lite :as 🪶]
    [clojure.walk :as walk]
    #_[clojure.string :as str]
    #_[nexus.core :as nexus]
@@ -30,7 +30,7 @@
     (swap! system
            (fn [state]
              (reduce (fn [acc [path v]]
-                       (assoc-in* acc path v))
+                       (🪶/assoc-in acc path v))
                      state path-vs)))))
 
 (def store (atom {}))

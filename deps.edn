@@ -1,4 +1,4 @@
-{:deps    {core-lite/core-lite {:local/root "../core-lite"}}
+{:deps    {life.kimo/core-lite {:local/root "../core-lite"}}
  :paths   ["src" "resources"]
  :aliases {:test   {:extra-paths ["test"]
                     :extra-deps  {thheller/shadow-cljs {:mvn/version "3.4.11"}}}

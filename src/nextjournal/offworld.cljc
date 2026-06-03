@@ -4,7 +4,7 @@
        [#_[nextjournal.offworld.order :as 📈]
         [cljs.core :refer [IFn]]])
    #?(:clj [clojure.walk :as walk])
-   [lite.core :refer [assoc*]]
+   [core.lite :as 🪶]
    [datastar :as-alias 🚀]
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
@@ -44,7 +44,7 @@
      (let [node (some-> e .-target)]
        (cond-> {:replicant/trigger   :replicant.trigger/dom-event
                 :replicant/dom-event e}
-         node (assoc* :replicant/node node)))))
+         node (🪶/assoc :replicant/node node)))))
 
 #?(:cljs
    (defn build-lifecycle-map [node payload]
@@ -112,9 +112,9 @@
            client-effects (into client-fx client-xp-fx)]
        (cond-> {:dispatch-data dispatch-data}
          (pos? (count client-effects))
-         (assoc* :client-effects client-effects)
+         (🪶/assoc :client-effects client-effects)
          (pos? (count server-payload))
-         (assoc* :server-payload (assoc* payload :actions (-> server-payload
+         (🪶/assoc :server-payload (🪶/assoc payload :actions (-> server-payload
                                                               (with-meta (meta actions'))
                                                               #_   📈/propose!)))))))
 
