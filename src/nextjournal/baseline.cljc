@@ -33,19 +33,22 @@
 (defn init-state [state]
   (merge state {::k/stem state}))
 
-(defn local [{::k/keys [stem path]}]
-  (get-in stem path))
+(defn local [m]
+  (let [stem (::k/stem m)
+        path (::k/path m)]
+    (get-in stem path)))
 
 (defn +
   "This fn signature standardizes our convention for writing render-fns.
   - We pass a single map to a render-fn, i.e. replicant's \"state\".
   - We include a domain in the state."
-  [{::k/keys [stem]} path & {:as config-state}]
-  (merge config-state
-         {::stem stem
-          ::path (if (sequential? path)
-                   (into [::local] (filterv #(not= % ::local) path))
-                   [::local path])}))
+  [m path & {:as config-state}]
+  (let [stem (::k/stem m)]
+    (merge config-state
+           {::stem stem
+            ::path (if (sequential? path)
+                     (into [::local] (filterv #(not= % ::local) path))
+                     [::local path])})))
 
 #?(:clj (defn explain-trace [{:keys [stack]}]
           (->> stack

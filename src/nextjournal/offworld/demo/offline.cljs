@@ -66,6 +66,7 @@
 (defn offline-capable [_ hiccup] hiccup)
 
 (defn offline-dispatch [dispatch-data actions]
+  #_
   (let [nexus          (nxr/get-registry)
         ux             (🪐/get-ux)
         client-ax?     #(🪐/client-handled? ux :nexus/actions nexus %)

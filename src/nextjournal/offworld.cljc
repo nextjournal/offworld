@@ -1,13 +1,13 @@
 (ns nextjournal.offworld
   (:require
+   #?(:clj [clojure.walk :as walk])
    #?@(:cljs
        [#_[nextjournal.offworld.order :as 📈]
-        [cljs.core :refer [IFn]]])
-   #?(:clj [clojure.walk :as walk])
-   [core.lite :as 🪶]
+        [cljs.core :refer [IFn]]
+        [core.lite :as 🪶]
+        [nexus.registry :as nxr]])
    [datastar :as-alias 🚀]
    [nexus.core :as nexus]
-   [nexus.registry :as nxr]
    [nextjournal.baseline :as-alias k]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.util :as ou])
@@ -29,10 +29,11 @@
 
 (defn get-ux [] @ux)
 
-#?(:cljs (defn recall [node]
-           (case (get-ux)
-             :csr nil
-             :ssr (.get memories node))))
+#?(:cljs
+   (defn recall [node]
+     (case (get-ux)
+       :csr nil
+       :ssr (.get memories node))))
 
 #?(:cljs (def serialize-fn ou/encode))
 #?(:cljs (def deserialize-fn ou/decode))
@@ -67,7 +68,7 @@
 
 (defn server-marked? [x] (contains? (meta x) ::🪐/server))
 
-(defn client-marked? [x] (not (server-marked? x)))
+(defn client-marked? [x] (and x (not (server-marked? x))))
 
 (defn client-handled? [ux kind nexus [k]]
   (case ux
@@ -86,6 +87,7 @@
      dispatch-data
      actions)))
 
+
 #?(:cljs
    (defn divert* [payload js-data]
      (let [actions        (:actions payload)
@@ -96,27 +98,26 @@
                             :lifecycle (build-lifecycle-map js-data payload)
                             {})
            actions'       (pre-interpolate nexus dispatch-data actions)
-           ux             (get-ux)
-           client-ax?     #(client-handled? ux :nexus/actions nexus %)
-           client-fx?     #(client-handled? ux :nexus/effects nexus %)
-           server-ax?     #(server-handled? ux :nexus/actions nexus %)
-           server-fx?     #(server-handled? ux :nexus/effects nexus %)
-           client-ax      (filterv client-ax? actions')
-           client-fx      (filterv client-fx? actions')
+           the-ux             (get-ux)
+           client-ax?     #(client-handled? the-ux :nexus/actions nexus %)
+           client-fx?     #(client-handled? the-ux :nexus/effects nexus %)
+           server-ax?     #(server-handled? the-ux :nexus/actions nexus %)
+           server-fx?     #(server-handled? the-ux :nexus/effects nexus %)
            server-ax      (filterv server-ax? actions')
            server-fx      (filterv server-fx? actions')
+           client-ax      (filterv #(or (client-ax? %)
+                                        (client-fx? %)) actions')
            xp-fx          (:effects (nexus/expand-actions nexus nil client-ax dispatch-data))
            client-xp-fx   (filterv client-fx? xp-fx)
            server-xp-fx   (filterv server-fx? xp-fx)
-           server-payload (-> server-ax (into server-fx) (into server-xp-fx))
-           client-effects (into client-fx client-xp-fx)]
+           server-payload (-> server-ax (into server-fx) (into server-xp-fx))]
        (cond-> {:dispatch-data dispatch-data}
-         (pos? (count client-effects))
-         (🪶/assoc :client-effects client-effects)
+         (pos? (count client-xp-fx))
+         (🪶/assoc :client-effects client-xp-fx)
          (pos? (count server-payload))
          (🪶/assoc :server-payload (🪶/assoc payload :actions (-> server-payload
-                                                              (with-meta (meta actions'))
-                                                              #_   📈/propose!)))))))
+                                                                  (with-meta (meta actions'))
+                                                                  #_   📈/propose!)))))))
 
 #?(:cljs
    (defn ^:export divert [payload-arg js-data]
@@ -193,13 +194,14 @@
            (for [[k v] (:on m)]
              [(with-modifiers (keyword (str "data-on" k)) v) (d*-dispatch v opts)]))))
 
-#?(:clj (defn replicant->d*
-          [hiccup & {:as   opts
-                     :keys [dispatch-url]
-                     :or   {dispatch-url "/offworld-dispatch"}}]
-          (let [opts (-> opts
-                         (assoc :dispatch-url dispatch-url)
-                         (assoc-in [:extra-payload :dispatch-url] dispatch-url))]
+#?(:clj
+   (defn replicant->d*
+     [hiccup & {:as   opts
+                :keys [dispatch-url]
+                :or   {dispatch-url "/offworld-dispatch"}}]
+     (let [opts (-> opts
+                    (assoc :dispatch-url dispatch-url)
+                    (assoc-in [:extra-payload :dispatch-url] dispatch-url))]
        (walk/postwalk
         (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
                                                 (#(attr->d* % opts)))))

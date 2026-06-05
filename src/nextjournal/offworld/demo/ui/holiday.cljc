@@ -33,7 +33,7 @@
 
 (nxr/register-action! ::randomize ^::🪐/client
   (fn [_ key-mods season]
-    (let [path        [::path :to :season]
+   #_ (let [path        [::path :to :season]
           reset?      (contains? (into #{} key-mods) :shift)
           rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
       (if reset?
@@ -43,7 +43,7 @@
 
 (defn get-icon {::k/deps #{`get-holiday-mode? `get-day}} [stem]
   (when (get-holiday-mode? stem)
-    (day->icon (get-day stem))))
+    (get day->icon (get-day stem))))
 
 (defn switch [state]
   [:input {:id     ::mode-switch

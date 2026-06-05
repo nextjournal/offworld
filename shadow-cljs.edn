@@ -3,7 +3,27 @@
                  :output-to "target/test.js"
                  :ns-regexp "-test$"
                  :autorun   true}
-          :app  {:target      :browser
-                 :modules     {:main {:init-fn nextjournal.offworld.demo.main/main}}
+          :ssr  {:target      :browser
+                 :modules     {:ssr {:init-fn nextjournal.offworld.demo.main/main}}
                  :output-dir  "resources/public/js"
-                 :build-hooks [(shadow.cljs.build-report/hook {:output-to "report.html"})]}}}
+                 :build-hooks [(shadow.cljs.build-report/hook)]
+                 :release     {:compiler-options {:lite-mode       true
+                                                  :elide-to-string true}}}
+          :csr  {:target      :esm
+                 :modules     {:csr {:init-fn nextjournal.offworld.demo.csr/start!}}
+                 :output-dir  "resources/public/js"
+                 :build-hooks [(shadow.cljs.build-report/hook)]
+                 :release     {:compiler-options {}}}
+          :cljs-lite-skill/build
+          {:target      :browser
+           :modules     {:base {}
+                         :ssr  {:init-fn    nextjournal.offworld.demo.main/main
+                                :depends-on #{:base}}
+                         :csr  {:init-fn    nextjournal.offworld.demo.csr/start!
+                                :depends-on #{:base}}}
+           :output-dir  ".cljs-lite-skill/manual"
+           :build-hooks [(shadow.cljs.build-report/hook)]
+           :release     {:compiler-options {:lite-mode                  true
+                                            :elide-to-string            true
+                                            :cross-chunk-method-motion  true}}}}}
+

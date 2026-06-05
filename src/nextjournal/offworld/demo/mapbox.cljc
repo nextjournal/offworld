@@ -9,19 +9,23 @@
 
 #?(:cljs
    (nxr/register-effect! ::init ^::🪐/client
-     (fn [{{:replicant/keys [remember]} :dispatch-data} _ id & {:keys [center]}]
-         (remember
-          (Map.
-           (clj->js {:container id
-                     :style     "https://demotiles.maplibre.org/style.json"
-                     :center    center
-                     :zoom      4}))))))
+     (fn init
+       ([ctx _ id] (init ctx _ id {}))
+       ([ctx _ id opts]
+        (let [center   (:center opts)
+              remember (:replicant/remember (:dispatch-data ctx))]
+          (remember
+           (Map.
+            #js {:container id
+                 :style     "https://demotiles.maplibre.org/style.json"
+                 :center    (when center #js [(first center) (second center)])
+                 :zoom      4})))))))
 
 #?(:cljs
    (nxr/register-effect! ::pan-to ^::🪐/client
      (fn [_ _ id e n]
        (let [^js map-ref (🪐/recall (js/document.getElementById id))]
-         (.panTo map-ref (clj->js [e n]))))))
+         (.panTo map-ref #js [e n])))))
 
 (defn mapbox [& {:as      state
                  :keys    [id]

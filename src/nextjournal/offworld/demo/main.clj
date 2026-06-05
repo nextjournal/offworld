@@ -113,14 +113,13 @@
       {:status 404})))
 
 (defn handler [{:as req :keys [uri]}]
-  (case (:uri req)
-    "/"                                 (index-handler req)
-    "/offworld-dispatch"                (offworld-dispatch-handler req)
-    "/offworld-go-online"               (offworld-go-online-handler req)
-    "/session"                          (sse-handler req)
-    "/js/main.js"                       (serve-file uri (str "resources/public" uri))
-    "/main.js"                          (serve-file uri (str "resources/" uri))
-    "/img/d6f5737-cljs-render-perf.png" (serve-file uri (str "resources/public" uri))
-    {:status  404
-     :headers {"Content-Type" "text/plain"}
-     :body    "Not found"}))
+  (case uri
+    "/"                  (index-handler req)
+    "/offworld-dispatch" (offworld-dispatch-handler req)
+    "/offworld-go-online" (offworld-go-online-handler req)
+    "/session"           (sse-handler req)
+    (if (re-matches #".*\.(js|js\.map|png|svg|css|woff2?)$" uri)
+      (serve-file uri (str "resources/public" uri))
+      {:status  404
+       :headers {"Content-Type" "text/plain"}
+       :body    "Not found"})))
