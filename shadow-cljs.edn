@@ -10,10 +10,10 @@
                  :release     {:compiler-options {:lite-mode       true
                                                   :elide-to-string true}}}
           :csr  {:target      :esm
-                 :modules     {:csr {:init-fn nextjournal.offworld.demo.csr/start!}}
+                 :modules     {:csr {:entries [nextjournal.offworld.demo.csr]}}
                  :output-dir  "resources/public/js"
                  :build-hooks [(shadow.cljs.build-report/hook)]
-                 :release     {:compiler-options {}}}
+                 :release     {:closure-defines {nextjournal.offworld.csr_bundle "true"}}}
           :cljs-lite-skill/build
           {:target      :browser
            :modules     {:base {}
@@ -23,7 +23,7 @@
                                 :depends-on #{:base}}}
            :output-dir  ".cljs-lite-skill/manual"
            :build-hooks [(shadow.cljs.build-report/hook)]
-           :release     {:compiler-options {:lite-mode                  true
-                                            :elide-to-string            true
-                                            :cross-chunk-method-motion  true}}}}}
+           :release     {:compiler-options {:lite-mode                 true
+                                            :elide-to-string           true
+                                            :cross-chunk-method-motion true}}}}}
 

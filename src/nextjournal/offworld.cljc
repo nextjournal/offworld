@@ -14,6 +14,8 @@
   #?(:cljs (:require-macros
             [nextjournal.offworld :refer [defc]])))
 
+#?(:cljs (goog-define csr_bundle "false"))
+
 (def registry (volatile! {}))
 
 #?(:cljs (defonce memories (js/WeakMap.)))
@@ -121,6 +123,7 @@
 
 #?(:cljs
    (defn ^:export divert [payload-arg js-data]
+     (js/console.log "csr" csr_bundle)
      (let [payload        (cond-> payload-arg (string? payload-arg) deserialize-fn)
            diversion      (divert* payload js-data)
            client-effects (:client-effects diversion)

@@ -6,7 +6,8 @@
    [nextjournal.offworld.demo :as demo]
    [nextjournal.offworld :as 🪐]
    [nextjournal.offworld.demo.offline :as 🌠]
-   [nexus.registry :as nxr]))
+   [nexus.registry :as nxr]
+   nextjournal.offworld.demo.nexus))
 
 (defonce system
   (atom (demo/init-state {})))
@@ -25,10 +26,12 @@
   (r/render root-el (ui/render (k/init-state state))))
 
 (defn start! []
+  (js/console.log "CSR BUNDLE STARTING")
   (add-watch system ::render
              (fn [_ _ _ new-state]
                (render! new-state)))
   (render! @system))
 
 (defn ^:dev/after-load after-load []
-  (swap! system update :dev/load inc))
+  (when (= :csr (🪐/get-ux))
+    (swap! system update :dev/load inc)))

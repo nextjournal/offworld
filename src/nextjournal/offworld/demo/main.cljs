@@ -4,12 +4,12 @@
    nextjournal.offworld.demo.nexus
    nextjournal.offworld.demo.ui.holiday
    nextjournal.offworld.demo.ui.nested-grid
-   nextjournal.offworld.demo.mapbox))
+   nextjournal.offworld.demo.mapbox
+   nextjournal.offworld.demo.offline))
 
 (defn main []
-  (🪐/set-ux! (if (.includes js/document.location.search "?ssr=true") :ssr :csr))
-  (when (= :csr (🪐/get-ux))
-    (let [s (js/document.createElement "script")]
-      (set! (.-src s) "/js/csr.js")
-      (set! (.-type s) "module")
-      (.appendChild js/document.head s))))
+  (let [params (js/URLSearchParams. js/document.location.search)]
+    (js/console.log "SSR BUNDLE STARTING")
+    (🪐/set-ux! (if (.has params "csr") :csr :ssr))
+    (when (.-serviceWorker js/navigator)
+      (.register (.-serviceWorker js/navigator) "/sw.js"))))

@@ -14,9 +14,7 @@
    [nextjournal.offworld :as 🪐]
    [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]
-   [nextjournal.offworld.demo :as demo]
-   [selmer.parser :as selmer]
-   [selmer.util])
+   [nextjournal.offworld.demo :as demo])
   (:import (java.nio.file Files)))
 
 (def system (atom (demo/init-state {})))
@@ -27,12 +25,14 @@
 (defn dispatch! [actions]
   (nexus/dispatch nexus+registry system {} actions))
 
+(def common-head
+  '([:script {:src "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"}]
+    [:script {:defer true :src "https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"}]
+    [:link {:rel "stylesheet" :href "https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css"}]))
+
 (def datastar-script
-  (str "<script type=\"module\" "
-       "src=\"https://cdn.jsdelivr.net/gh"
-       "/starfederation/datastar@1.0.0-RC.7"
-       "/bundles/datastar.js\""
-       "></script>"))
+  [:script {:type "module"
+            :src  "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js"}])
 
 (def !connections (atom #{}))
 
@@ -78,22 +78,30 @@
    :headers {"Content-Type" "text/plain"}
    :body    "ok"})
 
+(def csr-script   [:script {:type "module" :src "/js/csr.js"}])
+(def csr-prefetch [:link {:rel "prefetch" :href "/js/csr.js"}])
+
+(defn index-page [csr?]
+  (str "<!DOCTYPE html>"
+       (rstr/render
+        [:html {:lang "en"}
+         [:head
+          [:meta {:charset "utf-8"}]
+          [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+          [:title "Table"]
+          common-head
+          (if csr? csr-script (list datastar-script csr-prefetch))]
+         (if csr?
+           [:body [:main {:id "app"}]]
+           [:body {:data-init "@get('session')"}
+            (-> @system k/init-state ui/render 🪐/replicant->d*)
+            [:script {:src "/js/ssr.js"}]])])))
+
 (defn index-handler [req]
-  (let [ssr? (some-> req :query-string (str/includes? "ssr=true"))]
+  (let [csr? (some-> req :query-string (str/includes? "csr"))]
     {:status  200
      :headers {"Content-Type" "text/html; charset=utf-8"}
-     :body
-     (selmer.util/without-escaping
-      (selmer/render-file
-       "public/index.html"
-       (when ssr?
-         {:extra-head datastar-script
-          :body-attr  "data-init=\"@get('session')\""
-          :main       (-> @system
-                          k/init-state
-                          ui/render
-                          🪐/replicant->d*
-                          rstr/render)})))}))
+     :body    (index-page csr?)}))
 
 (defn offworld-go-online-handler [req]
   (dispatch! (ou/read-action-log req))

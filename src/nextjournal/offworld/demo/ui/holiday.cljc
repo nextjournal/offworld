@@ -33,7 +33,7 @@
 
 (nxr/register-action! ::randomize ^::🪐/client
   (fn [_ key-mods season]
-   #_ (let [path        [::path :to :season]
+    (let [path        [::path :to :season]
           reset?      (contains? (into #{} key-mods) :shift)
           rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
       (if reset?

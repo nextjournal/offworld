@@ -28,16 +28,25 @@
   []
   #_(vreset! rdom/state {}))
 
-#_(defn go-offline! []
+(defn load-csr! []
+  (let [s (js/document.createElement "script")]
+    (set! (.-src s) "/js/csr.js")
+    (set! (.-type s) "module")
+    (.appendChild js/document.head s)))
+
+(defn go-offline! []
+  (js/console.log "GOING OFFLINE")
+  (load-csr!)
   (let [nodes          (array-seq (js/document.querySelectorAll "[data-offworld-sync]"))
         sync-states    (for [node nodes]
-                         (merge (ou/deserialize (.getAttribute node "data-offworld-sync"))
+                         (merge (ou/decode (.getAttribute node "data-offworld-sync"))
                                 {:dom-node node}))
         id->sync-state (zipmap (map :id sync-states) sync-states)
         offline-stem   (reduce (fn [acc {:keys [select-paths] ::k/keys [stem]}]
                                  (reduce #(assoc-in %1 %2 (get-in stem %2)) acc select-paths))
                                {}
                                sync-states)]
+    (🪐/set-ux! :csr)
     (flush-replicant!)
     (reset! 🪐/online? false)
     (reset! !online? false)
@@ -46,16 +55,18 @@
     (doall (map render sync-states (repeat offline-stem)))))
 
 (defn go-online! []
+  (js/console.log "GOING ONLINE")
   (js/fetch
    (str "/offworld-go-online?action-log=" @!action-log "&state=" @!system))
   (flush-replicant!)
+  (🪐/set-ux! :ssr)
   (reset! 🪐/online? true)
   (reset! !online? true)
   (reset! !system nil)
   (reset! !id->sync-state nil)
   (reset! !action-log nil))
 
-#_(defonce connection-listeners
+(defonce connection-listeners
   (do (.addEventListener js/window "online" go-online!)
       (.addEventListener js/window "offline" go-offline!)))
 
