@@ -13,7 +13,7 @@
                  :modules     {:csr {:entries [nextjournal.offworld.demo.csr]}}
                  :output-dir  "resources/public/js"
                  :build-hooks [(shadow.cljs.build-report/hook)]
-                 :release     {:closure-defines {nextjournal.offworld.csr_bundle "true"}}}
+                 :release     {:closure-defines {nextjournal.offworld.csr_bundle true}}}
           :cljs-lite-skill/build
           {:target      :browser
            :modules     {:base {}

@@ -73,6 +73,7 @@
                               rstr/render)]]}))))
 
 (defn offworld-dispatch-handler [req]
+  (println  (:actions (ou/read-dispatch req)))
   (dispatch! (:actions (ou/read-dispatch req)))
   {:status  200
    :headers {"Content-Type" "text/plain"}

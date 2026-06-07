@@ -9,7 +9,7 @@
              "PL-GS-2210" "CZ0-AZ-3939" "DK-39-1119" "SE-30-1199"]))
 
 (defn init-state [state]
-  (assoc state ::plates (take 9 (repeatedly rand-plate))))
+  (assoc state ::plates (take 9 (distinct (repeatedly rand-plate)))))
 
 (nxr/register-action! ::scan ^::🪐/client
   (fn [_ plate]
@@ -36,8 +36,8 @@
 
 (defn wrap-interest [{:keys [id label]} & children]
     (let [id          id
-          pop-id      [id "-pop"]
-          anchor-name ["--" id]]
+          pop-id      (str id "-pop")
+          anchor-name (str "--" id)]
       [:button {:id          id
                 :interestfor pop-id
                 :style       {:anchor-name anchor-name}}
@@ -70,15 +70,17 @@
      [:label "Client: " (status-icon scan)]
      [:label "Server: " (status-icon server-scan)]]))
 
-(defc game [{::k/keys [path stem] :as state}]
+(defc ^:export game [{::k/keys [path stem] :as state}]
   [:div.flex.flex-wrap.items-start.max-w-160
-   (let [x (first (get-plates stem))]
+   (println "PLATES " (pr-str (get-plates stem)))
+   (for [x (get-plates stem)]
      (wrap-interest
       {:id    x
        :label "Click to \"scan\""}
       (truck (k/+ state (conj path x) {:plate x}))))])
 
-(defc offline-game [& args]
+(defc ^:export offline-game [& args]
+  (println (pr-str args))
   [:dialog {:style              {:position  "fixed"
                                  :top       "50%"
                                  :left      "50%"
@@ -86,6 +88,3 @@
             :replicant/on-mount [[:node/show-modal]]}
    "OFFLINE MODE:"
    (apply game args)])
-
-(game {})
-(offline-game {})

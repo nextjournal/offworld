@@ -3,7 +3,10 @@
    [nexus.registry :as nxr]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
-   [nextjournal.offworld :as-alias 🪐]))
+   [nextjournal.offworld :as-alias 🪐]
+   nextjournal.offworld.demo.mapbox
+   nextjournal.offworld.demo.offline
+   nextjournal.offworld.demo.scan))
 
 (defn get-node [ctx]
   (:replicant/node (:dispatch-data ctx ctx)))
@@ -56,7 +59,7 @@
                             ([ctx _] (.hidePopover (get-node ctx)))
                             ([ctx _ node] (.hidePopover node)))
    :node/show-modal       (fn [ctx]
-                            (get-node ctx)
+                           #?(:cljs (js/console.log (get-node ctx)))
                             (.showModal (get-node ctx)))
    :browser/alert         (fn [_ _ s] #?(:cljs (js/alert s)))
    :node/set-checked      (fn [ctx _ node value]

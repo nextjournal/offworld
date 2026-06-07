@@ -15,6 +15,7 @@
                     :render-fn     (ou/fn-ref->str render-fn)
                     ::k/stem       (ou/select-paths stem (into [] (concat select-paths [path])))
                     ::k/path       path}]
+    (def sync-state  sync-state)
     [:div {:id                 id
            :data-offworld-sync (ou/encode sync-state)}
      hiccup]))

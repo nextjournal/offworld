@@ -14,16 +14,13 @@
   #?(:cljs (:require-macros
             [nextjournal.offworld :refer [defc]])))
 
-#?(:cljs (goog-define csr_bundle "false"))
+#?(:cljs (goog-define csr_bundle false))
 
 (def registry (volatile! {}))
 
 #?(:cljs (defonce memories (js/WeakMap.)))
 
-#?(:cljs (def online? (atom true)))
-
-#?(:cljs (defn go-online! [] (reset! online? true)))
-#?(:cljs (defn go-offline! [] (reset! online? false)))
+#?(:cljs (def online? (reify IDeref (-deref [_] js/navigator.onLine))))
 
 (defonce ux (volatile! :csr))
 
@@ -123,7 +120,9 @@
 
 #?(:cljs
    (defn ^:export divert [payload-arg js-data]
-     (js/console.log "csr" csr_bundle)
+     (js/console.log "csrrrr" csr_bundle)
+     (js/console.log "nav" js/navigator.onLine)
+     (js/console.log "divert: online? " @online?)
      (let [payload        (cond-> payload-arg (string? payload-arg) deserialize-fn)
            diversion      (divert* payload js-data)
            client-effects (:client-effects diversion)
@@ -142,10 +141,6 @@
        (let [d*-json   (js/JSON.stringify #js {:offworld (serialize-fn (merge server-payload extra-payload))})
              query-url (str url "?datastar=" (js/encodeURIComponent d*-json))]
          (js/fetch query-url #js {:method "GET"})))))
-
-(defn offline? [stem]
-  #?(:clj false
-     :cljs (::offline? (meta stem))))
 
 #?(:clj
    (defn with-modifiers [k v]

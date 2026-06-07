@@ -1,26 +1,30 @@
 (ns nextjournal.offworld.demo.offline
   (:require
+   [clojure.string :as str]
    [nextjournal.offworld.util :as ou]
    [nextjournal.baseline :as k]
    [nextjournal.offworld :as 🪐]
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
-))
+   [replicant.dom :as rdom]))
 
-(def !online? (atom true))
 (def !action-log (atom nil))
 (def !system (atom nil))
 (def !id->sync-state (atom nil))
 
+(defn str->fn [s]
+  (let [[ns-part fn-part] (str/split s "/")]
+    (js/goog.getObjectByName (str ns-part "." (str/replace fn-part "-" "_")))))
+
 (defn render [{::k/keys [stem path config]
                :keys    [render-fn dom-node]}
               & [new-stem]]
-  (let [render-fn (get-in @🪐/registry [:render-fn render-fn])
+  (let [render-fn (str->fn render-fn)
         state     {::k/stem (merge (or new-stem stem)
                                    {::🪐/offline?         true
                                     ::🪐/last-server-stem stem})}]
-    #_(rdom/render (.-firstElementChild dom-node)
-                 (render-fn (k/+ state path config)))))
+        (rdom/render (.-firstElementChild dom-node)
+                     (render-fn (k/+ state path config)))))
 
 (defn flush-replicant!
   "Clear replicant's vdom - otherwise, any morphs done
@@ -35,33 +39,34 @@
     (.appendChild js/document.head s)))
 
 (defn go-offline! []
-  (js/console.log "GOING OFFLINE")
-  (load-csr!)
-  (let [nodes          (array-seq (js/document.querySelectorAll "[data-offworld-sync]"))
-        sync-states    (for [node nodes]
-                         (merge (ou/decode (.getAttribute node "data-offworld-sync"))
-                                {:dom-node node}))
-        id->sync-state (zipmap (map :id sync-states) sync-states)
-        offline-stem   (reduce (fn [acc {:keys [select-paths] ::k/keys [stem]}]
-                                 (reduce #(assoc-in %1 %2 (get-in stem %2)) acc select-paths))
-                               {}
-                               sync-states)]
-    (🪐/set-ux! :csr)
-    (flush-replicant!)
-    (reset! 🪐/online? false)
-    (reset! !online? false)
-    (reset! !id->sync-state id->sync-state)
-    (reset! !system offline-stem)
-    (doall (map render sync-states (repeat offline-stem)))))
+  (js/console.log "GOING OFFLINE" 🪐/csr_bundle)
+  (js/console.log (pr-str 🪐/csr_bundle))
+  (if-not 🪐/csr_bundle
+    (load-csr!)
+    (let [nodes          (array-seq (js/document.querySelectorAll "[data-offworld-sync]"))
+          sync-states    (for [node nodes]
+                           (merge (ou/decode (.getAttribute node "data-offworld-sync"))
+                                  {:dom-node node}))
+          id->sync-state (zipmap (map :id sync-states) sync-states)
+          offline-stem   (reduce (fn [acc {:keys [select-paths] ::k/keys [stem]}]
+                                   (reduce #(assoc-in %1 %2 (get-in stem %2)) acc select-paths))
+                                 {}
+                                 sync-states)]
+      (println (pr-str sync-states))
+      (🪐/set-ux! :csr)
+      (flush-replicant!)
+      (reset! !id->sync-state id->sync-state)
+      (reset! !system offline-stem)
+      (doall (map render sync-states (repeat offline-stem))))))
 
 (defn go-online! []
   (js/console.log "GOING ONLINE")
   (js/fetch
-   (str "/offworld-go-online?action-log=" @!action-log "&state=" @!system))
+   (str "/offworld-go-online"
+        "?action-log=" @!action-log
+        "&state=" @!system))
   (flush-replicant!)
   (🪐/set-ux! :ssr)
-  (reset! 🪐/online? true)
-  (reset! !online? true)
   (reset! !system nil)
   (reset! !id->sync-state nil)
   (reset! !action-log nil))
@@ -74,10 +79,10 @@
            #(run! (fn [sync-state] (render sync-state %4))
                   (vals @!id->sync-state)))
 
+
 (defn offline-capable [_ hiccup] hiccup)
 
 (defn offline-dispatch [dispatch-data actions]
-  #_
   (let [nexus          (nxr/get-registry)
         ux             (🪐/get-ux)
         client-ax?     #(🪐/client-handled? ux :nexus/actions nexus %)

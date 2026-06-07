@@ -2,7 +2,7 @@
   (:require
    [nextjournal.baseline :as k]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
-   #?(:clj [nextjournal.offworld.demo.ui.nested-grid.util :as ngu])
+   [nextjournal.offworld.demo.ui.nested-grid.util :as ngu]
    [nextjournal.offworld.demo.ui.holiday :as 🎄]
    [nexus.registry :as nxr]
    [nextjournal.offworld :as-alias 🪐]
@@ -38,7 +38,7 @@
   (fn [_ path]
     [[:effects/save path {:size-cache (volatile! {})}]]))
 
-#?(:clj (defn nested-grid [{:as      state
+(defn nested-grid [{:as      state
                     ::k/keys [stem path]
                     :keys    [row-tree column-tree overscan]
                     :or      {overscan 100}}]
@@ -100,5 +100,3 @@
                   (:id (last row-path)) " "
                   (:id (last col-path))
                   (🎄/get-icon stem)]))]))))
-   :cljs (defn nested-grid [& _]))
-

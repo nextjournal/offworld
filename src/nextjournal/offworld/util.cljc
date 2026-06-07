@@ -37,10 +37,11 @@
                   decode)))
 
 #?(:clj (defn read-action-log [{:keys [query-string]}]
+          (def query-string query-string)
           (some-> query-string
                   codec/form-decode
                   (get "action-log")
-                  decode)))
+                #_  decode)))
 
 (defn select-paths [m paths]
   (reduce #(assoc-in %1 %2 (get-in m %2)) {} paths))

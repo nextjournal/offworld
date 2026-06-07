@@ -15,7 +15,7 @@
 (r/set-dispatch!
  (fn [dispatch-data actions]
    (println actions)
-     (if @🪐/online?
+     (if js/navigator.onLine
        (nxr/dispatch system dispatch-data actions)
        (🌠/offline-dispatch dispatch-data actions))))
 
@@ -25,12 +25,19 @@
 (defn render! [state]
   (r/render root-el (ui/render (k/init-state state))))
 
-(defn start! []
+(defn ^:export start! []
   (js/console.log "CSR BUNDLE STARTING")
   (add-watch system ::render
              (fn [_ _ _ new-state]
                (render! new-state)))
   (render! @system))
+
+(js/console.log "CSR BUNDLE LOADED")
+
+(js/console.log  js/navigator.onLine)
+
+(when-not js/navigator.onLine
+  (🌠/go-offline!))
 
 (defn ^:dev/after-load after-load []
   (when (= :csr (🪐/get-ux))

@@ -3,9 +3,7 @@
    [nextjournal.offworld :as 🪐]
    nextjournal.offworld.demo.nexus
    nextjournal.offworld.demo.ui.holiday
-   nextjournal.offworld.demo.ui.nested-grid
-   nextjournal.offworld.demo.mapbox
-   nextjournal.offworld.demo.offline))
+   nextjournal.offworld.demo.ui.nested-grid))
 
 (defn main []
   (let [params (js/URLSearchParams. js/document.location.search)]
