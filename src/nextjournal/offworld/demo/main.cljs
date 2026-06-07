@@ -1,6 +1,7 @@
 (ns nextjournal.offworld.demo.main
   (:require
    [nextjournal.offworld :as 🪐]
+   [nextjournal.offworld.demo.offline :as 🌠]
    nextjournal.offworld.demo.nexus
    nextjournal.offworld.demo.ui.holiday
    nextjournal.offworld.demo.ui.nested-grid))

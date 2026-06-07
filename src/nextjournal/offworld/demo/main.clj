@@ -79,7 +79,8 @@
    :headers {"Content-Type" "text/plain"}
    :body    "ok"})
 
-(def csr-script   [:script {:type "module" :src "/js/csr.js"}])
+(def csr-script   [:script {:type "module" :src "/js/csr.js"
+                            :onload "nextjournal.offworld.demo.csr.start_BANG_()"}])
 (def csr-prefetch [:link {:rel "prefetch" :href "/js/csr.js"}])
 
 (defn index-page [csr?]
