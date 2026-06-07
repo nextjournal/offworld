@@ -32,17 +32,10 @@
   []
   #_(vreset! rdom/state {}))
 
-(defn load-csr! []
-  (let [s (js/document.createElement "script")]
-    (set! (.-src s) "/js/csr.js")
-    (set! (.-type s) "module")
-    (.appendChild js/document.head s)))
-
 (defn go-offline! []
   (js/console.log "GOING OFFLINE" 🪐/csr_bundle)
   (js/console.log (pr-str 🪐/csr_bundle))
-  (if-not 🪐/csr_bundle
-    (load-csr!)
+  (when 🪐/csr_bundle
     (let [nodes          (array-seq (js/document.querySelectorAll "[data-offworld-sync]"))
           sync-states    (for [node nodes]
                            (merge (ou/decode (.getAttribute node "data-offworld-sync"))
