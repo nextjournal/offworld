@@ -22,9 +22,9 @@
           (interpose "-")
           (apply str))))
 
-#?(:cljs
-   (nxr/register-placeholder! ::🌿/el
-     (fn [_ path-or-id]
+(nxr/register-placeholder! ::🌿/el ^::🪐/client
+  (fn [_ path-or-id]
+    #?(:cljs
        (js/document.getElementById
         (cond
           (string? path-or-id)     path-or-id

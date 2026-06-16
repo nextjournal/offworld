@@ -72,7 +72,6 @@
 
 (defc ^:export game [{::🌿/keys [path stem] :as state}]
   [:div.flex.flex-wrap.items-start.max-w-160
-   (println "PLATES " (pr-str (get-plates stem)))
    (for [x (get-plates stem)]
      (wrap-interest
       {:id    x
@@ -80,7 +79,6 @@
       (truck (🌿/+ state (conj path x) {:plate x}))))])
 
 (defc ^:export offline-game [& args]
-  (println (pr-str args))
   [:dialog {:style              {:position  "fixed"
                                  :top       "50%"
                                  :left      "50%"

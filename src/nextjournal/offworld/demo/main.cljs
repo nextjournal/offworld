@@ -17,6 +17,5 @@
 
 (defn main []
   (let [params (js/URLSearchParams. js/document.location.search)]
-    (js/console.log "SSR BUNDLE STARTING")
     (🪐/set-ux! (if (.has params "csr") :csr :ssr))
     (when-not js/goog.DEBUG (start-handoff!))))

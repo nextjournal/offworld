@@ -14,10 +14,9 @@
 
 (r/set-dispatch!
  (fn [dispatch-data actions]
-   (println actions)
-     (if js/navigator.onLine
-       (nxr/dispatch system dispatch-data actions)
-       (🌠/offline-dispatch dispatch-data actions))))
+   (if js/navigator.onLine
+     (nxr/dispatch system dispatch-data actions)
+     (🌠/offline-dispatch dispatch-data actions))))
 
 (defonce root-el
   (js/document.getElementById "app"))
@@ -26,15 +25,10 @@
   (r/render root-el (ui/render (🌿/init-state state))))
 
 (defn ^:export start! []
-  (js/console.log "CSR BUNDLE STARTING")
   (add-watch system ::render
              (fn [_ _ _ new-state]
                (render! new-state)))
   (render! @system))
-
-(js/console.log "CSR BUNDLE LOADED")
-
-(js/console.log  js/navigator.onLine)
 
 (when-not js/navigator.onLine
   (🌠/go-offline!))

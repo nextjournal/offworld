@@ -86,7 +86,6 @@
      dispatch-data
      actions)))
 
-
 #?(:cljs
    (defn divert* [payload js-data]
      (let [actions        (:actions payload)
@@ -97,7 +96,7 @@
                             :lifecycle (build-lifecycle-map js-data payload)
                             {})
            actions'       (pre-interpolate nexus dispatch-data actions)
-           the-ux             (get-ux)
+           the-ux         (get-ux)
            client-ax?     #(client-handled? the-ux :nexus/actions nexus %)
            client-fx?     #(client-handled? the-ux :nexus/effects nexus %)
            server-ax?     #(server-handled? the-ux :nexus/actions nexus %)
@@ -116,13 +115,10 @@
          (pos? (count server-payload))
          (🪶/assoc :server-payload (🪶/assoc payload :actions (-> server-payload
                                                                   (with-meta (meta actions'))
-                                                                  #_   📈/propose!)))))))
+                                                                  #_📈/propose!)))))))
 
 #?(:cljs
    (defn ^:export divert [payload-arg js-data]
-     (js/console.log "csrrrr" csr_bundle)
-     (js/console.log "nav" js/navigator.onLine)
-     (js/console.log "divert: online? " @online?)
      (let [payload        (cond-> payload-arg (string? payload-arg) deserialize-fn)
            diversion      (divert* payload js-data)
            client-effects (:client-effects diversion)
@@ -212,5 +208,4 @@
     `(do
        (defn ~sym ~@decls)
        #_(swap! registry assoc-in [:render-fn ~k] #?(:clj  (var ~sym)
-                                                     :cljs ~sym))
-       )))
+                                                     :cljs ~sym)))))

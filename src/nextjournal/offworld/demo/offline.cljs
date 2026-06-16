@@ -33,8 +33,6 @@
   #_(vreset! rdom/state {}))
 
 (defn go-offline! []
-  (js/console.log "GOING OFFLINE" 🪐/csr_bundle)
-  (js/console.log (pr-str 🪐/csr_bundle))
   (when 🪐/csr_bundle
     (let [nodes          (array-seq (js/document.querySelectorAll "[data-offworld-sync]"))
           sync-states    (for [node nodes]
@@ -45,7 +43,6 @@
                                    (reduce #(assoc-in %1 %2 (get-in stem %2)) acc select-paths))
                                  {}
                                  sync-states)]
-      (println (pr-str sync-states))
       (🪐/set-ux! :csr)
       (flush-replicant!)
       (reset! !id->sync-state id->sync-state)
@@ -53,7 +50,6 @@
       (doall (map render sync-states (repeat offline-stem))))))
 
 (defn go-online! []
-  (js/console.log "GOING ONLINE")
   (js/fetch
    (str "/offworld-go-online"
         "?action-log=" @!action-log

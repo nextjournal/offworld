@@ -5,7 +5,6 @@
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
    [nextjournal.offworld :as-alias 🪐]
    nextjournal.offworld.demo.mapbox
-   nextjournal.offworld.demo.offline
    nextjournal.offworld.demo.scan))
 
 (defn get-node [ctx]
@@ -58,9 +57,7 @@
    :node/hide-popover     (fn hide-popover
                             ([ctx _] (.hidePopover (get-node ctx)))
                             ([ctx _ node] (.hidePopover node)))
-   :node/show-modal       (fn [ctx]
-                           #?(:cljs (js/console.log (get-node ctx)))
-                            (.showModal (get-node ctx)))
+   :node/show-modal       (fn [ctx] (.showModal (get-node ctx)))
    :browser/alert         (fn [_ _ s] #?(:cljs (js/alert s)))
    :node/set-checked      (fn [ctx _ node value]
                             (set! (.-checked (or node (get-node ctx))) value))
