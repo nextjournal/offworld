@@ -34,8 +34,11 @@
        :csr nil
        :ssr (.get memories node))))
 
-#?(:cljs (def serialize-fn ou/encode))
-#?(:cljs (def deserialize-fn ou/decode))
+#?(:cljs (def ^:dynamic encode-fn ou/encode))
+#?(:cljs (def ^:dynamic decode-fn ou/decode))
+
+#?(:cljs (defn register-encode-fn! [f] (set! encode-fn f)))
+#?(:cljs (defn register-decode-fn! [f] (set! decode-fn f)))
 
 (declare dispatch!)
 
@@ -119,7 +122,7 @@
 
 #?(:cljs
    (defn ^:export divert [payload-arg js-data]
-     (let [payload        (cond-> payload-arg (string? payload-arg) deserialize-fn)
+     (let [payload        (cond-> payload-arg (string? payload-arg) decode-fn)
            diversion      (divert* payload js-data)
            client-effects (:client-effects diversion)
            server-payload (:server-payload diversion)
@@ -128,13 +131,13 @@
          (when client-effects
            (nxr/dispatch (atom {}) dispatch-data client-effects))
          (when server-payload
-           (serialize-fn server-payload))))))
+           (encode-fn server-payload))))))
 
 #?(:cljs
    (defn dispatch! [url actions & {:keys [event extra-payload trigger]}]
      (when-let [{:keys [server-payload client-effects]}
                 (divert* {:actions actions :trigger trigger} event)]
-       (let [d*-json   (js/JSON.stringify #js {:offworld (serialize-fn (merge server-payload extra-payload))})
+       (let [d*-json   (js/JSON.stringify #js {:offworld (encode-fn (merge server-payload extra-payload))})
              query-url (str url "?datastar=" (js/encodeURIComponent d*-json))]
          (js/fetch query-url #js {:method "GET"})))))
 
