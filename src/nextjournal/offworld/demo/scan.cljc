@@ -1,6 +1,6 @@
 (ns nextjournal.offworld.demo.scan
   (:require
-   [nextjournal.baseline :as k]
+   [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld :as 🪐 :refer [defc]]
    [nexus.registry :as nxr]))
 
@@ -20,17 +20,17 @@
     [[:effects/save [::scans plate] :canceled]]))
 
 (defn get-plates
-  {::k/paths #{[::plates]}}
+  {::🌿/paths #{[::plates]}}
   [stem]
   (::plates stem))
 
 (defn get-scans
-  {::k/paths #{[::scans]}}
+  {::🌿/paths #{[::scans]}}
   [stem]
   (::scans stem))
 
 (defn get-scan
-  {::k/deps #{`get-scans}}
+  {::🌿/deps #{`get-scans}}
   [stem plate]
   (some-> stem get-scans (get plate)))
 
@@ -56,7 +56,7 @@
     :scanned "✅"
     :canceled "❌"))
 
-(defn truck [{:keys [plate] ::k/keys [stem]}]
+(defn truck [{:keys [plate] ::🌿/keys [stem]}]
   (let [{::🪐/keys [offline? last-server-stem]}
         stem
         scan        (get-scan stem plate)
@@ -70,14 +70,14 @@
      [:label "Client: " (status-icon scan)]
      [:label "Server: " (status-icon server-scan)]]))
 
-(defc ^:export game [{::k/keys [path stem] :as state}]
+(defc ^:export game [{::🌿/keys [path stem] :as state}]
   [:div.flex.flex-wrap.items-start.max-w-160
    (println "PLATES " (pr-str (get-plates stem)))
    (for [x (get-plates stem)]
      (wrap-interest
       {:id    x
        :label "Click to \"scan\""}
-      (truck (k/+ state (conj path x) {:plate x}))))])
+      (truck (🌿/+ state (conj path x) {:plate x}))))])
 
 (defc ^:export offline-game [& args]
   (println (pr-str args))

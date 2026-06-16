@@ -8,7 +8,7 @@
         [nexus.registry :as nxr]])
    [datastar :as-alias 🚀]
    [nexus.core :as nexus]
-   [nextjournal.baseline :as-alias k]
+   [nextjournal.offworld.stem :as-alias 🌿]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.util :as ou])
   #?(:cljs (:require-macros

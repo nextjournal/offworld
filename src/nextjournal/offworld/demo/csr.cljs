@@ -1,7 +1,7 @@
 (ns nextjournal.offworld.demo.csr
   (:require
    [replicant.dom :as r]
-   [nextjournal.baseline :as k]
+   [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld.demo.ui :as ui]
    [nextjournal.offworld.demo :as demo]
    [nextjournal.offworld :as 🪐]
@@ -23,7 +23,7 @@
   (js/document.getElementById "app"))
 
 (defn render! [state]
-  (r/render root-el (ui/render (k/init-state state))))
+  (r/render root-el (ui/render (🌿/init-state state))))
 
 (defn ^:export start! []
   (js/console.log "CSR BUNDLE STARTING")

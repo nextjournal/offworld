@@ -2,7 +2,7 @@
   (:require
    [nextjournal.offworld :as 🪐]
    [nexus.registry :as nxr]
-   [nextjournal.baseline :as k]
+   [nextjournal.offworld.stem :as 🌿]
    [datastar :as-alias 🚀])
   #?(:cljs
      (:require-global [maplibregl.Map :as Map])))
@@ -29,10 +29,10 @@
 
 (defn mapbox [& {:as      state
                  :keys    [id]
-                 ::k/keys [path]
+                 ::🌿/keys [path]
                  :or      {id "offworld-mapbox-demo"}}]
   (let [{:keys [center]
-         :or   {center [12.4 51.52]}} (k/local state)]
+         :or   {center [12.4 51.52]}} (🌿/local state)]
   [:div
    [:div {:id                 id
           :data-ignore-morph  true

@@ -1,7 +1,7 @@
 (ns nextjournal.offworld.demo.load-builder
   (:require
    [nextjournal.offworld.util]
-   [nextjournal.baseline :as k :refer [defq]]))
+   [nextjournal.offworld.stem :as 🌿 :refer [defq]]))
 
 (defn ->v [x] (if (vector? x) x [x]))
 

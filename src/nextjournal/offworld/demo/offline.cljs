@@ -2,7 +2,7 @@
   (:require
    [clojure.string :as str]
    [nextjournal.offworld.util :as ou]
-   [nextjournal.baseline :as k]
+   [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld :as 🪐]
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
@@ -16,15 +16,15 @@
   (let [[ns-part fn-part] (str/split s "/")]
     (js/goog.getObjectByName (str ns-part "." (str/replace fn-part "-" "_")))))
 
-(defn render [{::k/keys [stem path config]
+(defn render [{::🌿/keys [stem path config]
                :keys    [render-fn dom-node]}
               & [new-stem]]
   (let [render-fn (str->fn render-fn)
-        state     {::k/stem (merge (or new-stem stem)
+        state     {::🌿/stem (merge (or new-stem stem)
                                    {::🪐/offline?         true
                                     ::🪐/last-server-stem stem})}]
         (rdom/render (.-firstElementChild dom-node)
-                     (render-fn (k/+ state path config)))))
+                     (render-fn (🌿/+ state path config)))))
 
 (defn flush-replicant!
   "Clear replicant's vdom - otherwise, any morphs done
@@ -41,7 +41,7 @@
                            (merge (ou/decode (.getAttribute node "data-offworld-sync"))
                                   {:dom-node node}))
           id->sync-state (zipmap (map :id sync-states) sync-states)
-          offline-stem   (reduce (fn [acc {:keys [select-paths] ::k/keys [stem]}]
+          offline-stem   (reduce (fn [acc {:keys [select-paths] ::🌿/keys [stem]}]
                                    (reduce #(assoc-in %1 %2 (get-in stem %2)) acc select-paths))
                                  {}
                                  sync-states)]

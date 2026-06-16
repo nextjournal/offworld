@@ -1,11 +1,11 @@
-(ns nextjournal.baseline
+(ns nextjournal.offworld.stem
   (:refer-clojure :exclude [+])
   #?(:cljs
      (:require-macros
-      [nextjournal.baseline :refer [trace trace-me defq]]))
+      [nextjournal.offworld.stem :refer [trace trace-me defq]]))
   (:require
    #?(:clj [clojure.string :as str]) 
-   [nextjournal.baseline :as-alias k]
+   [nextjournal.offworld.stem :as-alias 🌿]
    [nextjournal.offworld :as-alias 🪐]
    [nexus.registry :as nxr]
    #_(:clj [nextjournal.offworld.util :as ou])))
@@ -23,7 +23,7 @@
           (apply str))))
 
 #?(:cljs
-   (nxr/register-placeholder! ::k/el
+   (nxr/register-placeholder! ::🌿/el
      (fn [_ path-or-id]
        (js/document.getElementById
         (cond
@@ -31,11 +31,11 @@
           (sequential? path-or-id) (id path-or-id))))))
 
 (defn init-state [state]
-  (merge state {::k/stem state}))
+  (merge state {::🌿/stem state}))
 
 (defn local [m]
-  (let [stem (::k/stem m)
-        path (::k/path m)]
+  (let [stem (::🌿/stem m)
+        path (::🌿/path m)]
     (get-in stem path)))
 
 (defn +
@@ -43,7 +43,7 @@
   - We pass a single map to a render-fn, i.e. replicant's \"state\".
   - We include a domain in the state."
   [m path & {:as config-state}]
-  (let [stem (::k/stem m)]
+  (let [stem (::🌿/stem m)]
     (merge config-state
            {::stem stem
             ::path (if (sequential? path)
@@ -73,7 +73,7 @@
               (update :stack conj f)))))
 
 (defn static-trace-push! [sym m]
-  (let [deps (::k/deps m)]
+  (let [deps (::🌿/deps m)]
     (cond-> *trace*
       deps
       (swap! update :static assoc sym (if (coll? deps) (into {} deps) #{deps})))))
@@ -115,7 +115,7 @@
                                         (map? (last decls)))
                                  (last decls)
                                  attr-map)
-           impl                (symbol (str sym "--nextjournal--baseline--impl"))
+           impl                (symbol (str sym "--nextjournal--stem--impl"))
            k                   (str (ns-name *ns*) "/" sym)]
        `(do
           (defn ~sym ~@decls)

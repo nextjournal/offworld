@@ -13,7 +13,7 @@
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld :as 🪐]
    [nextjournal.offworld.util :as ou]
-   [nextjournal.baseline :as k]
+   [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld.demo :as demo])
   (:import (java.nio.file Files)))
 
@@ -67,7 +67,7 @@
     (sse-message
      {:event "datastar-patch-elements"
       :lines [["elements" (-> new-state
-                              k/init-state
+                              🌿/init-state
                               ui/render
                               🪐/replicant->d*
                               rstr/render)]]}))))
@@ -96,7 +96,7 @@
          (if csr?
            [:body [:main {:id "app"}]]
            [:body {:data-init "@get('session')"}
-            (-> @system k/init-state ui/render 🪐/replicant->d*)
+            (-> @system 🌿/init-state ui/render 🪐/replicant->d*)
             [:script {:src "/js/ssr.js"}]])])))
 
 (defn index-handler [req]

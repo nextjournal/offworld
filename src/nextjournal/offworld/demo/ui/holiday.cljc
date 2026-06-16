@@ -1,7 +1,7 @@
 (ns nextjournal.offworld.demo.ui.holiday
   (:require
    [nexus.registry :as nxr]
-   [nextjournal.baseline :as k :refer [defq]]
+   [nextjournal.offworld.stem :as 🌿 :refer [defq]]
    [nextjournal.offworld :as-alias 🪐]))
 
 (def day->icon
@@ -28,7 +28,7 @@
 (nxr/register-action! ::season
   (fn [_ s] [[:effects/save [::path :to :season] (keyword s)]]))
 
-(defn get-day {::k/deps #{`get-season}} [stem]
+(defn get-day {::🌿/deps #{`get-season}} [stem]
   (season->holiday (get-season stem)))
 
 (nxr/register-action! ::randomize ^::🪐/client
@@ -41,7 +41,7 @@
          [:effects/save path :spring]]
         [[:effects/save path rand-season]]))))
 
-(defn get-icon {::k/deps #{`get-holiday-mode? `get-day}} [stem]
+(defn get-icon {::🌿/deps #{`get-holiday-mode? `get-day}} [stem]
   (when (get-holiday-mode? stem)
     (get day->icon (get-day stem))))
 
@@ -61,7 +61,7 @@
    [:option {:value :fall} "Fall"]
    [:option {:value :winter} "Winter"]])
 
-(defn randomize-button [{::k/keys [stem]}]
+(defn randomize-button [{::🌿/keys [stem]}]
   [:button {:on {:click [[::randomize
                           [:event/key-modifiers]
                           (get-season stem)]]}}

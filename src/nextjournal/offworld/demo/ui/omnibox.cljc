@@ -2,7 +2,7 @@
   (:require
    [clojure.string :as str]
    [nexus.registry :as nxr]
-   [nextjournal.baseline :as k]
+   [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.demo.filters :as filters]
    [nextjournal.offworld.demo.ui.holiday :as 🎄]
@@ -13,41 +13,41 @@
           mods  :key-modifiers}]
     (cond
       (= key "Escape")    [[:event/prevent-default]
-                           [:node/hide-popover [::k/el popover-id]]
-                           [:input/clear [::k/el popover-id]]
+                           [:node/hide-popover [::🌿/el popover-id]]
+                           [:input/clear [::🌿/el popover-id]]
                            [:effects/save (conj path :value) ""]]
       (= key "ArrowDown") [[:event/prevent-default]
                            (when choice-id
-                             [:node/focus [::k/el choice-id]])]
+                             [:node/focus [::🌿/el choice-id]])]
       (= key "Enter")     [[:event/prevent-default]
-                           [:node/hide-popover [::k/el popover-id]]
-                           [:input/clear [::k/el anchor-id]]
+                           [:node/hide-popover [::🌿/el popover-id]]
+                           [:input/clear [::🌿/el anchor-id]]
                            [:effects/save (conj path :value) ""]
                            [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
       (and (mods :shift)
-           (= key "Tab")) [[:node/hide-popover [::k/el popover-id]]]
+           (= key "Tab")) [[:node/hide-popover [::🌿/el popover-id]]]
       :else               nil)))
 
 (nxr/register-action! ::ob/keydown-choice-item ^::🪐/client
   (fn [_ {:keys [key popover-id prev-id next-id choice-id anchor-id filters-to-add path]}]
     (case key
       "Escape"    [[:event/prevent-default]
-                   [:node/hide-popover [::k/el popover-id]]
+                   [:node/hide-popover [::🌿/el popover-id]]
                    [:node/blur]]
       "Enter"     [[:event/prevent-default]
-                   [:node/hide-popover [::k/el popover-id]]
-                   [:node/blur [::k/el anchor-id]]
-                   [:node/set-checked [::k/el choice-id] true]
+                   [:node/hide-popover [::🌿/el popover-id]]
+                   [:node/blur [::🌿/el anchor-id]]
+                   [:node/set-checked [::🌿/el choice-id] true]
                    [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
       "ArrowUp"   [[:event/prevent-default]
                    (if prev-id
-                     [:node/focus [::k/el prev-id]]
-                     [:node/focus [::k/el anchor-id]])]
+                     [:node/focus [::🌿/el prev-id]]
+                     [:node/focus [::🌿/el anchor-id]])]
       "ArrowDown" [[:event/prevent-default]
                    (when next-id
-                     [:node/focus [::k/el next-id]])]
+                     [:node/focus [::🌿/el next-id]])]
       "Tab"       [(when-not next-id
-                     [:node/hide-popover [::k/el popover-id]])]
+                     [:node/hide-popover [::🌿/el popover-id]])]
       nil)))
 
 (nxr/register-action! ::ob/add-filter ^::🪐/server
@@ -94,7 +94,7 @@
   (str parent-id index))
 
 (defn anchor [{:keys    [anchor-id popover-id filters-to-add]
-               ::k/keys [stem path]}]
+               ::🌿/keys [stem path]}]
   [:input
    {:id          anchor-id
     :type        "text"
@@ -104,7 +104,7 @@
                   "bg-white"]
     :style       {:anchor-name (str "--" anchor-id)}
     :placeholder (str "Filter..." (🎄/get-icon stem))
-    :on          {:focus   [[:node/show-popover [::k/el popover-id]]]
+    :on          {:focus   [[:node/show-popover [::🌿/el popover-id]]]
                   :input   [[:effects/save (conj path :value) [:event.target/value]]]
                   :keydown [[::keydown-input
                              {:choice-id      (choice-id popover-id 0)
@@ -116,7 +116,7 @@
                               :popover-id     popover-id}]]}}])
 
 (defn popover [{:keys    [choices filters-to-add filters anchor-id popover-id]
-                ::k/keys [path]}]
+                ::🌿/keys [path]}]
   (let [child-indices (into [] (range (count (concat filters-to-add choices))))]
     [:div.w-full.p-1
      {:id      popover-id
@@ -177,7 +177,7 @@
           (range (count choices)))]))
 
 (defn filter-pill [{{:keys [label] :as this-filter}
-                    :filter ::k/keys [path]}]
+                    :filter ::🌿/keys [path]}]
   [:li.flex.ps-1.rounded-sm.focus-within:outline-4.outline-red-400.text-xs
    [:span.flex.mt-1.focus:outline-none
     [:div.w-3.h-3.text-slate-400 icon-filter]]
@@ -189,21 +189,21 @@
 
 (defn omnibox [{:as      state
                 :keys    [choices]
-                ::k/keys [stem path]}]
+                ::🌿/keys [stem path]}]
   (let [{:keys
          [filters value]} (get-in stem path)
         config            (merge
                            {:choices    choices
                             :filters    filters
-                            :popover-id (k/id path [:popover])
-                            :anchor-id  (k/id path [:anchor])}
+                            :popover-id (🌿/id path [:popover])
+                            :anchor-id  (🌿/id path [:anchor])}
                            (when-not (str/blank? value)
                              {:filters-to-add
                               [(filters/text->filter value)]}))]
     [:div
-     (anchor (k/+ state path config))
-     (popover (k/+ state path config))
+     (anchor (🌿/+ state path config))
+     (popover (🌿/+ state path config))
      (->> filters
           (map #(do {:filter %}))
-          (map k/+ (repeat state) (repeat path))
+          (map 🌿/+ (repeat state) (repeat path))
           (map filter-pill))]))

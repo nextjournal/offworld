@@ -10,7 +10,7 @@
    [nextjournal.offworld.demo.ui :as ui]
    [nextjournal.offworld.demo.clerk-viewers :as viewers]
    [nextjournal.offworld :as 🪐]
-   [nextjournal.baseline :as k]
+   [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld.demo.biz :as biz]
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
@@ -85,7 +85,7 @@ In reagent, we often use React's `ref`[^react-ref] to access the html element th
 
 For instance, re-com's nested-grid stores a reference to its dom-node in a local reagent atom[^rc-grid-ref], then uses a reagent lifecycle method to react to that node's scroll-state and flex-sizing. This reaction necessary to determine the right virtualization "window", while still remaining lightweight and compatible by leaving scroll and sizing "uncontrolled".
 
-We can still model this behavior, even without a component abstraction. Replicant passes the target dom-node to placeholder- and action-handlers. That's enough for the most basic features - for instance, our nested-grid demo gets the same scroll-state using placeholders, and then updates `::k/local` state to trigger a re-render [^ng-scroll].
+We can still model this behavior, even without a component abstraction. Replicant passes the target dom-node to placeholder- and action-handlers. That's enough for the most basic features - for instance, our nested-grid demo gets the same scroll-state using placeholders, and then updates `::🌿/local` state to trigger a re-render [^ng-scroll].
 
 We might also need to do actor-like messaging, where one element can observe another element's browser-local state, and act on it. But again, we can skip any component model and just use the DOM. We make a dom-node addressable the old fashioned way, by rendering an html id. For instance, our mapbox render-fn declares the id of one element within the action handler of another[^component-id-passing]. This way, our hiccup describes how the `:button` "acts" on the mapbox `:div`, and the only abstraction we need is a let-binding.
 
@@ -93,7 +93,7 @@ Using the html id, the action handler gets the node from a standard DOM query, t
 
 This gives us a minimal "component lifecycle" pattern. Since we articulate it using portable data (action-vectors), the pattern works in the exact same way, whether in SSR, CSR or hybrid offline-mode. In SSR mode, datastar's morph does the "mount" and "unmount" behavior, while in CSR, replicant's vdom reconciler does it.
 
-If we need to persist some of our "component's" underlying state across mounts and unmounts (or, with SSR, across sessions), we can dispatch an action that both stores the essential state and mutates the object[^mapbox-reinit]. That way, we can reinitialize the "component" to its last-known state whenever it mounts. This depends on our `::k/local` pattern, where we assign a unique `::k/path` to each meaningful "component" of our UI. That means, to build a persistent "component" with javascript batteries included, all you need is a path and an id. That sounds like two things, but essentially they are one, since the id can be a pure derivation of the path.
+If we need to persist some of our "component's" underlying state across mounts and unmounts (or, with SSR, across sessions), we can dispatch an action that both stores the essential state and mutates the object[^mapbox-reinit]. That way, we can reinitialize the "component" to its last-known state whenever it mounts. This depends on our `::🌿/local` pattern, where we assign a unique `::🌿/path` to each meaningful "component" of our UI. That means, to build a persistent "component" with javascript batteries included, all you need is a path and an id. That sounds like two things, but essentially they are one, since the id can be a pure derivation of the path.
 
 Id passing lets us express the concept of "this", without adopting any special architecture. It keeps our mental model close to the browser, enabling synergy with modern browser APIs.
 
@@ -333,22 +333,22 @@ Here's what a typical callsite looks like:
 (hover-alert
  {:level     :warn
   :label     "Construction zone"
-  ::k/path   [::k/local :stations :dresden :alerts 0]
-  ::k/domain {:biz/stations [:hanover :dresden]
+  ::🌿/path   [::🌿/local :stations :dresden :alerts 0]
+  ::🌿/domain {:biz/stations [:hanover :dresden]
               :biz/problems #{{:id       0
                                :title    "Construction zone"
                                :severity :warn}}}
-  ::k/local  {:stations
+  ::🌿/local  {:stations
               {:dresden
                {:alerts {0 {:hover? true}}}}}})
 ```
 
-`::k/domain` and `::k/local` come directly out of the replicant system-state. `::k/path` comes from the caller. Here's a more detailed walkthrough:
+`::🌿/domain` and `::🌿/local` come directly out of the replicant system-state. `::🌿/path` comes from the caller. Here's a more detailed walkthrough:
 
 #### Receiving "local" state
 ```clojure
 (defn hover-alert [{:keys    [level label]
-                    ::k/keys [path local]}]
+                    ::🌿/keys [path local]}]
   (let [{:keys [hover?]} (get local path)]
     [:div {:on {:mouse-over [[:save (conj path :hover?) true]]
                 :mouse-out  [[:save (conj path :hover?) false]]}}
@@ -357,7 +357,7 @@ Here's what a typical callsite looks like:
              :style (when hover? {:border "2px dashed black"})})]))
 ```
 
-Here we wrap the basic `alert` with local state management. When the user mouses over the wrapper div, our `:save` action updates a value within replicant's system state, under `::k/local`. This causes replicant to re-render. It calls `hover-alert` again, and this time it destructures `hover?` to pass a style map the the `alert` fn.
+Here we wrap the basic `alert` with local state management. When the user mouses over the wrapper div, our `:save` action updates a value within replicant's system state, under `::🌿/local`. This causes replicant to re-render. It calls `hover-alert` again, and this time it destructures `hover?` to pass a style map the the `alert` fn.
 
 #### Injecting "local" state, querying "domain" state
 
@@ -366,13 +366,13 @@ Here we wrap the basic `alert` with local state management. When the user mouses
 (clerk/code
  "(defn station-panel [{:as     state
                        :keys    [station]
-                       ::k/keys [domain local path]}]
+                       ::🌿/keys [domain local path]}]
    (for [{:keys [id title severity]}
          (biz/get-problems domain {:station station})]
      (hover-alert {:label    title
                    :level    severity
-                   ::k/path  (into path [:alerts id])
-                   ::k/local local})))")
+                   ::🌿/path  (into path [:alerts id])
+                   ::🌿/local local})))")
 ```
 
 Here's a "business" component, translating domain semantics into UI semantics.
@@ -386,18 +386,18 @@ This `main-view` just returns its children, with injections:
 
 ```clojure
 (defn main-view' [{:as      state
-                   ::k/keys [domain local path]
+                   ::🌿/keys [domain local path]
                    :or      {path []}}]
   (station-panel
    {:station   :dresden
-    ::k/local  local
-    ::k/path   (into path [:stations :trucks])
-    ::k/domain domain})
+    ::🌿/local  local
+    ::🌿/path   (into path [:stations :trucks])
+    ::🌿/domain domain})
   (station-panel
    {:station   :hanover
-    ::k/local  local
-    ::k/path   (into path [:stations :trains])
-    ::k/domain domain}))
+    ::🌿/local  local
+    ::🌿/path   (into path [:stations :trains])
+    ::🌿/domain domain}))
 ```
 
 #### Helpers
@@ -408,7 +408,7 @@ For instance, here's that last component rewritten.
 (defn main-view [state]
   (for [k [:dresden :hanover]]
     (station-panel
-     (k/+ state [:stations k]
+     (🌿/+ state [:stations k]
        {:station k}))))
 ```
 
@@ -417,16 +417,16 @@ Similar to concept A, but inside-out:
 
 ```clojure
 (hover-alert
- {::k/config    {:label "Construction zone" :level :warn}
-  ::k/local     {:stations
+ {::🌿/config    {:label "Construction zone" :level :warn}
+  ::🌿/local     {:stations
                  {:dresden
                   {:alerts {0 {:hover? true}}}}}
-  ::k/path      [::k/local :stations :dresden :alerts 0]
+  ::🌿/path      [::🌿/local :stations :dresden :alerts 0]
   :biz/problems #{{:id 0 :severity :warn :title "Construction zone"}}
   :biz/stations [:hanover :dresden]})
 ```
 #### Goes against Replicant ergonomics
-This won't feel like a "replicant" render-fn, since we don't destructure top-level keys to decide how to render. Instead, we get them from `::k/config`. Rewriting a "stateless" fn (like `alert`) into one that uses local state (like `hover-alert`) is complicated, since we have to destructure the arg differently.
+This won't feel like a "replicant" render-fn, since we don't destructure top-level keys to decide how to render. Instead, we get them from `::🌿/config`. Rewriting a "stateless" fn (like `alert`) into one that uses local state (like `hover-alert`) is complicated, since we have to destructure the arg differently.
 
 #### Query the domain: Easy! 
 Domain keys are top-level, not in a subtree. Just call `(get-something state)` to query the domain.
@@ -442,7 +442,7 @@ This way, a callsite looks like:
 
 ```clojure
 (hover-alert
- {::k/path      [::k/local :stations :dresden :alerts 0]
+ {::🌿/path      [::🌿/local :stations :dresden :alerts 0]
   :biz/problems #{{:id 0 :severity :warn :title "Construction zone"}}
   :biz/stations [:hanover :dresden]
   :label        "Construction zone"
@@ -518,23 +518,23 @@ Every render-fn will need to do exactly this job. We can extract the work to a h
 (hover-alert
  {:label   "Construction zone"
   :level   :warn
-  ::k/path [::k/local :stations :dresden 0]
-  ::k/stem {:biz/stations [:hanover :dresden]
+  ::🌿/path [::🌿/local :stations :dresden 0]
+  ::🌿/stem {:biz/stations [:hanover :dresden]
             :biz/problems #{{:id 0 :severity :warn :title "Construction zone"}}
-            ::k/local     {:stations
+            ::🌿/local     {:stations
                            {:dresden
                             {:alerts {0 {:hover? true}}}}}}})
 ```
 
 This looks more complicated, but it makes for nice ergonomics. 
 
-- `::k/stem`[^stem-name]:
+- `::🌿/stem`[^stem-name]:
   - It's just the value of the replicant (sy)stem, with no restructuring.
   - It's not called "domain" because it contains more than that.
   - For "domain" queries, just pass `stem`: `(biz/get-problems stem)`
-  - For "local" state, use a library getter: `(k/local state)` or `(k/local stem)`
-- `::k/path`: 
-  - Paths must begin with `::k/local`. Our passing helper can handle that for us, so we only declare the meaningful part of the path.
+  - For "local" state, use a library getter: `(🌿/local state)` or `(🌿/local stem)`
+- `::🌿/path`: 
+  - Paths must begin with `::🌿/local`. Our passing helper can handle that for us, so we only declare the meaningful part of the path.
   - We don't "accumulate" paths by default. The user can just do `conj`, or we'll provide another helper.
 
 ### State concept E: Close over the replicant state
@@ -551,8 +551,8 @@ We can still substitute the value in tests, using `with-redefs`.
 
 ```clojure
 (defn hover-alert [{:keys    [level label path]
-                    ::k/keys [path]}]
-  (let [{:keys [hover?]} (get k/*stem* path)]
+                    ::🌿/keys [path]}]
+  (let [{:keys [hover?]} (get 🌿/*stem* path)]
     [:div {:on {:mouse-over [[:save (conj path :hover?) true]]
                 :mouse-out  [[:save (conj path :hover?) false]]}}
      (alert {:level level
@@ -561,12 +561,12 @@ We can still substitute the value in tests, using `with-redefs`.
 
 (defn station-panel [{:as      state
                       :keys    [station]
-                      ::k/keys [path]}]
+                      ::🌿/keys [path]}]
   (for [{:keys [id title severity]}
-        (biz/get-problems k/*stem* {:station station})]
+        (biz/get-problems 🌿/*stem* {:station station})]
     (hover-alert {:label    title
                   :level    severity
-                  ::k/path  (into path [:alerts id])})))
+                  ::🌿/path  (into path [:alerts id])})))
 ```
 
 ## How do we model a render-fn's "local" state?
@@ -574,7 +574,7 @@ We're considering ways to reserve a subtree of the system state for a particular
 
 This path could be fully automated[^membrane], but that's too magical for our taste. Instead, we'll declare the path explicitly within a render-fn's callsite:
 
-`(ui/main-view {::k/path [:biz/vehicle :ui/panel 25]})`
+`(ui/main-view {::🌿/path [:biz/vehicle :ui/panel 25]})`
 
 A path joins over business domain, ui config and ui nesting. It says: "*this* business fact, displayed *this* way, in *this* location." In practice, paths could be more abstract, but I think they carry this essential meaning.
 
@@ -591,7 +591,7 @@ we'll have two structures: the essential tree of render calls, and a second, red
 ### Path Concept A: Fully explicit paths
 When we call a render-fn, we decide its entire path:
 
-`(defn render-a [state] (render-b assoc state ::k/path [:biz/vehicle :ui/inspector 25]))`
+`(defn render-a [state] (render-b assoc state ::🌿/path [:biz/vehicle :ui/inspector 25]))`
 
 #### Is this PLOP?
 Only the current render-fn should have access to "local" state. 
@@ -601,8 +601,8 @@ do we take care to "name" it using an explicit path?
 This way, paths "accumulate" as the tree of render-fn calls gets deeper.
 
 ```clojure
-(defn render-a [{:as state :k/keys [path]}]
-  (render-b (assoc state ::k/path (concat path [:extra :stuff]))))
+(defn render-a [{:as state :🌿/keys [path]}]
+  (render-b (assoc state ::🌿/path (concat path [:extra :stuff]))))
 ```
 
 Although more complex to implement, we get a nice property:
@@ -616,10 +616,10 @@ We shouldn't really care about the shape of "local" state, because:
 
 All this makes the task of choosing a path feel less "inventive".
 
-### Path Concept C: Prepend every path with a library key: `[::k/local ...]`
+### Path Concept C: Prepend every path with a library key: `[::🌿/local ...]`
 This helps us avoid collisions while drilling and querying.
 If we also use Path Concept B, then the mental cost is low, since we never have to write the entire path by hand.
-A library getter can help resolve ambiguities: `(k/local state)` can do the perfect destructuring for us.
+A library getter can help resolve ambiguities: `(🌿/local state)` can do the perfect destructuring for us.
 
 ### Conclusion
 We could have Concepts A, B and C within the same app:
@@ -718,12 +718,12 @@ which depends on an *unregistered* query, `:day-missing`:
 ```clojure
 ^{::clerk/visibility {:code :hide}}
 (clerk/code
-"(k/register! :icon-error
-  #(when (k/q % :holiday-mode?)
-     (day->icon (k/q % :day-missing))))")
+"(🌿/register! :icon-error
+  #(when (🌿/q % :holiday-mode?)
+     (day->icon (🌿/q % :day-missing))))")
 
 ^{::clerk/visibility {:code :hide}}
-(clerk/code "(k/trace {::path {:to {:holiday-mode? true}}} ::icon-error)")
+(clerk/code "(🌿/trace {::path {:to {:holiday-mode? true}}} ::icon-error)")
 
 ^{::clerk/visibility {:code :hide}}
 (clerk/code
@@ -738,9 +738,9 @@ to illustrate exactly why our query needs to call it.
 We should also trace what render-fns were called to produce this error[^todo].
 
 #### Tracing "local" state[^todo]
-Our `k/+` function narrows the UI path, which we can also trace at runtime.
+Our `🌿/+` function narrows the UI path, which we can also trace at runtime.
 We should include this when tracing a render-fn, to know what subtrees 
-of `::k/local` are being used by the render-fn and its children.
+of `::🌿/local` are being used by the render-fn and its children.
 
 #### Tracing static dependencies[^todo]
 Looking back at the query handler registration, we added metadata to some
@@ -748,7 +748,7 @@ of the handler-fns:
 
 ```clojure
 ^{::clerk/visibility {:result :hide}}
-{::k/deps [:day :holiday-mode?]}
+{::🌿/deps [:day :holiday-mode?]}
 ```
 
 With this, our tooling can do static analysis on our codebase, answering a complementary question:
@@ -765,7 +765,7 @@ We might want to improve the concision with a macro, similar to deframe[^deframe
 
 
 ### Query Concept A: Minimalist registry
-The examples in *State Concept A* use a `k/q` function to query the domain state.
+The examples in *State Concept A* use a `🌿/q` function to query the domain state.
 As for modeling change, nexus can handle this - we'll just namespace our actions by the domain.
 Here's what query handlers look like:
 
@@ -776,44 +776,44 @@ Here's what query handlers look like:
                       :fall   :squash-day
                       :winter :gift-day})
 
-(clerk/code '(k/register! :season
+(clerk/code '(🌿/register! :season
   #(get-in % [:path :to :season] :spring)))
 
-(clerk/code '(k/register! :day
-  ^{::k/deps #{:season}}
-  #(season->holiday (k/q % :season))))
+(clerk/code '(🌿/register! :day
+  ^{::🌿/deps #{:season}}
+  #(season->holiday (🌿/q % :season))))
 
 (def day->icon {:gift-day   "🎁"
                 :egg-day    "🥚"
                 :bird-day   "🦃"
                 :squash-day "🎃"})
 
-(clerk/code '(k/register! :holiday-mode?
+(clerk/code '(🌿/register! :holiday-mode?
   #(get-in % [:path :to :holiday-mode?])))
 
-(clerk/code '(k/register! :icon
-  ^{::k/deps #{:day :holiday-mode?}}
+(clerk/code '(🌿/register! :icon
+  ^{::🌿/deps #{:day :holiday-mode?}}
   (fn [domain & {:keys [emphasize?]}]
-    (when (k/q domain :holiday-mode?)
-      (str (day->icon (k/q domain :day))
+    (when (🌿/q domain :holiday-mode?)
+      (str (day->icon (🌿/q domain :day))
            (when emphasize? "!"))))))
 		   
 {:nextjournal.clerk/visibility {:result :show}}
 ```
 
-To use one, pass a domain map to `k/q`, followed by a registered key and any extra args.
+To use one, pass a domain map to `🌿/q`, followed by a registered key and any extra args.
 
 ```clojure
 (clerk/code '(let [domain {:path {:to {:holiday-mode? true :season :winter}}}]
-  (k/q domain :icon)))
+  (🌿/q domain :icon)))
 ```
 
-You can also pass an entire system state. The handler will get passed the `::k/domain` subtree, 
+You can also pass an entire system state. The handler will get passed the `::🌿/domain` subtree, 
 followed by any extra args.
 
 ```clojure
-(clerk/code '(let [state {::k/domain {:path {:to {:holiday-mode? true :season :winter}}}}]
-  (k/q state :icon {:emphasize? true})))
+(clerk/code '(let [state {::🌿/domain {:path {:to {:holiday-mode? true :season :winter}}}}]
+  (🌿/q state :icon {:emphasize? true})))
 ```
 
 On the call side, these look like re-frame. However, following the replicant philosophy,
@@ -830,7 +830,7 @@ for looking up registry keys.
 ### Query Concept C: Queries all the way down
 Arguably, in top-down rendering, render-fns *are* queries.
 And we'd like to have tracing on render-fns too.
-Could we provide a single library macro, `k/defn`, that can declare both render-fns and queries?
+Could we provide a single library macro, `🌿/defn`, that can declare both render-fns and queries?
 
 ## Can we design an API for data grids in clerk & ductile?
 ## Can we build a `nested-grid` in cljs using replicant's "top-down" UI model?
@@ -1096,7 +1096,7 @@ decisions. Specifically, we can declare a domain query[^query] as a placeholder:
 (defn randomize-button [state]
   [:button {:on {:click [[::randomize
                           [:event/key-modifiers]
-                          [::k/q ::season]]]}}
+                          [::🌿/q ::season]]]}}
    "Randomize (shift-click to reset)"])
 ```
 
@@ -1119,14 +1119,14 @@ but what about the feature? Does it complement the rest, or is it a footgun?
 #### Problem: Is this pointless?
 The placeholder derives from a static "snapshot" of the system state. But, so does 
 the entire hiccup returned from our render-fn. We don't need a placeholder, because
-we can simply *call* `k/q`. Then our "summary" value will get serialized into the datastar expression.
+we can simply *call* `🌿/q`. Then our "summary" value will get serialized into the datastar expression.
 No need for any extra wiring.
 
 ```clojure
 (defn randomize-button [state]
   [:button {:on {:click [[::randomize
                           [:event/key-modifiers]
-                          (k/q state ::season)]]}}
+                          (🌿/q state ::season)]]}}
    "Randomize (shift-click to reset)"])
 ```
 
@@ -1148,7 +1148,7 @@ Here's an example:
 (nxr/register-action! ::randomize
   ^::🪐/client
   (fn [_ key-mods season]
-    (let [path        [::k/domain ::path :to :season]
+    (let [path        [::🌿/domain ::path :to :season]
           reset?      (contains? (set key-mods) :shift)
           rand-season (first (rand-nth (seq (dissoc season->holiday season))))
           new-season  (if reset? :spring rand-season)]
@@ -1159,7 +1159,7 @@ Here's an example:
 (defn randomize-button [state]
   [:button {:on {:click [[::randomize
                           [:event/key-modifiers]
-                          (k/q state ::season)]]}}
+                          (🌿/q state ::season)]]}}
    "Randomize (shift-click to reset)"])
 ```
 
@@ -1247,7 +1247,7 @@ We wrap a hiccup to make it "offline-capable"[^offline-a1]. For this, we declare
 
 - The render-fn that should keep running when offline.
 - A set of `:select-paths`, to subtrees of the server's `system`.
-- `::k/config`: the current named args passed into the render-fn.
+- `::🌿/config`: the current named args passed into the render-fn.
   - These won't change as long as the user is offline, since the caller is "disabled".
 
 Our server returns html as usual, but it stores the "selected" subtrees as an edn blob
@@ -1294,8 +1294,8 @@ We could treat some queries as "static" while offline - instead of running the q
 just return a snapshot value.
 
 ##### Idea: declare path guardrails for queries
-Just like we declare a static `::k/deps`, on a query[^static-deps], indicating the required sub-queries,
-we could declare a `::k/paths`[^static-paths], promising to use only certain subtrees of the state.
+Just like we declare a static `::🌿/deps`, on a query[^static-deps], indicating the required sub-queries,
+we could declare a `::🌿/paths`[^static-paths], promising to use only certain subtrees of the state.
 Then, we could infer an element's required state from the union of every query's paths.
 This could be a nice 80/20 solution, bottoming out on the simplest queries, which are analagous
 to re-frame's "layer-2 extractors"[^re-frame-l2].
@@ -1304,13 +1304,13 @@ Since static trace is available at runtime[^render-trace], we might get away wit
 
 ```clojure
 ^{::clerk/visibility {:code :hide}}
-(clerk/code "(🌠/offline-capable (truck-scanner (k/+ state my-path {:config true})))")
+(clerk/code "(🌠/offline-capable (truck-scanner (🌿/+ state my-path {:config true})))")
 ```
 
 [^static-deps]: [scan.cljc#L38](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld/demo/scan.cljc#L38)
 [^static-paths]: [scan.cljc#L28](https://github.com/nextjournal/offworld/blob/4d0c404b94bcd812e046f63eecbe7efad5c2a906/src/nextjournal/offworld/demo/scan.cljc#L28)
 [^re-frame-l2]: https://day8.github.io/re-frame/subscriptions/#the-four-layers
-[^render-trace]: [baseline.cljc#L129](https://github.com/nextjournal/offworld/blob/main/src/nextjournal/baseline.cljc#L129)
+[^render-trace]: [stem.cljc#L129](https://github.com/nextjournal/offworld/blob/main/src/nextjournal.offworld.stem.cljc#L129)
 
 ##### Tradeoff: this requires replicant on the client. We're back to a thick bundle.
 
@@ -1421,7 +1421,7 @@ And here's the full table spec:
 - https://github.com/starfederation/datastar/issues/482
 
 [^injection]: [Wikipedia: Dependency Injection](https://en.wikipedia.org/wiki/Dependency_injection)
-[^k-local]: See `k/local` in the [following section](#domain-state).
+[^k-local]: See `🌿/local` in the [following section](#domain-state).
 [^albert]: [Albert's notes: "Replican't"](https://github.com/nextjournal/ductile/blob/156bc27dba9980a0b6e8bbd4866f64f17b220ab4/notes/albert/replicant.md?plain=1#L16)
 [^flows-advanced]: [Flows: advanced topics](https://day8.github.io/re-frame/flows-advanced-topics)
 [^flows]: [Re-frame: Flows](https://day8.github.io/re-frame/Flows)
