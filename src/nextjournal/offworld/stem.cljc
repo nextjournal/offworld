@@ -4,23 +4,17 @@
      (:require-macros
       [nextjournal.offworld.stem :refer [trace trace-me defq]]))
   (:require
-   #?(:clj [clojure.string :as str]) 
-   [nextjournal.offworld.stem :as-alias 🌿]
+   #?(:clj [clojure.string :as str])
    [nextjournal.offworld :as-alias 🪐]
-   [nexus.registry :as nxr]
-   #_(:clj [nextjournal.offworld.util :as ou])))
+   [nextjournal.offworld.stem :as-alias 🌿]
+   [nextjournal.offworld.util :as ou]
+   [nexus.registry :as nxr]))
 
 (defn ->v [x] (if (sequential? x) (into [] x) [x]))
 
 (defn id
   ([path] (id path []))
-  ([path suffixes]
-   #_(->> (->v path)
-          (into suffixes)
-          flatten
-          (map name)
-          (interpose "-")
-          (apply str))))
+  ([path suffixes] (ou/encode (into (->v path) suffixes))))
 
 (nxr/register-placeholder! ::🌿/el ^::🪐/client
   (fn [_ path-or-id]
