@@ -1,5 +1,6 @@
 (ns nextjournal.offworld.demo.nexus
   (:require
+   [core.lite :as 🪶]
    [nexus.registry :as nxr]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
@@ -38,7 +39,7 @@
     (swap! system
            (fn [state]
              (reduce (fn [acc [path v default-coll]]
-                       (update-in acc path (fnil conj (or default-coll [])) v))
+                       (🪶/update-in acc path (fnil conj (or default-coll [])) v))
                      state path-vs)))))
 
 (reg-many
