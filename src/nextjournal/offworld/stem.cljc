@@ -1,5 +1,5 @@
 (ns nextjournal.offworld.stem
-  (:refer-clojure :exclude [+])
+  (:refer-clojure :exclude [+ >])
   #?(:cljs
      (:require-macros
       [nextjournal.offworld.stem :refer [trace trace-me defq]]))
@@ -27,22 +27,28 @@
 (defn init-state [state]
   (merge state {::🌿/stem state}))
 
-(defn local [m]
-  (let [stem (::🌿/stem m)
-        path (::🌿/path m)]
-    (get-in stem path)))
+(defn stem [state] (::🌿/stem state))
+
+(defn path
+  ([state] (path state []))
+  ([state suffix] (into (::🌿/path state [::🌿/local])
+                        (->v suffix))))
+
+(defn local [m] (get-in (stem m) (path m)))
+
+(defn >
+  ([m path]
+   (> m path {}))
+  ([m path config-state]
+   (merge config-state
+          {::🌿/stem (::🌿/stem m)
+           ::🌿/path (or path [::🌿/local])})))
 
 (defn +
-  "This fn signature standardizes our convention for writing render-fns.
-  - We pass a single map to a render-fn, i.e. replicant's \"state\".
-  - We include a domain in the state."
-  [m path & {:as config-state}]
-  (let [stem (::🌿/stem m)]
-    (merge config-state
-           {::stem stem
-            ::path (if (sequential? path)
-                     (into [::local] (filterv #(not= % ::local) path))
-                     [::local path])})))
+  ([m suffix]
+   (+ m suffix {}))
+  ([m suffix config-state]
+   (> m (into (::🌿/path m) (->v suffix)) config-state)))
 
 #?(:clj (defn explain-trace [{:keys [stack]}]
           (->> stack
