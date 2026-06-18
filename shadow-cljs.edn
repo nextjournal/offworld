@@ -16,14 +16,9 @@
                  :release     {:closure-defines {nextjournal.offworld.csr_bundle true}}}
           :cljs-lite-skill/build
           {:target      :browser
-           :modules     {:base {}
-                         :ssr  {:init-fn    nextjournal.offworld.demo.main/main
-                                :depends-on #{:base}}
-                         :csr  {:init-fn    nextjournal.offworld.demo.csr/start!
-                                :depends-on #{:base}}}
+           :modules     {:ssr {:init-fn nextjournal.offworld.demo.main/main}}
            :output-dir  ".cljs-lite-skill/manual"
            :build-hooks [(shadow.cljs.build-report/hook)]
-           :release     {:compiler-options {:lite-mode                 true
-                                            :elide-to-string           true
-                                            :cross-chunk-method-motion true}}}}}
+           :release     {:compiler-options {:lite-mode       true
+                                            :elide-to-string true}}}}}
 
