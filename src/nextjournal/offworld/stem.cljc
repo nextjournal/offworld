@@ -48,7 +48,7 @@
   ([m suffix]
    (+ m suffix {}))
   ([m suffix config-state]
-   (> m (into (::🌿/path m) (->v suffix)) config-state)))
+   (> m (into (::🌿/path m [::🌿/local]) (->v suffix)) config-state)))
 
 #?(:clj (defn explain-trace [{:keys [stack]}]
           (->> stack
