@@ -117,7 +117,7 @@
          (🪶/assoc :client-effects client-xp-fx)
          (pos? (count server-payload))
          (🪶/assoc :server-payload (🪶/assoc payload :actions (-> server-payload
-                                                                  (with-meta (meta actions'))
+                                                                  (with-meta (meta actions))
                                                                   #_📈/propose!)))))))
 
 #?(:cljs
