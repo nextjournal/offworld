@@ -1,7 +1,11 @@
 {:tasks
- {clean         (do
-                  (fs/delete-tree "resources/public/js")
-                  (fs/delete-tree ".shadow-cljs"))
-  dev           (clojure "-X:dev:demo")
-  test-clj      (clojure "-M:test-clj")
-  test-cljs     (clojure "-M:test:demo" "-m" "shadow.cljs.devtools.cli" "compile" "test")}}
+ {clean          (do
+                   (fs/delete-tree "resources/public/js")
+                   (fs/delete-tree ".shadow-cljs"))
+  dev            (clojure "-X:dev:demo")
+  test-clj       (clojure "-M:test-clj")
+  test-cljs      (clojure "-M:test:demo" "-m" "shadow.cljs.devtools.cli" "compile" "test")
+  squint-compile (do (shell "npx squint compile")
+                     (shell "bash -c 'esbuild resources/public/js/nextjournal/offworld/demo/main.js --bundle > resources/public/js/main.bundle.js'"))
+  squint-measure (do (shell "npx squint compile")
+                     (shell "bash  -c 'esbuild resources/public/js/nextjournal/offworld/demo/main.js --minify --bundle | gzip | wc -c'"))}}

@@ -1,12 +1,12 @@
 {:paths      ["src"]
- :deps {no.cjohansen/nexus {:git/url "https://github.com/cjohansen/nexus"
-                            :git/tag "v2026.07.1"
-                            :git/sha "4c786db"}
-        no.cjohansen/replicant {:git/url "https://github.com/cjohansen/replicant"
-                                :git/tag "v2026.06.2"
-                                :git/sha "20e3c2c"}
-        kimo/transit-cljs-lite {:git/url "https://github.com/borkdude/transit-cljs-lite"
-                                :git/sha "a6dcf0b02e00b03f7eaeb6ff8ab97be6458b9e85"}}
+ :deps       {no.cjohansen/nexus       {:git/url "https://github.com/cjohansen/nexus"
+                                        :git/tag "v2026.07.1"
+                                        :git/sha "4c786db"}
+              no.cjohansen/replicant   {:git/url "https://github.com/cjohansen/replicant"
+                                        :git/tag "v2026.06.2"
+                                        :git/sha "20e3c2c"}
+              kimo-k/transit-cljs-lite {:git/url "https://github.com/kimo-k/transit-cljs-lite"
+                                        :git/sha "b54320d7fb08f55f597ad2005e3360746c3781ba"}}
  :output-dir "resources/public/js"
  :extension  "js"
  :main       [nextjournal.offworld.demo.main]}

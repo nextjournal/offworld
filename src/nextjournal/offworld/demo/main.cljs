@@ -18,8 +18,7 @@
 (defn main []
   (let [params (js/URLSearchParams. js/document.location.search)]
     (🪐/set-ux! (if (.has params "csr") :csr :ssr))
-    #_(let [goog (or js/globalThis.goog {})]
-      (when-not goog.DEBUG (start-handoff!)))
-    (prn :dude)))
+    (let [goog (or js/globalThis.goog {})]
+        (when-not goog.DEBUG (start-handoff!)))))
 
 (main)

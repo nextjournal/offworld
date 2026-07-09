@@ -5,8 +5,8 @@
    [nexus.registry :as nxr]))
 
 (defn rand-plate []
-  (rand-nth ["NL-AS-1829" "DE-BC-3829" "FR-FG-3173" "BE-DX-3882" "ES-ZX-5934" "IT-AG-3847"
-             "PL-GS-2210" "CZ0-AZ-3939" "DK-39-1119" "SE-30-1199"]))
+  (rand-nth [:NL-AS-1829 :DE-BC-3829 :FR-FG-3173 :BE-DX-3882 :ES-ZX-5934 :IT-AG-3847
+             :PL-GS-2210 :CZ0-AZ-3939 :DK-39-1119 :SE-30-1199]))
 
 (defn init-state [state]
   (assoc state ::plates (take 9 (distinct (repeatedly rand-plate)))))

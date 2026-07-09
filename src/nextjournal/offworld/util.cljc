@@ -2,6 +2,7 @@
   (:require
    #?@(:cljs [[nextjournal.transit-lite :as tx]])
    #?@(:clj [[clojure.string :as str]
+             [clojure.walk :as walk]
              [ring.util.codec :as codec]
              [cheshire.core :as cheshire]
              [cognitect.transit :as tx]]))
@@ -28,13 +29,20 @@
      :cljs
      (tx/read-str (js/atob s))))
 
+#?(:clj (defn keywordize [x]
+          (walk/postwalk
+           #(cond-> % (string? %) keyword)
+           x)))
+
 #?(:clj (defn read-dispatch [{:keys [query-string]}]
+          (def query-string query-string)
           (some-> query-string
                   codec/form-decode
                   (get "datastar")
                   cheshire/parse-string
                   (get "offworld")
-                  decode)))
+                  decode
+                  keywordize)))
 
 #?(:clj (defn read-action-log [{:keys [query-string]}]
           (def query-string query-string)
