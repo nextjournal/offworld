@@ -96,7 +96,8 @@
            [:body [:main {:id "app"}]]
            [:body {:data-init "@get('session')"}
             (-> @system 🌿/init-state ui/render 🪐/replicant->d*)
-            [:script {:src "/js/ssr.js"}]])])))
+            [:script {:type "module"
+                      :src "/js/main.bundle.js"}]])])))
 
 (defn index-handler [req]
   (let [csr? (some-> req :query-string (str/includes? "csr"))]

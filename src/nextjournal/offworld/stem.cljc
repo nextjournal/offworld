@@ -1,9 +1,9 @@
 (ns nextjournal.offworld.stem
   {:squint/compile-time true}
   (:refer-clojure :exclude [+ >])
-  #_#?(:cljs
-       (:require-macros
-        [nextjournal.offworld.stem :refer [trace trace-me defq]]))
+  ;; #?(:cljs
+  ;;    (:require-macros
+  ;;     [nextjournal.offworld.stem :refer [trace trace-me defq]]))
   (:require
    #?(:clj [clojure.string :as str])
    [nextjournal.offworld :as-alias 🪐]

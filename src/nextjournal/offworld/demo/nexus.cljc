@@ -1,6 +1,7 @@
 (ns nextjournal.offworld.demo.nexus
   (:require
-   [core.lite :as 🪶]
+   #?(:squint [cljs.core :as 🪶]
+      :default [core.lite :as 🪶])
    [nexus.registry :as nxr]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]

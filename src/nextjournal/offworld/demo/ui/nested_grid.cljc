@@ -6,7 +6,8 @@
    [nextjournal.offworld.demo.ui.holiday :as 🎄]
    [nexus.registry :as nxr]
    [nextjournal.offworld :as-alias 🪐]
-   [core.lite :as 🪶]
+   #?(:squint [cljs.core :as 🪶]
+      :default [core.lite :as 🪶])
    [datastar :as-alias 🚀]))
 
 (nxr/register-action! ::ng/scroll ^::🪐/server

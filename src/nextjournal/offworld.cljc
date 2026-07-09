@@ -1,10 +1,12 @@
 (ns nextjournal.offworld
+  {:squint/compile-time true}
   (:require
    #?(:clj [clojure.walk :as walk])
    #?@(:cljs
        [#_[nextjournal.offworld.order :as 📈]
-        [cljs.core :refer [IFn]]
-        [core.lite :as 🪶]
+        #_[cljs.core :refer [IFn]]
+        #?(:squint [cljs.core :as 🪶]
+           :cljs [core.lite :as 🪶])
         [nexus.registry :as nxr]])
    [datastar :as-alias 🚀]
    [nexus.core :as nexus]
@@ -14,7 +16,8 @@
   #?(:cljs (:require-macros
             [nextjournal.offworld :refer [defc]])))
 
-#?(:cljs (goog-define csr_bundle false))
+#?(:squint (def csr_bundle false)
+   :cljs (goog-define csr_bundle false))
 
 (def registry (volatile! {}))
 
@@ -89,6 +92,46 @@
      dispatch-data
      actions)))
 
+;; Pure expansion of actions into effects, without executing them. Nexus'
+;; `dispatch` interleaves expansion and effect execution, so it can no longer
+;; answer "which effects would these actions produce?". `divert` needs exactly
+;; that: expand client actions into leaf effects and route each to the client or
+;; the server. State is always nil here (nothing runs), and offworld registers
+;; no interceptors, so this stays a plain recursive walk over action handlers.
+(defn expand-action [nexus state dispatch-data action]
+  (let [[kind :as action] (first (nexus/interpolate nexus dispatch-data [action]))]
+    (if-let [f (get-in nexus [:nexus/actions kind])]
+      (let [actions (apply f state (next action))]
+        (cond
+          (empty? actions) {}
+
+          (not (nexus/actions? actions))
+          {:errors [{:action action
+                     :phase :expand-action
+                     :err (ex-info (str kind " should expand to a collection of actions")
+                                   {:res actions :action action})}]}
+
+          :else
+          (reduce (fn [acc a]
+                    (let [{:keys [effects errors]} (expand-action nexus state dispatch-data a)]
+                      (cond-> acc
+                        (seq effects) (update :effects (fnil into []) effects)
+                        (seq errors) (update :errors (fnil into []) errors))))
+                  {} actions)))
+      {:effects [action]})))
+
+(defn expand-actions
+  "Loops over `actions`, recursively expanding each registered action into the
+  leaf effects it produces. Returns `{:effects _ :errors _}`. Does not execute
+  effects."
+  [nexus state actions dispatch-data]
+  (reduce (fn [acc action]
+            (let [{:keys [effects errors]} (expand-action nexus state dispatch-data action)]
+              (cond-> acc
+                (seq effects) (update :effects (fnil into []) effects)
+                (seq errors) (update :errors (fnil into []) errors))))
+          {} actions))
+
 #?(:cljs
    (defn divert* [payload js-data]
      (let [actions        (:actions payload)
@@ -108,7 +151,7 @@
            server-fx      (filterv server-fx? actions')
            client-ax      (filterv #(or (client-ax? %)
                                         (client-fx? %)) actions')
-           xp-fx          (:effects (nexus/expand-actions nexus nil client-ax dispatch-data))
+           xp-fx          (:effects (expand-actions nexus nil client-ax dispatch-data))
            client-xp-fx   (filterv client-fx? xp-fx)
            server-xp-fx   (filterv server-fx? xp-fx)
            server-payload (-> server-ax (into server-fx) (into server-xp-fx))]
@@ -134,6 +177,12 @@
            (encode-fn server-payload))))))
 
 #?(:cljs
+   (do
+     (set! js/globalThis.nextjournal (or js/globalThis.nextjournal {}))
+     (set! js/globalThis.nextjournal.offworld (or js/globalThis.nextjournal.offworld {}))
+     (set! js/globalThis.nextjournal.offworld.divert divert)))
+
+#?(:cljs
    (defn dispatch! [url actions & {:keys [event extra-payload trigger]}]
      (when-let [{:keys [server-payload client-effects]}
                 (divert* {:actions actions :trigger trigger} event)]
@@ -151,7 +200,7 @@
 (defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn ou/encode}}]
   (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
-       "(nextjournal.offworld.divert("
+       "(globalThis.nextjournal && nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions actions
                                  :trigger :event})) "',"
@@ -160,7 +209,7 @@
 (defn d*-lifecycle [actions lifecycle & {:keys [serialize-fn extra-payload dispatch-url]
                                          :or   {serialize-fn ou/encode}}]
   (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
-       "(nextjournal.offworld.divert("
+       "(globalThis.nextjournal && nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions   actions
                                  :trigger   :lifecycle
