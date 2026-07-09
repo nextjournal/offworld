@@ -24,7 +24,7 @@
                                    {::🪐/offline?         true
                                     ::🪐/last-server-stem stem})}]
         (rdom/render (.-firstElementChild dom-node)
-                     (render-fn (🌿/+ state path config)))))
+                     (render-fn (🌿/PLUS state path config)))))
 
 (defn flush-replicant!
   "Clear replicant's vdom - otherwise, any morphs done

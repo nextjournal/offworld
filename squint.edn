@@ -1,0 +1,10 @@
+{:paths      ["src" "vendor/transit-cljs-lite/src"]
+ :deps {no.cjohansen/nexus {:git/url "https://github.com/cjohansen/nexus"
+                            :git/tag "v2026.07.1"
+                            :git/sha "4c786db"}
+        no.cjohansen/replicant {:git/url "https://github.com/cjohansen/replicant"
+                                :git/tag "v2026.06.2"
+                                :git/sha "20e3c2c"}}
+ :output-dir "resources/public/js"
+ :extension  "js"
+ :main       [nextjournal.offworld.demo.main]}

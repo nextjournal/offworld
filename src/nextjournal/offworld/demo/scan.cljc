@@ -76,7 +76,7 @@
      (wrap-interest
       {:id    x
        :label "Click to \"scan\""}
-      (truck (🌿/+ state (conj path x) {:plate x}))))])
+      (truck (🌿/PLUS state (conj path x) {:plate x}))))])
 
 (defc ^:export offline-game [& args]
   [:dialog {:style              {:position  "fixed"

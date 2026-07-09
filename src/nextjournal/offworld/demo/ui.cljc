@@ -12,17 +12,17 @@
 (defn render [{:as state ::🌿/keys [stem]}]
   [:main {:id "app"}
    [:div.flex
-    (mb/mapbox (🌿/+ state [:mapbox]))
+    (mb/mapbox (🌿/PLUS state [:mapbox]))
     [:div
      [:div.flex
       (map
        (fn [id]
          (omnibox-ui/omnibox
-          (🌿/+ state [:header-fields id]
+          (🌿/PLUS state [:header-fields id]
                {:choices (lb/get-choices stem id)})))
          (lb/get-header-fields stem))]
      (ng/nested-grid
-      (🌿/+ state [:grid]
+      (🌿/PLUS state [:grid]
            {:row-tree    ng/demo-row-tree
             :column-tree ng/demo-col-tree}))]
   (🌠/offline-capable
@@ -33,5 +33,5 @@
       ::🌿/path           [:scan-game]
       ::🌿/stem           stem
       #_#_:cache-queries [#'scan/get-scans #'scan/get-plates]}
-     (scan/game (🌿/+ state [:scan-game])))
-    (holiday/panel (🌿/+ state [:panel]))]])
+     (scan/game (🌿/PLUS state [:scan-game])))
+    (holiday/panel (🌿/PLUS state [:panel]))]])

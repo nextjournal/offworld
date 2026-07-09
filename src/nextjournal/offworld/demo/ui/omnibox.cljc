@@ -201,9 +201,9 @@
                              {:filters-to-add
                               [(filters/text->filter value)]}))]
     [:div
-     (anchor (🌿/+ state path config))
-     (popover (🌿/+ state path config))
+     (anchor (🌿/PLUS state path config))
+     (popover (🌿/PLUS state path config))
      (->> filters
           (map #(do {:filter %}))
-          (map 🌿/+ (repeat state) (repeat path))
+          (map 🌿/PLUS (repeat state) (repeat path))
           (map filter-pill))]))

@@ -1,8 +1,9 @@
 (ns nextjournal.offworld.stem
+  {:squint/compile-time true}
   (:refer-clojure :exclude [+ >])
-  #?(:cljs
-     (:require-macros
-      [nextjournal.offworld.stem :refer [trace trace-me defq]]))
+  #_#?(:cljs
+       (:require-macros
+        [nextjournal.offworld.stem :refer [trace trace-me defq]]))
   (:require
    #?(:clj [clojure.string :as str])
    [nextjournal.offworld :as-alias 🪐]
@@ -44,9 +45,9 @@
           {::🌿/stem (::🌿/stem m)
            ::🌿/path (or path [::🌿/local])})))
 
-(defn +
+(defn PLUS
   ([m suffix]
-   (+ m suffix {}))
+   (PLUS m suffix {}))
   ([m suffix config-state]
    (> m (into (::🌿/path m [::🌿/local]) (->v suffix)) config-state)))
 
@@ -101,23 +102,22 @@
         (do (trace-push! ~f)
             (try (do ~@body) (finally (trace-pop!)))))))
 
-#?(:clj
-   (defmacro defq
-     {:clj-kondo/lint-as 'clojure.core/defn}
-     [sym & decls]
-     (let [[_doc-string decls] (if (string? (first decls))
-                                 [(first decls) (next decls)]
-                                 [nil decls])
-           [attr-map decls]    (if (map? (first decls))
-                                 [(first decls) (next decls)]
-                                 [nil decls])
-           attr-map            (if (and (list? (first decls))
-                                        (map? (last decls)))
-                                 (last decls)
-                                 attr-map)
-           impl                (symbol (str sym "--nextjournal--stem--impl"))
-           k                   (str (ns-name *ns*) "/" sym)]
-       `(do
-          (defn ~sym ~@decls)
-          #?(:clj  (var ~sym)
-             :cljs ~sym)))))
+(defmacro defq
+  {:clj-kondo/lint-as 'clojure.core/defn}
+  [sym & decls]
+  (let [[_doc-string decls] (if (string? (first decls))
+                              [(first decls) (next decls)]
+                              [nil decls])
+        [attr-map decls]    (if (map? (first decls))
+                              [(first decls) (next decls)]
+                              [nil decls])
+        attr-map            (if (and (list? (first decls))
+                                     (map? (last decls)))
+                              (last decls)
+                              attr-map)
+        impl                (symbol (str sym "--nextjournal--stem--impl"))
+        k                   (str (ns-name *ns*) "/" sym)]
+    `(do
+       (defn ~sym ~@decls)
+       #?(:clj  (var ~sym)
+          :cljs ~sym))))
