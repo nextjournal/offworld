@@ -5,7 +5,7 @@
   ;;    (:require-macros
   ;;     [nextjournal.offworld.stem :refer [trace trace-me defq]]))
   (:require
-   #?(:clj [clojure.string :as str])
+   [clojure.string :as str]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.stem :as-alias 🌿]
    [nextjournal.offworld.util :as ou]
@@ -15,7 +15,7 @@
 
 (defn id
   ([path] (id path []))
-  ([path suffixes] (ou/encode (into (->v path) suffixes))))
+  ([path suffixes]  (str/join "--" (map name (into (flatten (->v path)) suffixes)))))
 
 (nxr/register-placeholder! ::🌿/el ^::🪐/client
   (fn [_ path-or-id]
