@@ -4,6 +4,7 @@
    [nexus.registry :as nxr]
    [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld.util :as ou]
    [nextjournal.offworld.demo.filters :as filters]
    [nextjournal.offworld.demo.ui.holiday :as 🎄]
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]))
@@ -15,14 +16,14 @@
       (= key "Escape")    [[:event/prevent-default]
                            [:node/hide-popover [::🌿/el popover-id]]
                            [:input/clear [::🌿/el popover-id]]
-                           [:effects/save (conj path :value) ""]]
+                           [:effects/save (conj path :value) (ou/str! "")]]
       (= key "ArrowDown") [[:event/prevent-default]
                            (when choice-id
                              [:node/focus [::🌿/el choice-id]])]
       (= key "Enter")     [[:event/prevent-default]
                            [:node/hide-popover [::🌿/el popover-id]]
                            [:input/clear [::🌿/el anchor-id]]
-                           [:effects/save (conj path :value) ""]
+                           [:effects/save (conj path :value) (ou/str! "")]
                            [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
       (and (mods :shift)
            (= key "Tab")) [[:node/hide-popover [::🌿/el popover-id]]]
@@ -200,10 +201,12 @@
                            (when-not (str/blank? value)
                              {:filters-to-add
                               [(filters/text->filter value)]}))]
+    ;; inlined 🌿/>: squint miscompiles calls to a var named > (emits infix)
     [:div
-     (anchor (🌿/PLUS state path config))
-     (popover (🌿/PLUS state path config))
+     (anchor (assoc config ::🌿/stem (🌿/stem state) ::🌿/path path))
+     (popover (assoc config ::🌿/stem (🌿/stem state) ::🌿/path path))
      (->> filters
-          (map #(do {:filter %}))
-          (map 🌿/PLUS (repeat state) (repeat path))
+          (map #(do {:filter    %
+                     ::🌿/stem  (🌿/stem state)
+                     ::🌿/path  path}))
           (map filter-pill))]))

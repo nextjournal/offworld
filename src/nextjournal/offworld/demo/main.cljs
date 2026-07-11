@@ -3,7 +3,8 @@
    [nextjournal.offworld :as 🪐]
    nextjournal.offworld.demo.nexus
    nextjournal.offworld.demo.ui.holiday
-   nextjournal.offworld.demo.ui.nested-grid))
+   nextjournal.offworld.demo.ui.nested-grid
+   nextjournal.offworld.demo.ui.omnibox))
 
 (defn handoff! []
   (let [s (js/document.createElement "script")]

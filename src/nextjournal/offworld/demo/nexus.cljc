@@ -6,6 +6,7 @@
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
    [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld.util :as ou]
    nextjournal.offworld.demo.mapbox
    nextjournal.offworld.demo.scan))
 
@@ -69,7 +70,8 @@
    :effects/conj          conj-batch}
 
   :nexus/placeholders
-  {:event.target/value       #(some-> % get-evt .-target .-value)
+  ;; DOM input values are strings, never keywords: mark at the source
+  {:event.target/value       #(some-> % get-evt .-target .-value ou/str!)
    :event.target/checked     #(some-> % get-evt .-target .-checked)
    :event.target/scroll-top  #(some-> % get-evt .-target .-scrollTop)
    :event.target/scroll-left #(some-> % get-evt .-target .-scrollLeft)

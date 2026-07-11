@@ -13,11 +13,11 @@
 
 (nxr/register-action! ::scan ^::🪐/client
   (fn [_ plate]
-    [[:effects/save [::scans plate] :scanned]]))
+    [[:effects/save [::scans (🪐/str! plate)] :scanned]]))
 
 (nxr/register-action! ::cancel ^::🪐/client
   (fn [_ plate]
-    [[:effects/save [::scans plate] :canceled]]))
+    [[:effects/save [::scans (🪐/str! plate)] :canceled]]))
 
 (defn get-plates
   {::🌿/paths #{[::plates]}}

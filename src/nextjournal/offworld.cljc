@@ -172,7 +172,7 @@
            dispatch-data  (:dispatch-data diversion)]
        (when @online?
          (when client-effects
-           (nxr/dispatch (atom {}) dispatch-data client-effects))
+           (nxr/dispatch (atom {}) dispatch-data (ou/unmark client-effects)))
          (when server-payload
            (encode-fn server-payload))))))
 
@@ -196,6 +196,11 @@
        (if-not modifiers
          k
          (keyword (apply str (name k) (interleave (repeat "__") (map name modifiers))))))))
+
+(def str!
+  "See nextjournal.offworld.util/str!: marks a string that stays a string
+  on the wire."
+  ou/str!)
 
 (defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn ou/encode}}]

@@ -31,45 +31,50 @@
   #?(:squint (Keyword. s)
      :default (keyword s)))
 
-(def wire-args
-  "Per action, argument positions that are not plain keyword data. :str
-  leaves the argument untouched, :path treats it as a lookup path whose
-  head is a keyword attribute and whose remaining segments are data.
-  Every undeclared string in actions, trigger and lifecycle encodes as a
-  keyword: keywords are the rule, strings the declared exception."
-  {:effects/save {0 :path}
-   :effects/conj {0 :path}
-   :nextjournal.offworld.demo.ui.omnibox/add-filter    {0 :path 1 :str}
-   :nextjournal.offworld.demo.ui.omnibox/remove-filter {0 :path 1 :str}})
+#?(:squint
+   (defclass WireStr
+     (extends js/String)
+     (constructor [this s] (super s))))
+
+;; non-iterable, else seq?/walk shred the mark into characters
+#?(:squint
+   (js/Object.defineProperty (.-prototype WireStr) js/Symbol.iterator
+                             #js {:value js/undefined}))
+
+(defn str!
+  "Marks a string that must stay a string on the wire. Every unmarked
+  string in the dispatch payload encodes as a keyword."
+  [s]
+  #?(:squint (WireStr. s)
+     :default s))
 
 (defn- kw-walk [x]
   (cond
+    #?@(:squint [(instance? WireStr x) (str x)])
     (string? x) (wire-kw x)
     (map? x) (update-vals x kw-walk)
     (vector? x) (mapv kw-walk x)
+    (set? x) (into #{} (map kw-walk) x)
     :else x))
 
-(defn- encode-action [[head & args]]
-  (let [rules (get wire-args (keyword head))]
-    (into [(wire-kw head)]
-          (map-indexed (fn [i a]
-                         (case (get rules i)
-                           :str a
-                           :path (into [(wire-kw (first a))] (rest a))
-                           (kw-walk a))))
-          args)))
+(defn unmark
+  "Recursively unwraps str! marks: client-executed effects must see plain
+  strings, JS libraries reject boxed String objects."
+  [x]
+  #?(:squint (cond
+               (instance? WireStr x) (str x)
+               (map? x) (update-vals x unmark)
+               (vector? x) (mapv unmark x)
+               (set? x) (into #{} (map unmark) x)
+               :else x)
+     :default x))
 
 (defn preprocess
   "Restores keyword types on the client dispatch payload before transit
-  encoding. Only actions, trigger and lifecycle are typed; other entries
-  pass through untouched."
+  encoding: marked strings (decoded wire strings and str! values) stay
+  strings, all other strings become keywords."
   [payload]
-  (if (map? payload)
-    (cond-> payload
-      (:actions payload)   (update :actions (partial mapv encode-action))
-      (:trigger payload)   (update :trigger wire-kw)
-      (:lifecycle payload) (update :lifecycle wire-kw))
-    payload))
+  (kw-walk payload))
 
 (defn encode [data]
   #?(:clj
@@ -88,6 +93,10 @@
            bais    (ByteArrayInputStream. (.getBytes decoded "utf-8"))
            reader  (tx/reader bais :json)]
        (tx/read reader))
+     ;; wire strings decode marked, so a decode/encode round trip keeps
+     ;; strings and keywords apart even though both are strings at runtime
+     :squint
+     (tx/read-str (js/atob s) {:decode-string #(WireStr. %)})
      :cljs
      (tx/read-str (js/atob s))))
 
