@@ -5,9 +5,9 @@
               no.cjohansen/replicant   {:git/url "https://github.com/cjohansen/replicant"
                                         :git/tag "v2026.06.2"
                                         :git/sha "20e3c2c"}
-              ;; TransitTagged protocol, branch keyword-objects; point back
-              ;; at a git sha once pushed upstream or to a fork
-              kimo-k/transit-cljs-lite {:local/root "/Users/borkdude/dev/transit-cljs-lite"}}
+              ;; TransitTagged protocol + :decode-string, branch keyword-objects
+              kimo-k/transit-cljs-lite {:git/url "https://github.com/borkdude/transit-cljs-lite"
+                                        :git/sha "00dbaa9e88c2cf9787afcafecdd7de8066a11fb7"}}
  :output-dir "resources/public/js"
  :extension  "js"
  :main       [nextjournal.offworld.demo.main]}
