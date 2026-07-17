@@ -1049,6 +1049,35 @@ Open questions:
 - We run replicant & nexus on the client, but we only use a few features.
   Can we still get a tiny bundle (e.g. cljs-lite)?
 
+#### Client optimism, server persistence
+```clojure
+(defn menu [state & items]
+  [:div {:id (🌿/id state)
+         :popover :manual}
+   items])
+
+(defn dropdown [{:as state :keys [label]}]
+  (let [{:keys [open?]} (🌿/local state)
+        open-path   (🌿/path state :open?)
+        items (get-a (🌿/stem state))
+        menu-path (🌿/path state [:menu 0])]
+    [:div
+     {::🤖/on-mount (when open?
+                      [[:show-popover menu-path]])}
+     [:div
+      {:on
+       {:click [[:save open-path (not open?)]
+                [:show-popover menu-path]]}}
+      label]
+     (menu (🌿/> state [:menu 0]) items)]))
+```
+
+Use this pattern for hi-fi interactivity
+still not a component (just an indirection!)
+id is basically (str/join path)
+don't need a react ref, just an id
+htmx blog footer haiku: "longing for a hypertext/already in hand"
+
 ### SSR Concept B: Nexus interceptors?
 Similar to Concept A, but pre-interpolation & dispatch are implemented as a nexus interceptor.
 In that case, we wouldn't attach datastar expressions to our html at all. We'd just use replicant/nexus on
