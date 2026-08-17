@@ -1,0 +1,4 @@
+{:hooks
+ {:analyze-call
+  {nextjournal.offworld.nexus.registry/register-many!
+   hooks.nextjournal.offworld.nexus.registry/register-many!}}}

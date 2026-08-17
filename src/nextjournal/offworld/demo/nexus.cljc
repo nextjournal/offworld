@@ -5,6 +5,7 @@
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
    [nextjournal.offworld :as-alias 🪐]
+   nextjournal.offworld.nexus.registry
    nextjournal.offworld.demo.mapbox
    nextjournal.offworld.demo.scan))
 
@@ -13,16 +14,6 @@
 
 (defn get-evt [ctx]
   (:replicant/dom-event (:dispatch-data ctx ctx)))
-
-(defn reg-many [m]
-  (let [system->state (:nexus/system->state m)
-        actions       (:nexus/actions m {})
-        effects       (:nexus/effects m {})
-        placeholders  (:nexus/placeholders m {})]
-    (when system->state (nxr/register-system->state! system->state))
-    (run! (fn [[k v]] (nxr/register-action! k v)) actions)
-    (run! (fn [[k v]] (nxr/register-effect! k v)) effects)
-    (run! (fn [[k v]] (nxr/register-placeholder! k v)) placeholders)))
 
 (def save-batch
   ^:nexus/batch ^::🪐/server
@@ -42,7 +33,7 @@
                        (🪶/update-in acc path (fnil conj (or default-coll [])) v))
                      state path-vs)))))
 
-(reg-many
+(nextjournal.offworld.nexus.registry/register-many!
  {:nexus/system->state deref
   :nexus/effects
   {:event/prevent-default #(.preventDefault (get-evt %))
