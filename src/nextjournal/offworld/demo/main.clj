@@ -19,11 +19,8 @@
 
 (def system (atom (demo/init-state {})))
 
-(def nexus+registry
-  (merge-with merge demo.nexus/server (nxr/get-registry)))
-
 (defn dispatch! [actions]
-  (nexus/dispatch nexus+registry system {} actions))
+  (nxr/dispatch system {} actions))
 
 (def common-head
   '([:script {:src "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"}]

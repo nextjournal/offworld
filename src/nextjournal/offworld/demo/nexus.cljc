@@ -81,5 +81,3 @@
                                   (when (.-altKey dom-event)   :alt)
                                   (when (.-ctrlKey dom-event)  :ctrl)]))
    :document/element-by-id   (fn [_ id] #?(:cljs (js/document.getElementById id)))}})
-
-(def server {})
