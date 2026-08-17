@@ -29,7 +29,7 @@
 (def datastar-script
   [:script {:type "module" :src  "datastar.js"}])
 
-(def !connections (atom #{}))
+(def !conns (atom #{}))
 
 (defn sse-handler [req]
   (hk-gen/->sse-response
@@ -37,14 +37,14 @@
    {hk-gen/write-profile (brotli/->brotli-profile)
     hk-gen/on-open
     (fn [sse-gen]
-      (swap! !connections conj sse-gen))
+      (swap! !conns conj sse-gen))
 
     hk-gen/on-close
     (fn [sse-gen _status]
-      (swap! !connections disj sse-gen))}))
+      (swap! !conns disj sse-gen))}))
 
 (defn broadcast-elements! [elements]
-  (doseq [c @!connections]
+  (doseq [c @!conns]
     (d*/patch-elements! c elements)))
 
 (defn sse-message [{:keys [event lines]}]
