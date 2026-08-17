@@ -21,7 +21,8 @@
   (nxr/dispatch system {} actions))
 
 (def common-head
-  '([:script {:src "tailwind.4.3.3.index.global.js"}]
+  '([:link {:rel "icon" :href "/favicon.ico"}]
+    [:script {:src "tailwind.4.3.3.index.global.js"}]
     [:script {:defer true :type :module :src "maplibre-gl.mjs"}]
     [:script {:type :module :innerHTML "import * as maplibregl from '/maplibre-gl.mjs'; window.maplibregl = maplibregl;"}]
     [:link {:rel "stylesheet" :href "maplibre-gl.css"}]))
@@ -122,7 +123,7 @@
     "/offworld-dispatch"  (offworld-dispatch-handler req)
     "/offworld-go-online" (offworld-go-online-handler req)
     "/session"            (sse-handler req)
-    (if (re-matches #".*\.(js|mjs|js\.map|png|svg|css|woff2?)$" uri)
+    (if (re-matches #".*\.(js|mjs|js\.map|png|svg|css|woff2?|ico)$" uri)
       (serve-file uri (str "resources/public" uri))
       {:status  404
        :headers {"Content-Type" "text/plain"}
