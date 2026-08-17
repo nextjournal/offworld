@@ -2,12 +2,10 @@
   (:require
    [babashka.fs :as fs]
    [clojure.string :as str]
-   [nexus.core :as nexus]
    [starfederation.datastar.clojure.api :as d*]
    [starfederation.datastar.clojure.adapter.http-kit :as hk-gen]
    [starfederation.datastar.clojure.brotli :as brotli]
    [nexus.registry :as nxr]
-   [nextjournal.offworld.demo.nexus :as demo.nexus]
    [nextjournal.offworld.demo.ui :as ui]
    [replicant.string :as rstr]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
@@ -42,7 +40,7 @@
       (swap! !connections conj sse-gen))
 
     hk-gen/on-close
-    (fn [sse-gen status]
+    (fn [sse-gen _status]
       (swap! !connections disj sse-gen))}))
 
 (defn broadcast-elements! [elements]
@@ -120,10 +118,10 @@
 
 (defn handler [{:as req :keys [uri]}]
   (case uri
-    "/"                  (index-handler req)
-    "/offworld-dispatch" (offworld-dispatch-handler req)
+    "/"                   (index-handler req)
+    "/offworld-dispatch"  (offworld-dispatch-handler req)
     "/offworld-go-online" (offworld-go-online-handler req)
-    "/session"           (sse-handler req)
+    "/session"            (sse-handler req)
     (if (re-matches #".*\.(js|mjs|js\.map|png|svg|css|woff2?)$" uri)
       (serve-file uri (str "resources/public" uri))
       {:status  404
