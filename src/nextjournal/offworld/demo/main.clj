@@ -23,13 +23,13 @@
   (nxr/dispatch system {} actions))
 
 (def common-head
-  '([:script {:src "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"}]
-    [:script {:defer true :src "https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"}]
-    [:link {:rel "stylesheet" :href "https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css"}]))
+  '([:script {:src "tailwind.4.3.3.index.global.js"}]
+    [:script {:defer true :type :module :src "maplibre-gl.mjs"}]
+    [:script {:type :module :innerHTML "import * as maplibregl from '/maplibre-gl.mjs'; window.maplibregl = maplibregl;"}]
+    [:link {:rel "stylesheet" :href "maplibre-gl.css"}]))
 
 (def datastar-script
-  [:script {:type "module"
-            :src  "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.7/bundles/datastar.js"}])
+  [:script {:type "module" :src  "datastar.js"}])
 
 (def !connections (atom #{}))
 
@@ -124,7 +124,7 @@
     "/offworld-dispatch" (offworld-dispatch-handler req)
     "/offworld-go-online" (offworld-go-online-handler req)
     "/session"           (sse-handler req)
-    (if (re-matches #".*\.(js|js\.map|png|svg|css|woff2?)$" uri)
+    (if (re-matches #".*\.(js|mjs|js\.map|png|svg|css|woff2?)$" uri)
       (serve-file uri (str "resources/public" uri))
       {:status  404
        :headers {"Content-Type" "text/plain"}
