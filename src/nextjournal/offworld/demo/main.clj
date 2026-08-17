@@ -6,6 +6,7 @@
    [starfederation.datastar.clojure.adapter.http-kit :as hk-gen]
    [starfederation.datastar.clojure.brotli :as brotli]
    [nexus.registry :as nxr]
+   nextjournal.offworld.demo.nexus
    [nextjournal.offworld.demo.ui :as ui]
    [replicant.string :as rstr]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
@@ -16,6 +17,8 @@
   (:import (java.nio.file Files)))
 
 (def system (atom (demo/init-state {})))
+
+(nxr/register-system->state! deref)
 
 (defn dispatch! [actions]
   (nxr/dispatch system {} actions))

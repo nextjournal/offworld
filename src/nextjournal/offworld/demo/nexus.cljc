@@ -2,6 +2,7 @@
   (:require
    [core.lite :as 🪶]
    [nexus.registry :as nxr]
+   [nexus.batching :as batching]
    [nextjournal.offworld.demo.ui.nested-grid :as-alias ng]
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
    [nextjournal.offworld :as-alias 🪐]
@@ -72,3 +73,5 @@
                                   (when (.-altKey dom-event)   :alt)
                                   (when (.-ctrlKey dom-event)  :ctrl)]))
    :document/element-by-id   (fn [_ id] #?(:cljs (js/document.getElementById id)))}})
+
+(batching/install!)
