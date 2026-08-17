@@ -5,7 +5,8 @@
        [#_[nextjournal.offworld.order :as 📈]
         [cljs.core :refer [IFn]]
         [core.lite :as 🪶]
-        [nexus.registry :as nxr]])
+        [nexus.registry :as nxr]
+        [nextjournal.offworld.staging :as staging]])
    [datastar :as-alias 🚀]
    [nexus.core :as nexus]
    [nextjournal.offworld.stem :as-alias 🌿]
@@ -111,7 +112,10 @@
            xp-fx          (:effects (nexus/expand-actions nexus nil client-ax dispatch-data))
            client-xp-fx   (filterv client-fx? xp-fx)
            server-xp-fx   (filterv server-fx? xp-fx)
-           server-payload (-> server-ax (into server-fx) (into server-xp-fx))]
+           server-payload (-> server-ax (into server-fx) (into server-xp-fx))
+           _              (when (staging/warning?)
+                            (staging/warn! (into (staging/unregistered-actions nexus actions)
+                                                 (staging/stranded-at-server nexus server-payload))))]
        (cond-> {:dispatch-data dispatch-data}
          (pos? (count client-xp-fx))
          (🪶/assoc :client-effects client-xp-fx)
