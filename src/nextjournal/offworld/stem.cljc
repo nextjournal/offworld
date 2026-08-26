@@ -12,18 +12,6 @@
 
 (defn ->v [x] (if (sequential? x) (into [] x) [x]))
 
-(defn id
-  ([path] (id path []))
-  ([path suffixes] (ou/encode (into (->v path) suffixes))))
-
-(nxr/register-placeholder! ::🌿/el ^::🪐/client
-  (fn [_ path-or-id]
-    #?(:cljs
-       (js/document.getElementById
-        (cond
-          (string? path-or-id)     path-or-id
-          (sequential? path-or-id) (id path-or-id))))))
-
 (defn init-state [state]
   (merge state {::🌿/stem state}))
 
@@ -33,6 +21,21 @@
   ([state] (path state []))
   ([state suffix] (into (::🌿/path state [::🌿/local])
                         (->v suffix))))
+
+(defn id
+  ([path-or-state] (id path-or-state []))
+  ([path-or-state suffixes]
+   (if (map? path-or-state)
+     (id (path path-or-state) suffixes)
+     (ou/encode (into (->v path-or-state) suffixes)))))
+
+(nxr/register-placeholder! ::🌿/el ^::🪐/client
+  (fn [_ path-or-id]
+    #?(:cljs
+       (js/document.getElementById
+        (cond
+          (string? path-or-id)     path-or-id
+          (sequential? path-or-id) (id path-or-id))))))
 
 (defn local [m] (get-in (stem m) (path m)))
 
