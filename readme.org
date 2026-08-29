@@ -137,10 +137,11 @@ The only question is what you defunctionalize /into/:
 Offworld picks data. Not because data is virtuous, but because of what a value
 admits that the other three don't:
 
-- *It can cross.* A closure cannot be split across a wire. =divert= splits every
-  dispatch by reading the side tag on each head, which is only possible because the
-  heads are there to read. Without this there is no hybrid mode at all — everything
-  else on this list is a bonus.
+- *It can cross.* A closure cannot be split across a wire. Every action Nexus
+  reaches is classified by the side tag on its head — at any expansion depth, not
+  just where you wrote it — which is only possible because the heads are there to
+  read. Without this there is no hybrid mode at all; everything else on this list is
+  a bonus.
 - *It can be substituted into.* Late-bound values work because interpolation walks
   the tree and replaces what it finds, at every action node, on both sides. This is
   what "you can =postwalk= it" cashes out to: not a capability in the abstract, but
@@ -218,8 +219,10 @@ can read any of them.
 
 *** 1. Client state — in the browser
 
-The click fires. =divert= decodes the payload and interpolates /only the
-client-marked placeholders/, against the real DOM event:
+The click fires. =divert= decodes the payload and dispatches it against a
+/client view/ of the registry — one whose placeholders are filtered to the
+client-marked ones. Interpolation happens per action, as Nexus reaches it, so
+=[:event/key-modifiers]= resolves against the real DOM event:
 
 #+begin_src clojure
 [[::randomize [:shift nil nil] :spring]]
@@ -252,7 +255,20 @@ tests is a value.
 
 The expansion returned two effects, and they don't live in the same place.
 =:browser/alert= is client-marked, so it runs immediately. =:effects/save= is
-=^::🪐/server=, so it doesn't.
+=^::🪐/server=, so it doesn't: an interceptor sitting at Nexus's =:before-action=
+phase recognises the tag, sets the action aside for the server, and short-circuits
+the rest of that action's chain so nothing runs it locally.
+
+That phase is the whole reason the split is trustworthy. It fires for /every/
+action Nexus reaches, at any expansion depth — so a server effect returned from
+inside a client expansion, three levels down, is caught exactly like one written at
+the top of the vector. The boundary is not a filter applied to the dispatch you
+authored; it is a rule applied to every action the dispatch produces.
+
+The action is interpolated against the client view before it is set aside, so a
+client-stage value resolves before it crosses, and a server-stage placeholder is
+carried across untouched — which is what the staging law asks for in both
+directions.
 
 *** 4–6. Across the wire, and back
 
@@ -268,9 +284,9 @@ One vector. One authoring site. Six stages, four of them in different runtimes, 
 the boundary between them marked by a single piece of metadata on a handler — not
 by a rewrite, not by a second language, not by a naming convention.
 
-And in CSR mode the exact same code runs with no split at all, because
-=client-handled?= answers =true= for everything when the ux is =:csr=. The split is
-a runtime decision, not an authoring one.
+And in CSR mode the exact same code runs with no split at all: the client view is
+simply not applied, the interceptor is not present, and every action runs where it
+was dispatched. The split is a runtime decision, not an authoring one.
 
 * The vocabulary
 
@@ -467,8 +483,8 @@ ways up, most legible first:
    pinned and nothing is legible.
 
 Be clear about which of those this library actually gives you: the first, because it
-is ordinary Clojure, and the fourth, as an =inline= escape hatch that has not moved
-into this repo yet. The two in the middle are design, not code here. And the second
+is ordinary Clojure, and the fourth, as the =inline= escape hatch. The two in the
+middle are design, not code here. And the second
 only exists if your data layer can name its own past. The claim underneath it — that
 the snapshot machinery a UI framework has to invent is inversely proportional to how
 addressable its data layer is, so that a time-addressable store makes rung 2 a long
@@ -1074,11 +1090,36 @@ is written twice.
 =propose!= stamps on the client, =check= decides on the server, returning =:fx= of
 =[:dispatch actions]=, =[:drop]=, or =[:timeout opts]=.
 
-*Status:* the policy vocabulary and both implementations are written, and they are
-pure functions you can drive from a REPL. Nothing else in the repo touches them —
-=order= has no call site, no test, and no use in the demo, and the line in =divert*=
-that would stamp outgoing dispatches is commented out. So this is a designed and
-implemented namespace, not an exercised one. Read it before you rely on it.
+** Opt in, or don't have it
+
+Ordering is a policy, not part of the client/server boundary, so it is two
+interceptors of its own rather than a step buried in the split. Nothing in this
+library installs either one:
+
+#+begin_src clojure
+(update nexus :nexus/interceptors conj (📈/proposing !counters))   ; client
+(update nexus :nexus/interceptors conj (📈/checking  !actor-state)) ; server
+#+end_src
+
+=proposing= runs =:after-dispatch= and stamps whatever is on its way to the server.
+=checking= runs =:before-dispatch= and applies the policy before anything runs. A
+dispatch carrying no policy passes through both untouched, and a dispatch that
+skips ahead when nobody is checking simply runs — which is the honest shape of an
+opt-in guarantee.
+
+Nothing runs unless a policy asks for it. A =:drop= says so outright, and a bare
+=:timeout= means /held, not yet/ — so a buffered gap waits rather than executing
+while it waits for its predecessor.
+
+Scheduling stays yours. =checking= takes an =:on-timeout= callback and hands the
+request over rather than reaching for a timer the library has no business owning;
+call =handle-timeout= when it fires.
+
+*Status:* both policies and both interceptors are implemented and tested — sequence
+gating, buffered gaps flushing on contiguity, the stamp advancing per dispatch, and
+the pass-through cases. What has no worked example yet is a UI that actually needs
+one. Until a real racing seam exercises it, treat the policy set as two plausible
+answers rather than two proven ones.
 
 * Objections
 
@@ -1183,14 +1224,15 @@ is residual turns out to be knowable per application, not per widget.
 
 *Do I have to register everything?* For a one-off server operation, no. An =inline=
 macro registers the closure at render time against the current connection and emits
-=[[:fx/invoke "<token>"]]=; the server looks the token up and calls it, and the
-whole table is dropped when the connection closes. This is the top rung of the
+=[[::inline/invoke "<token>"]]=; the server looks the token up and calls it, and the
+whole table is dropped when the connection closes. Another connection holding the
+same token gets nothing. This is the top rung of the
 ladder under [[*Early or late, per value][Early or late, per value]] — code and environment both, pinned behind a
 key — offered here as an escape hatch rather than built on.
 
 Be clear about what it costs, because it costs every property in the list under
 [[*You can't not defunctionalize][You can't not defunctionalize]]. The intent on the wire is a UUID, so there is
-nothing to check, nothing to colour beyond =:fx/invoke= itself, nothing to authorize
+nothing to check, nothing to colour beyond =::inline/invoke= itself, nothing to authorize
 by shape, and nothing to replay — the token dies with the connection. It also mints
 a fresh token on every render, so an attribute a stable key would leave alone churns
 on each morph. And it runs only on the server, so it is no answer at all to the
@@ -1198,8 +1240,8 @@ other kind of ceremony complaint — "you made me register an action to toggle a
 boolean," which is about residual /client/ state. Two escape hatches, two different
 complaints; neither covers the other.
 
-(Neither =inline= nor the atlas ships in this library. Both were built in a separate
-research repo and would have to be moved here.)
+(=inline= ships here. The atlas does not — it was built in a separate research repo
+and would have to be moved.)
 
 *Where's the component model?* There isn't one, and the demo does without: a path
 for identity, an id for addressing, a =WeakMap= for lifetime, and life-cycle hooks
@@ -1233,8 +1275,8 @@ Honest inventory, since this is a research library and not a product.
 
 - *Solid:* the dispatch split, placeholders, the side tag, SSR and CSR modes, the
   stem, the staging analysis.
-- *Written but unexercised:* both ordering policies. Implemented and readable, with
-  no call site, no test, and no use in the demo.
+- *Implemented and tested, but with no worked example:* both ordering policies and
+  the two interceptors that apply them. Exercised by tests, not by a UI that races.
 - *Half working:* offline mode. Going offline works — subtrees re-render locally
   from the parked snapshot and dispatches keep running. Coming back doesn't: the
   action log is shipped un-encoded and the receiving handler's decode is commented
@@ -1247,13 +1289,8 @@ Honest inventory, since this is a research library and not a product.
   any Clojure buffer with eldoc and hover readings. The classifier reads Offworld's
   =staging= namespace directly and arguably belongs here. It is an editing aid, not
   a gate: nothing in CI re-emits the faces table or fails on a staging violation.
-  The =inline= macro — a render-time closure behind a per-connection token, for
-  one-off server work — lives there too, and is weak past emitting a basic effect.
 - *Missing, and wanted:* a distinguishable representation for placeholders, so an
-  unresolved one fails loudly instead of passing as data. And =divert= as a Nexus
-  =:before-action= interceptor — that phase wraps a single action's whole life-cycle
-  including recursive expansion, which is the hook the current top-level-only split
-  is missing.
+  unresolved one fails loudly instead of passing as data.
 - *Speculative:* compiling statically-known dispatches to direct client code.
 
 * Sources
