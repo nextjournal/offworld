@@ -83,12 +83,36 @@
     :csr false
     :ssr (server-marked? (get-in nexus [kind k]))))
 
+(def ^:private buckets
+  [:nexus/placeholders :nexus/expansions :nexus/actions :nexus/effects])
+
+(defn handler-of [nexus [k]]
+  (some #(get-in nexus [% k]) buckets))
+
+(defn server-action? [nexus action]
+  (server-marked? (handler-of nexus action)))
+
+(defn divert-interceptor [{:keys [nexus action dispatch-data] :as ctx}]
+  (if (and action (server-action? nexus action))
+    (-> ctx
+        (update ::🪐/server-actions (fnil conj [])
+                (first (nexus/interpolate nexus dispatch-data [action])))
+        (assoc :queue []))
+    ctx))
+
+(defn client-placeholders [nexus]
+  (update nexus :nexus/placeholders
+          #(into {} (filter (comp client-marked? val)) %)))
+
+(defn client-nexus [nexus]
+  (-> nexus
+      client-placeholders
+      (update :nexus/interceptors (fnil conj [])
+              {:phase         ::🪐/divert
+               :before-action divert-interceptor})))
+
 (defn pre-interpolate [nexus dispatch-data actions]
-  (let [placeholders (:nexus/placeholders nexus)]
-    (nexus/interpolate
-     {:nexus/placeholders (into {} (filterv client-marked? placeholders))}
-     dispatch-data
-     actions)))
+  (nexus/interpolate (client-placeholders nexus) dispatch-data actions))
 
 #?(:cljs
    (defn divert* [payload js-data]
@@ -99,49 +123,31 @@
                             :event     (build-event-map js-data payload)
                             :lifecycle (build-lifecycle-map js-data payload)
                             {})
-           actions'       (pre-interpolate nexus dispatch-data actions)
-           the-ux         (get-ux)
-           client-ax?     #(client-handled? the-ux :nexus/expansions nexus %)
-           client-fx?     #(client-handled? the-ux :nexus/effects nexus %)
-           server-ax?     #(server-handled? the-ux :nexus/expansions nexus %)
-           server-fx?     #(server-handled? the-ux :nexus/effects nexus %)
-           server-ax      (filterv server-ax? actions')
-           server-fx      (filterv server-fx? actions')
-           client-ax      (filterv #(or (client-ax? %)
-                                        (client-fx? %)) actions')
-           xp-fx          (:effects (nexus/expand-actions nexus nil client-ax dispatch-data))
-           client-xp-fx   (filterv client-fx? xp-fx)
-           server-xp-fx   (filterv server-fx? xp-fx)
-           server-payload (-> server-ax (into server-fx) (into server-xp-fx))
-           _              (when (staging/warning?)
-                            (staging/warn! (into (staging/unregistered-actions nexus actions)
-                                                 (staging/stranded-at-server nexus server-payload))))]
+           ssr?           (= :ssr (get-ux))
+           ctx            (nexus/dispatch (cond-> nexus ssr? client-nexus)
+                                          (atom {}) dispatch-data actions)
+           server-actions (::🪐/server-actions ctx)]
+       (when (staging/warning?)
+         (staging/warn! (into (staging/unregistered-actions nexus actions)
+                              (staging/stranded-at-server nexus server-actions))))
        (cond-> {:dispatch-data dispatch-data}
-         (pos? (count client-xp-fx))
-         (🪶/assoc :client-effects client-xp-fx)
-         (pos? (count server-payload))
-         (🪶/assoc :server-payload (🪶/assoc payload :actions (-> server-payload
-                                                                  (with-meta (meta actions))
-                                                                  #_📈/propose!)))))))
+         (seq server-actions)
+         (🪶/assoc :server-payload
+                   (🪶/assoc payload :actions
+                             (with-meta (vec server-actions) (meta actions))))))))
 
 #?(:cljs
    (defn ^:export divert [payload-arg js-data]
-     (let [payload        (cond-> payload-arg (string? payload-arg) decode-fn)
-           diversion      (divert* payload js-data)
-           client-effects (:client-effects diversion)
-           server-payload (:server-payload diversion)
-           dispatch-data  (:dispatch-data diversion)]
-       (when @online?
-         (when client-effects
-           (nxr/dispatch (atom {}) dispatch-data client-effects))
-         (when server-payload
-           (encode-fn server-payload))))))
+     (when @online?
+       (let [payload (cond-> payload-arg (string? payload-arg) decode-fn)]
+         (some-> (divert* payload js-data) :server-payload encode-fn)))))
 
 #?(:cljs
    (defn dispatch! [url actions & {:keys [event extra-payload trigger]}]
-     (when-let [{:keys [server-payload client-effects]}
-                (divert* {:actions actions :trigger trigger} event)]
-       (let [d*-json   (js/JSON.stringify #js {:offworld (encode-fn (merge server-payload extra-payload))})
+     (when-let [server-payload (:server-payload
+                                (divert* {:actions actions :trigger trigger} event))]
+       (let [d*-json   (js/JSON.stringify
+                        #js {:offworld (encode-fn (merge server-payload extra-payload))})
              query-url (str url "?datastar=" (js/encodeURIComponent d*-json))]
          (js/fetch query-url #js {:method "GET"})))))
 
