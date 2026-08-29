@@ -134,7 +134,8 @@
          (seq server-actions)
          (🪶/assoc :server-payload
                    (🪶/assoc payload :actions
-                             (with-meta (vec server-actions) (meta actions))))))))
+                             (with-meta (vec server-actions)
+                               (merge (meta actions) (meta server-actions)))))))))
 
 #?(:cljs
    (defn ^:export divert [payload-arg js-data]

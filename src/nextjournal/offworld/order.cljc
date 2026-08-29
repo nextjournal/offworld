@@ -13,7 +13,7 @@
   (:require
    [nextjournal.offworld :as-alias 🪐]))
 
-#?(:cljs (def proposal-system (atom {})))
+(defonce proposal-system (atom {}))
 
 (def ^:private conjv (fnil conj []))
 
@@ -48,16 +48,15 @@
   client before sending the actions to the server. Returns {:args [...] :state new-policy-state}."
   (fn [_ actions] (get-policy actions)))
 
-#?(:cljs
-   (defn propose!
-     ([actions] (propose! proposal-system actions))
-     ([system actions]
-      (let [policy                            (get-policy actions)
-            {:keys [args state] :as proposal} (propose (get @system policy) actions)]
-        (when (contains? proposal :state)
-          (swap! system assoc policy state))
-        (cond-> actions
-          (contains? proposal :args) (vary-meta assoc ::🪐/order (into [policy] args)))))))
+(defn propose!
+  ([actions] (propose! proposal-system actions))
+  ([system actions]
+   (let [policy                            (get-policy actions)
+         {:keys [args state] :as proposal} (propose (get @system policy) actions)]
+     (when (contains? proposal :state)
+       (swap! system assoc policy state))
+     (cond-> actions
+       (contains? proposal :args) (vary-meta assoc ::🪐/order (into [policy] args))))))
 
 (defmethod propose :default [_ _])
 
@@ -142,3 +141,46 @@
                                     :timeout-gen timeout-gen})
        :fx    [[:dispatch (apply concat buf)]]}
       {:state actor-state})))
+
+;; ---------------------------------------------------------------------------
+;; Interceptors. Both are opt-in: conj one into :nexus/interceptors to get it.
+;; Neither is installed by anything in this library.
+
+(defn proposing
+  "An :after-dispatch interceptor that stamps outgoing server actions with the
+  ordering policy already tagged on the dispatch. Client side. `!state` holds
+  the per-policy sequence counters."
+  [!state]
+  {:phase ::🪐/order-propose
+   :after-dispatch
+   (fn [{:keys [actions] :as ctx}]
+     (cond-> ctx
+       (and (seq (::🪐/server-actions ctx)) (get-policy actions))
+       (update ::🪐/server-actions
+               #(propose! !state (with-meta (vec %) (meta actions))))))})
+
+(defn checking
+  "A :before-dispatch interceptor that applies the dispatch's ordering policy
+  before anything runs. Server side. `!state` holds per-policy actor state.
+
+  A policy may rewrite the actions, drop them, or ask for a timeout; a dispatch
+  carrying no policy passes through untouched. Scheduling is the host's job —
+  pass `:on-timeout` to receive the request, and call `handle-timeout` when it
+  fires."
+  ([!state] (checking !state {}))
+  ([!state {:keys [on-timeout]}]
+   {:phase ::🪐/order-check
+    :before-dispatch
+    (fn [{:keys [actions] :as ctx}]
+      (if-not (get-policy actions)
+        ctx
+        (let [{:keys [fx state]} (check @!state actions)]
+          (reset! !state state)
+          ;; Nothing runs unless a policy explicitly asks for it: a :drop says
+          ;; so, and a bare :timeout means "held, not yet".
+          (reduce (fn [ctx* [op arg]]
+                    (case op
+                      :dispatch (update ctx* :actions into arg)
+                      :timeout  (do (when on-timeout (on-timeout arg)) ctx*)
+                      ctx*))
+                  (assoc ctx :actions []) fx))))}))
