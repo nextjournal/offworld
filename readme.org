@@ -303,8 +303,10 @@ Five concepts. That's the whole surface.
 ** Intents
 
 A vector of action-vectors, under =:on= in hiccup, keyed by DOM event name.
-Life-cycle hooks take the same shape, and Datastar modifiers ride as metadata so
-you never hand-roll a debounce:
+Life-cycle hooks take the same shape, and
+[[https://data-star.dev/reference/attributes#data-on][Datastar modifiers]] ride as metadata, so you never hand-roll a debounce. They are
+joined onto the attribute name with =__=, so the scroll handler below renders as
+=data-on:scroll__throttle.100ms=:
 
 #+begin_src clojure
 {:on {:change [[::toggle [:event.target/checked]]]}}
