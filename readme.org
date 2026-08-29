@@ -1,79 +1,83 @@
+#+TITLE: 🪐 Offworld
+#+OPTIONS: toc:2 num:nil
+
 * 🪐 Offworld
 
-** 🫧Bubbling
-"When an event bubbles, it becomes part of your component’s API and every consumer along the event’s path must understand the event. It’s important to understand how bubbling works so you can choose the most restrictive bubbling configuration that works for your component." (https://developer.salesforce.com/docs/platform/lwc/guide/events-propagation.html)
+Offworld runs one Clojure expression in three places.
 
+The same render-fns, the same intents, the same handlers — rendered on a server and
+morphed into the browser; or rendered entirely in the browser; or, when the network
+drops, rendered in the browser from a snapshot the server left behind. You don't
+port anything. You mark which handlers belong to which side, and Offworld splits
+each interaction at dispatch time.
 
+It is a thin layer over three libraries that do the heavy lifting:
 
-** 💉Injection
+- *Replicant* — hiccup, a dispatch hook, and life-cycle hooks. No component model.
+- *Nexus* — a registry of expansions, effects and placeholders, and a loop that drains a vector of actions.
+- *Datastar* — attribute-driven client behaviour, and SSE-driven DOM morphing.
 
-** 🫧Bubble or 💉Inject?
-Bubbling is nonlocal reasoning on magic strings (true?).
+Offworld adds one idea to those three, and the whole library follows from it.
 
-A feature depends on 1 broadcaster, N subscribers.
-We lose unidirectionality, square the complexity.
+** The one idea
 
-With 💉injection, actions target specific element(s), and can throw if they aren't present.
-Reasonability depends on a toplevel `def` (def contract, def some-html-id).
+#+begin_quote
+An interaction is a /staged computation/. Represent it as data, and mark each
+handler with the stage it runs at.
+#+end_quote
 
-Then, clojure ensures (some) consistency across magic-string sites (single basis, can be renamed once).
-But, sensible default:
-`def` is no better than `🌿/path`, and with isomorphic render/DOM, why not (never not feasible)?
+That's it. There is no component model, no reactive graph, no compiler, no signals.
+There is a vector of intents, a registry of handlers, and one piece of metadata —
+=^::🪐/server= or =^::🪐/client= — that says where a handler lives.
 
-Drawback of data is just a "space-age" (hickey) problem.
-D*+brotli take us to the space-age.
-Why not commit to topdown rendering?
+Everything below is a consequence: the client/server split, the offline mode, the
+staging checker, the state discipline, and the reason we don't use DOM event
+bubbling.
 
-(Note: do i just need to learn bubbling?)
-TODO prior art critique of event bubbling?
+** Quickstart
 
-(Idea: Could the browser event loop "host" nexus' interceptor-stack?)
+#+begin_src sh
+bb dev            # shadow-cljs watch + http-kit on :8000 + clerk on :9001
+#+end_src
 
-Injection provides everything bubbling can, but the wiring is static (not dynamic). 
+- [[http://localhost:8000][localhost:8000]] — server-side rendering. The browser holds no state; the
+  server renders hiccup to HTML and morphs it down an SSE connection.
+- [[http://localhost:8000?csr][localhost:8000?csr]] — the same UI, entirely client-side. Replicant reconciles a vdom;
+  no server is involved after the first byte.
+- Kill the server, or toggle your network offline, and the SSR page keeps working —
+  see [[*Offline: the third mode][Offline]].
 
-- 🫧bubble: staged values combine at dispatch time, visible in devtools
-- 💉inject: staged values combine at render time, visible in DOM
+#+begin_src sh
+bb test-clj       # jvm tests
+bb test-cljs      # node tests via shadow
+#+end_src
 
-Clojure removes the need to bubble.
-Injection is free, due to structural sharing.
+Everything under =src/nextjournal/offworld/demo/= is the demo, not the library. The
+library is six files: =offworld.cljc=, =stem.cljc=, =staging.cljc=, =order.cljc=,
+=util.cljc=, =nexus/registry.cljc=. Under a thousand lines.
 
-The injection bet: a render-fn composes intents passed in by its outer callers. It composes a staged computation, using the nexus dsl. It's all visible at render-time, thus, it's all readable concretly from the DOM. This composition style is possible because it's defunctionalized. Putting a staged computation together is just putting data together.
+* Why
 
-** Staged Computation
-*** Continuation-passing style
-Instead of returning a value, you pass on the environment and a mandate.
+** Two paradigms, one program
 
-*** Server continuations
+Server-side rendering is appealing: one place for state, one language for the whole
+app, no cache to invalidate. But it always needs a server. What happens when the
+client lags, or the connection drops?
 
-*** Defunctionalization
-What's an "abstract machine"?
-It's either nexus, or it's an ad-hoc mental model.
-You can't not defunctionalize; the machine's never not immanent.
+Rich clients are appealing for the opposite reasons: they're resilient and
+immediate. But we end up rebuilding, in the browser, capabilities the server
+already had — a store, a query layer, a migration story.
 
-A registry, and an apply fn.
+Most codebases pick one and live with it. Switching, or combining, means a rewrite.
 
-*** δλ🫧 Defunctional Bubbling
-We combine late-bound values as a datastructure.
+We're using Clojure, though. If we simplify the fundamental patterns far enough,
+can we get the flexibility for free?
 
-*** δλ💉 Defunctional Injection
+** The stages exist whether or not you name them
 
-
-
-*** But really, bubble or inject?
-You can't not defunctionalize.
-The choice is:
-Strings, js/Objects, Macros, Compilation? Or, data?
-
-*** Formal proofs for bubbling vs. injection (use tla+?)
-Prove: anything that can be bubbled can be injected
-Prove: injection names itself, bubbling names the other
-
-"For programs that 'dynamically generate' new closures...
-no new constants and no extensible case expressions are needed."
-(danvy-nielsen 2001) (dynamic action expansion)
-
-*** Staging
-Here's the full UI loop:
+Any interactive server-rendered app has a fixed pipeline. It's physically real: the
+DOM event only exists in the browser, the database only exists on the server, and
+something has to carry a value from the first to the second.
 
 | stage           | inputs             | action       | outputs           |
 |-----------------+--------------------+--------------+-------------------|
@@ -97,39 +101,1014 @@ Here's the full UI loop:
 | Render          | server-state   --> | render       | --> new actions   |
 |                 |                    |              | --> SSE-message↩  |
 
+Every hybrid framework has this pipeline. What differs is whether the stages are
+written down anywhere, or whether you reconstruct them in your head each time.
 
+The common approach is to leave them implicit and scatter them: a fragment of
+JavaScript in a string attribute reads =evt.key= (client stage); an opaque
+server-side closure holds the business logic (server stage); a payload key matched
+by string convention ties the two together. Three authoring sites, three languages,
+and nothing that can see all of them at once.
 
-**** Morph Time 
-**** Client Dispatch Time
-(((interpolate))), 
-**** HTTP Request Time
-**** Server Dispatch Time
-**** Render Time
+Offworld's bet is that one data structure carrying all of the stages is worth more
+than the directness you give up.
 
-*** The Staging Law
-A stage can pass along values bound to a later stage. For instance, 
+** You can't not defunctionalize
 
-** Reusability, composition
-How shall we compose the first-order data representing a staged computation?
-*** Composing strings
-*** 🪙A treasure hunt for strings
-Helps optimize performance, costs mental load.
-*** Compiling strings
-critique of hyper?
-*** Composing data
+The objection to actions-as-data is always the same: you've reinvented function
+calls, badly. Greenspun's tenth rule, with a registry.
 
+The answer is that there is no version of this program where the machine isn't
+present. A continuation composed during server render has to survive serialization,
+cross a wire, and be applied in a browser. A closure cannot make that trip. So you
+will defunctionalize — replace the function with a first-order tag plus its free
+variables, and a dispatcher that applies them. Reynolds' move, forced by physics
+rather than chosen for elegance.
 
+The only question is what you defunctionalize /into/:
 
-"Even for programs which "dynamically generate" no"
-no new constants and no extensible
-case expressions are needed
+- into *strings* — an event name, a payload key, an interpolated JS expression
+- into *places* — a stringly-typed attribute cell whose meaning lives in a callback
+- into *macros* — inferred staging, expanded at compile time
+- into *data* — a Clojure vector
 
+Offworld picks data. Not because data is virtuous, but because of what a value
+admits that the other three don't:
 
-* SOURCES
-- LWC event propagation (https://developer.salesforce.com/docs/platform/lwc/guide/events-propagation.html)
-- How events bubble in LWC (https://developer.salesforce.com/blogs/2021/08/how-events-bubble-in-lightning-web-components)
-- Angular: avoiding custom event bubbling (https://blog.angular-university.io/angular-component-design-how-to-avoid-custom-event-bubbling-and-extraneous-properties-in-the-local-component-tree/)
-- composed: true considered harmful? (https://dev.to/open-wc/composed-true-considered-harmful-5g59)
-- Shadow DOM and event propagation (https://pm.dartus.fr/posts/2021/shadow-dom-and-event-propagation/)
-- Internals of event delegation (https://blog.logrocket.com/deep-internals-event-delegation/)
-- Defunctionalization / CPS (https://arxiv.org/pdf/2111.10413)
+- *It can cross.* A closure cannot be split across a wire. =divert= splits every
+  dispatch by reading the side tag on each head, which is only possible because the
+  heads are there to read. Without this there is no hybrid mode at all — everything
+  else on this list is a bonus.
+- *It can be substituted into.* Late-bound values work because interpolation walks
+  the tree and replaces what it finds, twice per side. This is what "you can
+  =postwalk= it" cashes out to: not a capability in the abstract, but the mechanism
+  every single dispatch depends on.
+- *It can be checked before it runs.* Stranded client references and unregistered
+  heads are found by walking the same structure — at runtime with =warn-on!=, or
+  statically over source, without loading or executing anything.
+- *It can be shown.* Every key is classified by side and kind and coloured in the
+  editor, with the reading on hover and at point. An intent prints at its call site
+  with =#p=. Nexus's action log records each dispatch with timings.
+- *It can be extended by a caller who doesn't understand it.* A layer that knows
+  nothing about a component's concern can still =into= or =mapv= or wrap the intent
+  it was handed, so reusable components compose without either layer naming the
+  other's business.
+- *It can be recorded and re-run.* An action log survives a disconnection and
+  replays on reconnect.
+- *A change to it is a change a reviewer can read.* Behaviour appears in a diff as a
+  changed vector, not as a changed string of JavaScript.
+
+Two more are reachable and not built, and it's worth being clear which side of that
+line they sit on: authorizing a dispatch by its /shape/ before anything runs, and
+compiling a statically-known dispatch to direct client code.
+
+The abstract machine is either Nexus, or it's an ad-hoc mental model in a
+colleague's head. It's never not immanent.
+
+* The loop, walked
+
+Here is a real interaction from the demo, start to finish. It's a button in the
+holiday panel. Shift-clicking it means something different from clicking it.
+
+#+begin_src clojure
+(defn randomize-button [{::🌿/keys [stem]}]
+  [:button {:on {:click [[::randomize
+                          [:event/key-modifiers]
+                          (get-season stem)]]}}
+   "Randomize (shift-click to reset)"])
+#+end_src
+
+Read the intent vector carefully — two of its three elements are at different
+stages, and the notation shows you which is which.
+
+*** 0. Render — on the server
+
+=(get-season stem)= is an ordinary function call. It runs /now/, during render, and
+what lands in the vector is the value =:spring=.
+
+=[:event/key-modifiers]= is not a call. It's a vector, and it stays a vector. It
+names a value that does not exist yet, because the click hasn't happened.
+
+This is the whole notation. Anything you can compute at render time, you compute
+with Clojure. Anything you can't, you /name/, and the name travels.
+
+Then =🪐/replicant->d*= walks the hiccup and turns the =:on= map into a Datastar
+attribute:
+
+#+begin_src html
+data-on:click="((_sp)=>_sp&&@get('/offworld-dispatch',{payload:{offworld:_sp}}))
+               (nextjournal.offworld.divert('<transit-base64>', evt))"
+#+end_src
+
+The intent is transit-encoded into the attribute. There /is/ string interpolation
+here — but it's a dumb transport rather than code generation: one opaque blob
+dropped into one fixed slot, beside a dispatch URL that's constant for the whole
+app. The JavaScript around it is byte-identical on every element, and no part of
+what an action /means/ is ever assembled into it.
+
+That's the distinction worth holding: not "no interpolation" but *one*
+interpolation, used the same way everywhere — against the alternative, where each
+seam hand-writes its own expression and every interaction invents a little
+language.
+
+*** 1. Client state — in the browser
+
+The click fires. =divert= decodes the payload and interpolates /only the
+client-marked placeholders/, against the real DOM event:
+
+#+begin_src clojure
+[[::randomize [:shift nil nil] :spring]]
+#+end_src
+
+=[:event/key-modifiers]= has become a value. =:spring= was already one, since
+render.
+
+*** 2. Client expansion — in the browser
+
+=::randomize= is registered =^::🪐/client=, so it expands here:
+
+#+begin_src clojure
+(nxr/register-action! ::randomize ^::🪐/client
+  (fn [_ key-mods season]
+    (let [path        [::path :to :season]
+          reset?      (contains? (into #{} key-mods) :shift)
+          rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
+      (if reset?
+        [[:browser/alert "Holiday season has been reset."]
+         [:effects/save path :spring]]
+        [[:effects/save path rand-season]]))))
+#+end_src
+
+Note what this buys: the shift-key branch is decided in the browser, with no round
+trip. An ordinary =if=, in ordinary Clojure, because by this stage the value it
+tests is a value.
+
+*** 3. Client fx — in the browser
+
+The expansion returned two effects, and they don't live in the same place.
+=:browser/alert= is client-marked, so it runs immediately. =:effects/save= is
+=^::🪐/server=, so it doesn't.
+
+*** 4–6. Across the wire, and back
+
+The server-bound remainder is transit-encoded and returned to the Datastar
+expression, which =@get=s it to =/offworld-dispatch=. There, Nexus drains it against
+the system atom. A watch on that atom re-renders the entire UI, runs
+=replicant->d*= over it again, renders it to a string, and pushes it down the SSE
+connection as a =datastar-patch-elements= event. Datastar morphs the DOM.
+
+*** The point
+
+One vector. One authoring site. Six stages, four of them in different runtimes, and
+the boundary between them marked by a single piece of metadata on a handler — not
+by a rewrite, not by a second language, not by a naming convention.
+
+And in CSR mode the exact same code runs with no split at all, because
+=client-handled?= answers =true= for everything when the ux is =:csr=. The split is
+a runtime decision, not an authoring one.
+
+* The vocabulary
+
+There are five concepts. That's the whole surface.
+
+** Intents
+
+A vector of action-vectors, under =:on= in hiccup, keyed by DOM event name.
+
+#+begin_src clojure
+{:on {:change [[::toggle [:event.target/checked]]]}}
+#+end_src
+
+Life-cycle hooks take the same shape:
+
+#+begin_src clojure
+{:replicant/on-mount [[::init id {:center center}]]}
+#+end_src
+
+Datastar modifiers ride as metadata, so you never hand-roll a debounce:
+
+#+begin_src clojure
+{:on {:scroll ^{:datastar/modifiers [:throttle.100ms]}
+              [[::ng/scroll path
+                [:event.target/scroll-top]
+                [:event.target/scroll-left]]]}}
+#+end_src
+
+** Expansions
+
+A handler that receives state and arguments and returns /more actions/. This is
+where decisions live.
+
+#+begin_src clojure
+(nxr/register-action! ::ng/scroll ^::🪐/server
+  (fn [_ path top left]
+    [[:effects/save (concat path [:scroll-top]) top]
+     [:effects/save (concat path [:scroll-left]) left]]))
+#+end_src
+
+Expansion recurs, so an expansion may return expansions. This matters more than it
+looks: because expansion runs to a fixed point, a handler can receive interpolated
+values and branch on them with plain Clojure. You almost never need to reify
+control-flow as data. (See [[*The staging law][The staging law]] for the one case where you do.)
+
+** Effects
+
+The drain. An effect is the leaf of the tree — it mutates something and returns
+nothing useful.
+
+#+begin_src clojure
+{:node/focus            (fn [ctx _ node] (.focus node))
+ :event/prevent-default #(.preventDefault (get-evt %))
+ :effects/save          ^:nexus/batch ^::🪐/server
+                        (fn [_ system path-vs]
+                          (swap! system (fn [state]
+                                          (reduce (fn [acc [path v]] (assoc-in acc path v))
+                                                  state path-vs))))}
+#+end_src
+
+A rule that keeps the registry small: /if an argument decides where to write, that's
+not a new effect./ It's the same =:effects/save= with a different path. Registering
+=:set-scroll-top= next to =:effects/save= is a smell.
+
+** Placeholders
+
+A named value that doesn't exist yet. Interpolation replaces the vector with the
+value, and runs twice per side — once before expansion, once before effects.
+
+#+begin_src clojure
+{:event.target/value  #(some-> % get-evt .-target .-value)
+ :event/key-modifiers (fn [dd]
+                        (let [e (:replicant/dom-event dd)]
+                          [(when (.-shiftKey e) :shift)
+                           (when (.-altKey e)   :alt)
+                           (when (.-ctrlKey e)  :ctrl)]))}
+#+end_src
+
+Prefer event-relative placeholders to global lookups. =:event.target/scroll-top=
+reads the triggering event's own target; a placeholder that does
+=(js/document.getElementById "some-hardcoded-id")= is correct exactly once, and
+wrong the moment the component renders twice.
+
+** The side tag
+
+The only genuinely new idea, and it's one keyword in metadata.
+
+#+begin_src clojure
+(nxr/register-action! ::scan ^::🪐/client (fn [_ plate] ...))
+(nxr/register-action! ::add-filter ^::🪐/server (fn [state path v] ...))
+#+end_src
+
+=^::🪐/server= means "this handler needs the server." Unmarked means client. In CSR
+mode the distinction is ignored entirely.
+
+Register in bulk when it reads better:
+
+#+begin_src clojure
+(nextjournal.offworld.nexus.registry/register-many!
+ {:nexus/system->state deref
+  :nexus/effects       {...}
+  :nexus/placeholders  {...}})
+#+end_src
+
+* Staging
+
+** The staging law
+
+#+begin_quote
+Computation authored at stage N may *consume* only values already resolved by some
+stage ≤ N. It may *carry* — nest, restructure, pass through — a reference to a
+later-stage value as opaque data, but never compute with its contents before its
+stage arrives.
+#+end_quote
+
+This is the rule the =randomize-button= example obeys without saying so.
+=(get-season stem)= is consumed at render because the server has it.
+=[:event/key-modifiers]= is only carried, because nothing at render time can know
+it.
+
+The law also tells you when to reach for a data-level conditional, and the answer is
+"rarely." Since expansion recurs, an expansion handler can branch with =if= over
+values that are already interpolated; a server handler can name its own server
+placeholders and branch in its body. The one case the law actually forces is:
+
+#+begin_quote
+The client must decide whether to go to the server *at all*, using a value only
+available at client-dispatch time.
+#+end_quote
+
+Everywhere else, the branch and the value it tests are at the same stage, so an
+ordinary =if= in a handler body does the job and Clojure does the work. Here they
+aren't: the value appears in the browser, and the code that would branch on it runs
+on the server — after the round trip you were trying to avoid. Sending the request
+and letting the server decide is always /correct/. It just costs the trip.
+
+Concretely: a keydown handler that should only commit on =Enter=. With no
+client-side branch, every keystroke becomes a request the server answers by doing
+nothing.
+
+So the guard exists for exactly one purpose — to let the client decide whether to
+send anything at all. It is not a general-purpose control-flow construct and should
+never grow into one. There is no =:and=, no =:or=, no =:cond=; one guard,
+deliberately too weak to be tempting, because everything a richer version could
+express is already expressible in Clojure at a stage that has the values.
+
+** The stage ladder
+
+=nextjournal.offworld.staging= makes the ladder explicit:
+
+#+begin_src clojure
+[:render :client/state :client/expand :client/fx :server/state :server/expand :server/fx]
+#+end_src
+
+Every registration has a /deadline/ — the stage past which an unresolved reference
+is stranded. Actions must expand at their side's expand stage; effects run at their
+side's fx stage; placeholders get until just before fx, because interpolation runs
+twice.
+
+** What a machine can check
+
+Not everything. Whether a handler /consumes/ or /carries/ a value lives in its body
+and is undecidable from the outside — so a later-stage reference sitting inside an
+earlier action might be a perfectly legal carry. Offworld doesn't guess.
+
+What /is/ decidable is the backward case, because there a carry has nowhere to go:
+
+- =:stranded-client-ref= — a client-stage reference that survived into the
+  server-bound payload. It resolves only in the browser, every client stage is
+  already past, and its resolver context is gone. It can be neither consumed nor
+  carried.
+- =:unregistered-action= — a dispatched head that resolves to no handler, and would
+  otherwise run as a silent no-op.
+
+#+begin_src clojure
+(staging/warn-on!)   ;; divert warns on every dispatch
+(staging/report)     ;; grouped summary of everything seen this session
+#+end_src
+
+The analysis functions are pure — =lookup=, =tag=, =refs=, =stranded-at-server=,
+=unregistered-actions= — so you can run them over a dispatch in a test, or in a
+REPL, without a browser.
+
+The checker works because a dispatch is a tree of keyword-headed vectors, and every
+head is a key in a registry whose entry carries the side tag. So the whole analysis
+is a =tree-seq=, a =get-in= and a =meta= — it never runs a handler and never reads
+one.
+
+Hand it a closure instead and there's nothing to walk. Which stage the code needs
+lives inside the body, and the only way to find out what a body needs is to execute
+it.
+
+* State: the stem
+
+** The dilemma
+
+Two familiar options, both real.
+
+*Prop drilling* gives you honest signatures. The arguments /are/ the scope, which
+makes render-fns testable and REPL-friendly. But changing the UI tree means
+re-drilling everything, every render-fn invents its own convention for where state
+lives, and you end up re-expressing the shape of the top-level state at a growing
+number of call sites.
+
+*Global state with a query registry* is concise, and most of the Clojure community
+has settled there. But now a render-fn's real dependencies aren't in its signature.
+Which registrations does this view need? What breaks if I delete it? What is
+=::macguffin= and why does removing this component break it? re-frame answers this
+with tooling — re-frame-10x is a visual REPL for exactly this problem.
+
+** Responsible drilling
+
+With top-down rendering you can have both, because the global state can simply /be/
+one of the arguments. Immutable data makes this free — you're passing a pointer, not
+copying a world.
+
+That's the *stem*: the whole state, carried down as a value, alongside a *path*
+saying where /this/ render-fn lives inside it.
+
+#+begin_src clojure
+(defn main-view [state]
+  (for [k [:dresden :hanover]]
+    (station-panel (🌿/+ state [:stations k] {:station k}))))
+#+end_src
+
+=🌿/+= extends the path and merges in configuration. =🌿/>= replaces the path
+outright. =🌿/local= reads this component's own subtree back out. The stem itself
+rides along untouched.
+
+Three concerns, kept apart by convention:
+
+- *Configuration* — plain keys. The caller owns the value, its locality, and its change.
+- *Local state* — reached through =🌿/local= and written at =🌿/path=. /This/ function owns it.
+- *Domain* — read out of the stem with an ordinary getter. UI should model neither
+  its locality nor its change; that's what puts you in the tar pit.
+
+#+begin_src clojure
+(defn get-season [stem] (get-in stem [::path :to :season] :spring))
+
+(defn get-day {::🌿/deps #{`get-season}} [stem]
+  (season->holiday (get-season stem)))
+#+end_src
+
+Getters are just functions of the stem. The =::🌿/deps= metadata is a seed for
+dependency tracing — =🌿/q= and =🌿/trace= will record a call tree at runtime — but
+the static registry it's aiming at is not finished. Treat =deps= as documentation
+today.
+
+** A path is an id
+
+=🌿/id= is a pure derivation of =🌿/path=. So an element's name comes from its
+position in the /render/ composition — not from a mount-time counter, an insertion
+order, or a place in the DOM.
+
+That's what makes it survive morphing. Datastar replaces nodes underneath you; it
+cannot perturb a name the markup itself derives. Content-addressing, applied to
+identity.
+
+The =::🌿/el= placeholder closes the loop, resolving a path or id to a live node at
+client-dispatch time:
+
+#+begin_src clojure
+[[:node/hide-popover [::🌿/el popover-id]]
+ [:node/focus        [::🌿/el choice-id]]]
+#+end_src
+
+To build a persistent "component" with JavaScript batteries included, all you need
+is a path and an id. That sounds like two things. It's one.
+
+* Talking to the browser
+
+** Element life-cycle without a component model
+
+Replicant hands the DOM node to placeholder- and action-handlers, and that's enough.
+No refs, no hooks, no =componentDidMount=.
+
+The demo's map widget is the full pattern in twenty lines. On mount, an action
+constructs a MapLibre object and calls the injected =remember= fn, which stores it
+in a =WeakMap= keyed by the node. Later, another element's handler names the node's
+id, and =🪐/recall= gets the object back to call methods on it.
+
+#+begin_src clojure
+[:div {:id id
+       :data-ignore-morph true
+       :replicant/on-mount [[::init id {:center center}]]}]
+
+[:button {:on {:click [[::pan-to id 4.89 52.38]
+                       [:effects/save path {:center [4.89 52.38]}]]}}
+ "Amsterdam"]
+#+end_src
+
+The =WeakMap= subordinates the JS object's lifetime to the node's. Unmount the div
+and the map is garbage; mount it again and =on-mount= builds a fresh one, seeded
+from the state that the same click already saved. Persistence across mounts — and
+across sessions, in SSR — falls out of saving the state and reinitializing from it.
+
+Because the pattern is expressed in portable data, it is identical in SSR, CSR and
+offline mode. In SSR, Datastar's morph does the mounting; in CSR, Replicant's
+reconciler does. Neither the render-fn nor the handler can tell.
+
+** Why we don't bubble
+
+The DOM event system fuses three unrelated jobs, and only one of them is contentious:
+
+1. *Delegation* — one listener serving many elements, including elements that didn't
+   exist when it was attached. Pure mechanism.
+2. *Default-action negotiation* — submit, navigation, checkbox toggle. Here the
+   browser is a participant, not just a transport, and a propagating cancelable
+   event is the only channel it offers.
+3. *Announcement* — an inner element throws a =CustomEvent= and whichever ancestors
+   happen to contain it may act.
+
+Job 3 is the architecture, and Offworld declines it.
+
+*The usual reason to delegate doesn't apply to us.* In an imperatively-wired app,
+the server swaps in new HTML and the listeners you attached are gone, with no code
+path to re-attach them — so you listen on a stable ancestor instead. We never attach
+imperatively. The listener is an attribute in the rendered markup, so its call site
+ships with the DOM on every morph. Re-attachment is not a problem we can have.
+
+*The cost of announcement is an obligation, not a name.* Salesforce's own guidance
+is blunt about it: "When an event bubbles, it becomes part of your component's API
+and every consumer along the event's path must understand the event." Namespaced
+keywords dispose of the collision half of that complaint. The obligation half
+survives renaming, because it isn't about names — it's about who is required to
+know.
+
+*=stopPropagation= is ambient authority.* A leaf silences handlers it has never heard
+of: analytics, focus management, a parent's keyboard router.
+=stopImmediatePropagation= is worse, making listener registration order semantically
+load-bearing across code that never agreed on an order. We wouldn't accept that
+anywhere else in a design.
+
+*An event buys name-decoupling, never time-decoupling.* =dispatchEvent= runs its
+listeners on the current call stack and returns after the last one — same task, same
+microtask checkpoint. Against a direct call it buys exactly three things: late
+binding of the callee, zero-or-many callees, and error isolation. It buys nothing
+about /when/. You can get scheduling by wrapping the dispatch in
+=requestAnimationFrame=, but then the rAF is doing all of the work, and a client
+effect can schedule its own next dispatch just as easily.
+
+*Bubbling routes by containment; injection routes by naming.* Containment routing
+makes the topology of your markup part of your control-flow graph — wrap something
+in a div, move a cell into a sticky header, and you have silently changed who hears
+an intent. React conceded this the moment physical placement diverged from logical
+composition: "Events from portals propagate according to the React tree rather than
+the DOM tree." They built the alternative and documented it as the behaviour.
+
+*So what do we do instead?* We pass the ids in, and the intent names its recipients.
+Here is the omnibox handling =Enter= on a choice item — one handler acting on four
+elements, all of them named at the site that decides:
+
+#+begin_src clojure
+"Enter" [[:event/prevent-default]
+         [:node/hide-popover [::🌿/el popover-id]]
+         [:node/blur         [::🌿/el anchor-id]]
+         [:node/set-checked  [::🌿/el choice-id] true]
+         [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
+#+end_src
+
+This is exactly the shape a component framework would express by bubbling. Here the
+render code says what the keypress /means/, nothing along any path is obliged to
+know, and =[:event/prevent-default]= sits in the same vector — job 2 is reachable
+from data, so we never needed the event as an architecture, only as a transport.
+
+Note also the failure modes. An injected id can be missing, and =::🌿/el= will
+resolve to nothing you can act on. A bubbled event with no listener is
+indistinguishable from one that worked. Injection fails where the mistake is.
+
+*When does bubbling still win?* Not on subscriber count — any consumer set derivable
+at render time is injectable, and under =view = f(state)= that's all of them. The
+real discriminator is *authorship*:
+
+#+begin_quote
+Bubbling is the interop protocol with code that isn't in your render tree. Inside
+your render tree it buys nothing that injection doesn't.
+#+end_quote
+
+Which leaves a short list, every entry of which is someone outside your render-fn:
+DOM you didn't render, consumers that arrive without a re-render, and the browser
+itself as the consumer of a default action.
+
+One escape hatch is worth keeping: a single ancestor listener reading =.target=, in
+place of N per-element handlers, is a real optimization. What it costs is literacy —
+the render code stops saying what a handler means at the site where it means it. Per
+element by default; delegate on measured cost.
+
+** Frame-perfect work
+
+#+begin_quote
+An intent is one per decision, not one per sample.
+#+end_quote
+
+Nexus should start and stop a gesture. It should never see a =pointermove=. The
+per-frame work — the drag preview, the pointer capture, the style writes — belongs
+inside a client effect that owns its own rAF loop, torn down by a second intent. If
+you find yourself dispatching per frame, the granularity is wrong.
+
+Two constraints fall out of the pipeline, and they're worth stating together:
+
+- =preventDefault= must be called while propagation is happening, so the
+  browser-as-participant is reachable only at Client Dispatch Time, and only while
+  that stage stays synchronous.
+- Interpolation reads the event's values first, before anything else runs. So the
+  rest of a dispatch /could/ be deferred safely — we hold a snapshot, not a live
+  event whose =target= the platform may still rewrite. Cancellation is the one thing
+  that can't be deferred.
+
+* Working in it
+
+** No treasure hunt
+
+To find out what a click does in an event-driven UI, you go looking. The listener
+might be on the element, or delegated to an ancestor three files away. Something on
+the path might call =stopPropagation=. If there's a shadow boundary in between, the
+=target= you'd inspect isn't the one that fired. The wiring is only complete at
+runtime, in the live DOM, which means the DOM is the document — and reading it is a
+treasure hunt.
+
+Here, the answer is in the form you're already looking at:
+
+#+begin_src clojure
+[:button {:on {:click [[::randomize
+                        [:event/key-modifiers]
+                        (get-season stem)]]}}
+ "Randomize (shift-click to reset)"]
+#+end_src
+
+Clicking this means =::randomize=, with the modifier keys and the current season.
+Nothing else is going to happen, no ancestor is going to intercept it, and no
+element elsewhere in the tree has quietly subscribed. What happens is stated in full
+at the site of the intent.
+
+That's local reasoning in the strict sense: the unit you have to understand is a
+single form, and understanding it doesn't require holding the rest of the
+application in your head.
+
+The same property runs the other way. Delete a render-fn and nothing else silently
+loses a listener, because nothing else was listening. Move a subtree into a wrapper
+div and no behaviour changes, because nothing routes by containment.
+
+** Everything is greppable, exactly
+
+Every name in this system is a namespaced Clojure keyword, so it has one definition
+site and a closed set of use sites.
+
+#+begin_src sh
+rg '::randomize'   # the registration, and every dispatch of it. no false positives.
+#+end_src
+
+Compare a =CustomEvent= called ="columnresize"=: a string, appearing in two
+unrelated files, with no definition site at all and nothing to distinguish it from
+the same word in a comment.
+
+Renames follow from this. Change a keyword, miss a site, and the miss surfaces as an
+=:unregistered-action= with the offending key named — not as a listener that quietly
+stops firing.
+
+** The REPL is the whole harness
+
+An intent is a value your render expression /returns/. So you can just look at it —
+with an inline =def=, or hashp's =#p=, dropped anywhere in the composition chain:
+
+#+begin_src clojure
+[:button {:on {:click #p [[::randomize
+                           [:event/key-modifiers]
+                           (get-season stem)]]}}
+ "Randomize (shift-click to reset)"]
+
+;; [[::randomize [:event/key-modifiers] (get-season stem)]]
+;; => [[:nextjournal.offworld.demo.ui.holiday/randomize
+;;      [:event/key-modifiers]
+;;      :spring]]
+#+end_src
+
+What prints is the finished staged computation /at that exact call site/:
+render-stage values already collapsed (=(get-season stem)= is now =:spring=),
+later-stage names still standing as data. Everything the outer callers injected is
+in there too, because injection is function application — the composition is a value
+at every rung of the chain, not just at the top. Capture two across a state change
+and =clojure.data/diff= them.
+
+There is no equivalent when behaviour is /announced/ rather than composed. A
+bubbling event has no value to look at. The intent is spread across an emitter, a
+propagation path, and whichever ancestors happen to be listening, and none of it
+exists until a real user gesture at runtime. The best available is a devtools
+breakpoint, after the fact, one event at a time — which is the difference between
+inspecting a program and observing a system.
+
+The rest follows from the same fact. A dispatch is a value, so you can build one,
+print it, and run the machinery over it with no browser and no server:
+
+#+begin_src clojure
+(nexus/expand-actions (nxr/get-registry) nil actions dispatch-data)
+(staging/unregistered-actions (nxr/get-registry) dispatch)
+(staging/stranded-at-server   (nxr/get-registry) payload)
+#+end_src
+
+Render-fns are the same story. The arguments /are/ the scope, so calling one is just
+calling a function:
+
+#+begin_src clojure
+(station-panel (🌿/+ state [:stations :dresden] {:station :dresden}))
+#+end_src
+
+There's no mounting, no test renderer, no jsdom. =bb test-clj= exercises the real
+pipeline on the JVM.
+
+** What this gives an agent
+
+Everything above matters more for a coding agent than for a person, because an agent
+has less context and no eyes.
+
+- *The unit of change is one form in one file.* An agent editing an intent doesn't
+  need a model of the runtime DOM, because the DOM never held any of the wiring.
+- *Verification without a browser.* An agent can construct a dispatch, expand it,
+  and assert on the result — or run =staging/report= — instead of driving a browser
+  and hoping. Most UI work is otherwise unverifiable except by screenshot.
+- *Mistakes are named.* A typo'd action is =:unregistered-action <key>=. A client
+  placeholder that leaked into a server payload is =:stranded-client-ref <key>=.
+  Both name the key. Neither requires reproducing a user interaction.
+- *The vocabulary is a map you can print.* =(nxr/get-registry)= is the whole
+  contract — no implicit registration, no lifecycle protocol, no framework state to
+  reason about. (With one exception, below: placeholders /are/ an ambient rule.)
+
+Turn the checker on while working:
+
+#+begin_src clojure
+(staging/warn-on!)
+#+end_src
+
+** What it costs
+
+Honest inventory, because the gaps are real and the first two bite daily.
+
+*A call site doesn't show its staging.* Reading =[[:effects/save path v] [::pan-to
+id 4.89 52.38]]=, nothing tells you that the first runs on the server and the second
+in the browser, or that =[:event.target/value]= over in the next handler is a
+placeholder rather than a literal vector. It's legible as data and illegible as
+/staging/. Nothing is actually hidden — the registry declares side and shape for
+every key — so this is a tooling gap rather than a design one, and it is largely
+closed already. The /divert atlas/ statically scans every registration site and
+classifies each key by side and by kind. =offworld-atlas-mode= font-locks that
+classification into any Clojure buffer — earth green for server, off-world violet
+for client, texture for effect / expansion / placeholder — with the reading
+available on hover and at point via eldoc: "🌍 server · effect", "🪐 client ·
+placeholder". The same classifier builds a synthetic registry and runs the staging
+checks against a dispatch without loading or executing any of it.
+
+Three caveats, none fatal. The classification is /per key/, so it tells you what
+=:effects/save= always is, not whether this particular dispatch is well-formed. The
+analysis is textual — registration forms and alias declarations read with regexes,
+not macroexpansion. And the faces table is a generated snapshot: regenerate it or it
+drifts, and nothing gates that.
+
+*A silent no-op is possible.* An unregistered action does nothing and says nothing
+unless =warn-on!= is on. Turn it on in dev.
+
+*Stack traces point at the loop.* An effect that throws gives you a trace through
+Nexus's dispatch loop, not through the render-fn that composed the intent. Nexus's
+own action log (=nexus.action-log/create-log=, with a Dataspex panel) recovers most
+of what the trace doesn't tell you — every dispatch, expanded, with timings — but
+the trace itself is still one indirection removed.
+
+*Explicit state is still explicit.* The stem makes threading cheap, but a render-fn
+that needs three things still takes three things. That's the trade for signatures
+that tell the truth, and it is a trade.
+
+*Placeholders are an ambient rule, and an unresolved one is invisible.* This is the
+sharpest edge in the design. Interpolation postwalks the entire action tree, so a
+placeholder is recognised by /shape/ — a keyword-headed vector — at any depth, in
+any argument position. Which means a placeholder that fails to resolve, because of a
+typo or a stale client bundle or a registration that never ran, is indistinguishable
+from a vector you meant to write. It travels onward as data, and nothing reports it.
+The tell is specific: a value arrives server-side as =["~:event.target/scroll-top"]=
+instead of a number, while the rendered HTML looks perfectly correct.
+
+The reverse direction is live too. Interpolation runs again on the server, against
+the /server's/ registry, so a keyword-headed literal you authored can be captured by
+a placeholder your code never heard of.
+
+The checker cannot help here, and =staging.cljc= admits why: =keyword-headed?= is
+"the shape of both a dispatched action and a reference," and =unregistered-actions=
+only walks head position, because a nested unregistered vector /has/ to be presumed
+data. Head position is discriminated by structure and is checkable; argument
+position is discriminated by registry membership, which is global, load-order
+dependent, and may differ between the two runtimes.
+
+Two partial mitigations exist. The atlas colours a registered key wherever it
+appears, so at a use site you can see that =[:event.target/value]= is a client
+placeholder — but the negative signal is /absence/ of colour, which is also what
+ordinary data looks like, and a source-level scan cannot see a client bundle that
+shipped without the registration. Nexus also offers =^:nexus/skip-interpolation= to
+exempt a value from the postwalk — but it is opt-in, and framed as a performance
+escape hatch rather than a correctness one, so the default remains "every
+keyword-headed vector is a candidate."
+
+The honest fix is not a lint. It is to make a placeholder a distinguishable /value/
+— a tagged literal or a record — so that "is this a placeholder?" is a property of
+the thing rather than of what happens to be in a registry. Unresolved would become
+an error, authored data could never be captured, and the check would hold at runtime
+rather than only over source. The cost is some of the plain-data aesthetic. Not
+done.
+
+* Three modes
+
+The same expression, three runtimes. This is what the library is named after.
+
+** SSR
+
+The browser holds no state. =divert= splits each dispatch, runs the client half
+locally, and returns the server half to Datastar, which =@get=s it. The server drains
+it into an atom; a watch re-renders the whole UI and pushes it down an SSE
+connection; Datastar morphs.
+
+#+begin_src clojure
+(add-watch system ::ui/render
+  (fn [_ _ _ new-state]
+    (broadcast-elements!
+     (sse-message {:event "datastar-patch-elements"
+                   :lines [["elements" (-> new-state 🌿/init-state ui/render
+                                           🪐/replicant->d* rstr/render)]]}))))
+#+end_src
+
+Yes — that re-renders everything, every time, and sends it over the wire. Brotli and
+morph diffing make that cheaper than it sounds, and it buys an enormous
+simplification: there is one state, in one place, and the DOM is a pure function of
+it. Committing to top-down rendering is the trade.
+
+** CSR
+
+Replicant's dispatch goes straight to Nexus against a local atom. =client-handled?=
+answers =true= for everything, so no split happens and no payload is ever encoded.
+
+#+begin_src clojure
+(r/set-dispatch!
+ (fn [dispatch-data actions]
+   (if js/navigator.onLine
+     (nxr/dispatch system dispatch-data actions)
+     (🌠/offline-dispatch dispatch-data actions))))
+#+end_src
+
+The SSR page prefetches this bundle and hands off to it in the background, so the
+first paint costs no JavaScript and the app becomes a rich client afterwards.
+
+** Offline: the third mode
+
+This is where representing intents as data stops being an aesthetic preference.
+
+An SSR page that loses its connection is normally dead — its state lives on a server
+it can't reach. Offworld's answer is to have the server /leave a snapshot behind/.
+=offline-capable= wraps a subtree, encodes the paths that subtree actually needs,
+and parks them in a =data-offworld-sync= attribute next to it:
+
+#+begin_src clojure
+(🌠/offline-capable
+ {:id           "scan-game-offline"
+  :render-fn    #'scan/offline-game
+  :select-paths #{[::scan/scans] [::scan/plates]}
+  ::🌿/path      [:scan-game]
+  ::🌿/stem      stem}
+ (scan/game (🌿/+ state [:scan-game])))
+#+end_src
+
+On the =offline= event, =go-offline!= collects every such node, rebuilds a stem from
+the parked paths, flips the ux to =:csr=, and re-renders those subtrees with
+Replicant — in the browser, from the same render-fns, with no server.
+
+Dispatches keep working. Server-bound actions can't run, so =offline-dispatch=
+appends them to an action log and runs everything locally against the offline stem.
+On reconnect, =go-online!= ships the log to =/offworld-go-online=, where the server
+drains it into the real system as though it had arrived all along.
+
+A log of intents is replayable because an intent is a value. That is the whole
+argument for data, cashed out.
+
+The demo makes the divergence visible on purpose: each truck shows a "Client" status
+and a "Server" status, and offline they disagree until you reconnect.
+
+* Ordering
+
+Dispatches race. A throttled scroll handler can put three actions on the wire and
+have them arrive out of order, and =assoc-in= is not commutative when the same path
+is written twice.
+
+=nextjournal.offworld.order= holds policies as metadata on the dispatch:
+
+- =:seq-gate= — stamp a sequence number per key; the server drops anything that
+  isn't next. Correct for "latest wins" streams like scroll position.
+- =:bounded-buffer= — hold out-of-order actions in a small buffer, flush on
+  contiguity, overflow, or a timeout. Correct when you need every action, in order.
+
+=propose!= stamps on the client, =check= decides on the server, returning =:fx= of
+=[:dispatch actions]=, =[:drop]=, or =[:timeout opts]=.
+
+*Status:* the policy vocabulary and both implementations are done and tested. The
+call site in =divert*= that would stamp outgoing dispatches is still commented out.
+Ordering is available to you deliberately, not automatically.
+
+* Objections
+
+*Isn't this Greenspunning?* Partly, and unavoidably — see [[*You can't not defunctionalize][above]]. The
+question isn't whether to build an abstract machine but whether to admit you have
+one. The specific charge worth taking seriously is reifying control-flow, and the
+staging law answers it by narrowing the case to one: eliding a round trip.
+
+*Why not infer the boundary with macros?* Hyper and Electric Clojure both do
+versions of this, and they buy real ergonomics. What they don't leave you with is a
+value. Each step away from data reinvents a little more of defunctionalization's
+tag-and-dispatch machinery while giving up the list [[*You can't not defunctionalize][above]] — nothing to walk,
+nothing to check, nothing to colour, nothing to log, and a behaviour change that
+shows up in review as an altered string.
+
+*Isn't shipping data slower than shipping code?* It's a space-age problem — the
+kind that gets cheaper every year, in the way that mattered for garbage collection.
+Brotli and morph diffing already put it under the noise floor for this demo. And
+the data form is a source, not an obligation: a dispatch whose shape is statically
+known can in principle be compiled to direct client code, with the interpreter
+retained as a reference implementation.
+
+*Why not signals?* A signal is a defunctionalized /setter on a mutable place/ —
+stringly-typed, with its meaning in a callback rather than on the wire. That's a fine
+representation for residual state that genuinely wants a cell: a column width,
+=<details open>=. It's a poor one for intent, which wants to be logged, replayed,
+and carried across a boundary. Offworld uses no signals and no cells; residual
+presentation state goes on the DOM node itself, or in Replicant's per-node memory.
+
+*Why not cursors?* A cursor is a read/write handle onto a path inside a larger
+value: read here, write here, and the caller doesn't have to know. It's the most
+natural thing to reach for, because Offworld already hands a render-fn both halves
+separately — =🌿/local= reads at the path, =[:effects/save path v]= writes at it. Why
+not fuse them and pass one object down?
+
+Because fusing them defunctionalizes the /place/ rather than the /intent/, and the
+two are not recoverable from each other. From =[:effects/save [:panel :season]
+:winter]= you cannot tell that someone shift-clicked Randomize. From =[::randomize
+[:shift] :spring]= you can recover both what happened and, by running the expansion,
+the write it produces.
+
+That difference costs nothing while everything is one process. It decides things the
+moment a write has to leave one:
+
+- *Authorization.* You can ask whether this user may randomize the season. You
+  cannot meaningfully ask whether they may set =[:panel :season]= to =:winter=,
+  because the check has no access to why.
+- *Replay.* Replaying places overwrites. Replaying intents re-decides, against
+  whatever the world looks like now.
+- *Composition.* A middle layer can wrap or restructure an intent it doesn't
+  understand. A write it can only intercept.
+
+There's a plain mechanical reason too: a cursor is a closure over a path, so it can't
+cross the wire. Defunctionalize it and you get a path plus a write operation — which
+is =[:effects/save path v]=. A cursor is what you have /before/ the boundary forces
+your hand. Offworld starts from after.
+
+What we keep is the addressing half. =🌿/+= extends a path and =🌿/local= reads at
+it: a lens with no write handle. Reading at a path was never the problem.
+
+re-frame took this position a decade ago and put it more bluntly: "Please, just say
+no. We already know where that goes. As your programs get bigger, the use of these
+two-way constructs will encourage control logic into all the wrong places and you'll
+end up with a tire-fire of an Architecture."
+
+One sharpening, because the usual framing of that argument — command-query
+separation — is the weaker version. The problem is not that reads and writes travel
+together. A strictly one-way system that dispatches =[:set-path [:a :b] 1]=
+everywhere has obeyed command-query separation and gained nothing whatsoever. The
+problem is that the write names a location instead of a meaning.
+
+And the concession: for genuinely residual state — is this disclosure open, what is
+half-typed in this box — the intent /is/ the place-write, and naming an action for it
+is ceremony. Our answer there is the DOM node itself or Replicant's per-node memory
+rather than a cursor, but "you made me register an action to toggle a boolean" is a
+fair complaint. The reason to hold the line anyway is that whether a piece of state
+is residual turns out to be knowable per application, not per widget.
+
+*Do I have to register everything?* For a one-off server operation, no. An =inline=
+macro registers the closure at render time against the current connection and emits
+=[[:fx/invoke "<token>"]]=; the server looks the token up and calls it, and the
+whole table is dropped when the connection closes. That is the closure rung — the
+same shape a framework built entirely on minted keys uses — available here as an
+escape hatch rather than as the default.
+
+Be clear about what it costs, because it costs the entire list [[*You can't not defunctionalize][above]]. The
+intent on the wire is a UUID, so there is nothing to check, nothing to colour beyond
+=:fx/invoke= itself, nothing to authorize by shape, and nothing to replay — the
+token dies with the connection. It also runs only on the server, so it is no answer
+at all for residual /client/ state, which is the complaint the previous paragraph
+was about. Two different escape hatches for two different kinds of ceremony.
+
+(Both =inline= and the atlas currently live in the playground repo rather than in
+Offworld.)
+
+*Where's the component model?* There isn't one, and the demo does without: a path
+for identity, an id for addressing, a =WeakMap= for lifetime, and life-cycle hooks
+that dispatch ordinary actions. Adding a component abstraction would mostly mean
+rebuilding what the DOM already does.
+
+* Status
+
+Honest inventory, since this is a research library and not a product.
+
+- *Solid:* the dispatch split, placeholders, the side tag, SSR and CSR modes, the
+  stem, the staging analysis, both ordering policies.
+- *Working, unpolished:* offline mode — it round-trips in the demo, but
+  =select-paths= is a blunt API and =cache-queries= is stubbed.
+- *Seeded, incomplete:* dependency tracing (=🌿/q=, =🌿/trace=, =::🌿/deps=) — the
+  runtime trace works; the static registry behind =defc=/=defq= is not wired.
+  Ordering is not attached to outgoing dispatches.
+- *Built, but living next door:* the divert atlas — static classification of every
+  nexus key by side and kind — and =offworld-atlas-mode=, which font-locks it into
+  any Clojure buffer with eldoc and hover readings. The classifier reads Offworld's
+  =staging= namespace directly and arguably belongs here. It is an editing aid, not
+  a gate: nothing in CI re-emits the faces table or fails on a staging violation.
+  The =inline= macro — a render-time closure behind a per-connection token, for
+  one-off server work — lives there too, and is weak past emitting a basic effect.
+- *Missing, and wanted:* a distinguishable representation for placeholders, so an
+  unresolved one fails loudly instead of passing as data. And =divert= as a Nexus
+  =:before-action= interceptor — that phase wraps a single action's whole life-cycle
+  including recursive expansion, which is the hook the current top-level-only split
+  is missing.
+- *Speculative:* compiling statically-known dispatches to direct client code.
+
+* Sources
+
+Prior art and the arguments we're answering.
+
+- [[https://replicant.fun/][Replicant]] — rendering, life-cycle hooks, [[https://replicant.fun/tutorials/javascript-interop/][JS interop]] and per-node memory
+- [[https://github.com/cjohansen/nexus][Nexus]] — actions, effects, placeholders
+- [[https://data-star.dev/][Datastar]] — attributes and SSE morphing
+- [[https://day8.github.io/re-frame/][re-frame]] — the unidirectional loop this is downstream of, and its own honest
+  writing on the cost of an execution model
+- [[https://day8.github.io/re-frame/historical/#guiding-philosophy][re-frame: guiding philosophy]] — the primacy of data, and the case against
+  read/write cursors and two-way binding
+- [[https://developer.salesforce.com/docs/platform/lwc/guide/events-propagation.html][LWC: event propagation]] and [[https://developer.salesforce.com/blogs/2021/08/how-events-bubble-in-lightning-web-components][How events bubble in LWC]] — the clearest statement of what
+  bubbling costs a component's API
+- [[https://blog.angular-university.io/angular-component-design-how-to-avoid-custom-event-bubbling-and-extraneous-properties-in-the-local-component-tree/][Angular: avoiding custom event bubbling]] — the mirror-image problem, and why a
+  framework without cheap threading ends up choosing a different implicit channel
+- [[https://dev.to/open-wc/composed-true-considered-harmful-5g59][composed: true considered harmful?]] — Westbrook Johnson, 2019
+- [[https://pm.dartus.fr/posts/2021/shadow-dom-and-event-propagation/][Shadow DOM and event propagation]] — retargeting, and =composedPath()= as an
+  "escape hatch to the shadow DOM encapsulation model"
+- [[https://react.dev/reference/react-dom/createPortal][React: createPortal]] — events propagate by the React tree, not the DOM tree
+- [[https://blog.logrocket.com/deep-internals-event-delegation/][Internals of event delegation]]
+- [[https://arxiv.org/pdf/2111.10413][CPS, defunctionalization, accumulations and associativity]] — Danvy et al. "For
+  programs that dynamically generate new closures… no new constants and no
+  extensible case expressions are needed."
