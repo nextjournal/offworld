@@ -124,3 +124,12 @@ critique of hyper?
 no new constants and no extensible
 case expressions are needed
 
+
+* SOURCES
+- LWC event propagation (https://developer.salesforce.com/docs/platform/lwc/guide/events-propagation.html)
+- How events bubble in LWC (https://developer.salesforce.com/blogs/2021/08/how-events-bubble-in-lightning-web-components)
+- Angular: avoiding custom event bubbling (https://blog.angular-university.io/angular-component-design-how-to-avoid-custom-event-bubbling-and-extraneous-properties-in-the-local-component-tree/)
+- composed: true considered harmful? (https://dev.to/open-wc/composed-true-considered-harmful-5g59)
+- Shadow DOM and event propagation (https://pm.dartus.fr/posts/2021/shadow-dom-and-event-propagation/)
+- Internals of event delegation (https://blog.logrocket.com/deep-internals-event-delegation/)
+- Defunctionalization / CPS (https://arxiv.org/pdf/2111.10413)
