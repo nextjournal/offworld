@@ -26,9 +26,11 @@ An interaction is a /staged computation/. Represent it as data, and mark each
 handler with the stage it runs at.
 #+end_quote
 
-That's it. There is no component model, no reactive graph, no compiler, no signals.
-There is a vector of intents, a registry of handlers, and one piece of metadata —
-=^::🪐/server= or =^::🪐/client= — that says where a handler lives.
+That's it. There is no component model, no reactive graph, no signals, and no
+compiler inferring where your code runs. (Hiccup is compiled to Datastar
+attributes, but that step transports the intent; it never decides anything about
+it.) There is a vector of intents, a registry of handlers, and one piece of
+metadata — =^::🪐/server= or =^::🪐/client= — that says where a handler lives.
 
 Everything below is a consequence: the client/server split, the offline mode, the
 staging checker, the state discipline, and the reason we don't use DOM event
@@ -140,9 +142,9 @@ admits that the other three don't:
   heads are there to read. Without this there is no hybrid mode at all — everything
   else on this list is a bonus.
 - *It can be substituted into.* Late-bound values work because interpolation walks
-  the tree and replaces what it finds, twice per side. This is what "you can
-  =postwalk= it" cashes out to: not a capability in the abstract, but the mechanism
-  every single dispatch depends on.
+  the tree and replaces what it finds, at every action node, on both sides. This is
+  what "you can =postwalk= it" cashes out to: not a capability in the abstract, but
+  the mechanism every single dispatch depends on.
 - *It can be checked before it runs.* Stranded client references and unregistered
   heads are found by walking the same structure — at runtime with =warn-on!=, or
   statically over source, without loading or executing anything.
@@ -153,8 +155,9 @@ admits that the other three don't:
   nothing about a component's concern can still =into= or =mapv= or wrap the intent
   it was handed, so reusable components compose without either layer naming the
   other's business.
-- *It can be recorded and re-run.* An action log survives a disconnection and
-  replays on reconnect.
+- *It can be recorded and re-run.* A list of intents is a replayable log. Offline
+  mode builds one while the connection is down, and reconnecting means replaying
+  it rather than diffing two states.
 - *A change to it is a change a reviewer can read.* Behaviour appears in a diff as a
   changed vector, not as a changed string of JavaScript.
 
@@ -207,9 +210,11 @@ app. The JavaScript around it is byte-identical on every element, and no part of
 what an action /means/ is ever assembled into it.
 
 That's the distinction worth holding: not "no interpolation" but *one*
-interpolation, used the same way everywhere — against the alternative, where each
-seam hand-writes its own expression and every interaction invents a little
-language.
+interpolation, used the same way everywhere. The thing it is set against is the
+common pattern where each seam hand-writes its own attribute expression —
+=evt.key= read here, a ternary there, a call into a bundled helper somewhere else
+— so that every interaction invents a little language and nothing but the browser
+can read any of them.
 
 *** 1. Client state — in the browser
 
@@ -306,10 +311,14 @@ where decisions live.
      [:effects/save (concat path [:scroll-left]) left]]))
 #+end_src
 
-Expansion recurs, so an expansion may return expansions. This matters more than it
-looks: because expansion runs to a fixed point, a handler can receive interpolated
-values and branch on them with plain Clojure. You almost never need to reify
-control-flow as data. (See [[*The staging law][The staging law]] for the one case where you do.)
+(=register-expansion!= is Nexus's newer name for the same call. "Action" is the
+data; "expansion" is the handler that turns one into more.)
+
+Expansion recurs, so an expansion may return expansions, and each action Nexus
+reaches is interpolated just before it is expanded. That matters more than it
+looks: a handler always receives interpolated values and can branch on them with
+plain Clojure. You almost never need to reify control-flow as data. (See
+[[*The staging law][The staging law]] for the one case where you do.)
 
 ** Effects
 
@@ -333,7 +342,10 @@ not a new effect./ It's the same =:effects/save= with a different path. Register
 ** Placeholders
 
 A named value that doesn't exist yet. Interpolation replaces the vector with the
-value, and runs twice per side — once before expansion, once before effects.
+value, and it happens at every action node on the way down: an action is
+interpolated just before Nexus decides whether it is an expansion or an effect,
+and every action an expansion hands back is interpolated in turn. So a
+placeholder that survives one round still resolves before the effect runs.
 
 #+begin_src clojure
 {:event.target/value  #(some-> % get-evt .-target .-value)
@@ -412,6 +424,64 @@ never grow into one. There is no =:and=, no =:or=, no =:cond=; one guard,
 deliberately too weak to be tempting, because everything a richer version could
 express is already expressible in Clojure at a stage that has the values.
 
+** Early or late, per value
+
+The law's other half is that /each value in an intent picks its own stage/, and the
+choice is made by how you write the argument, not by a setting.
+
+=(get-season stem)= is early. It runs once, at render, and the result is baked into
+the markup — so clicking that already-rendered button ten times asserts =:spring=
+ten times. There is no operation left in the vector to repeat, only a value.
+
+The clearest case is a counter. =[[:effects/save path (inc n)]]= freezes a number at
+render; an expansion of your own — call it =[[::bump path]]= — names an operation
+that recomputes at dispatch against whatever the state has become. Ten clicks faster than the server can re-render land
+on =1= in the first spelling and =10= in the second. Same button, same effect
+registry, and the difference is entirely in what the vector carries.
+
+Neither is the right default in the abstract. The question to ask at the call site
+is whether the argument stands for /the current value of something/ or is a stable
+identifier — a path, a row id, a mode name — that means the same thing whenever it
+is read. Stable identifiers are always safe early. It is specifically the "the
+value I read a moment ago" arguments that freeze whether you meant them to or not.
+
+Mostly this doesn't bite, and it's worth saying so rather than teaching distrust of
+every literal. Under ordinary use the render loop re-takes the snapshot faster than
+a person can click again. It bites in three named places: when something on the
+render path is slow enough that the next render lags the next click; when the
+render loop is deliberately capped below click speed; and when the dispatch source
+isn't a person at all — a drag handler, key repeat, a held button, a script.
+
+The harder case is an early value too large to serialize into an attribute. Four
+ways up, most legible first:
+
+1. *Inline it.* The value in the vector. Small values only, and nothing is pinned.
+2. *Carry a coordinate into immutable history* — Datomic's =basis-t=, a long naming
+   an entire past database state — and re-run the read =as-of= it at dispatch. The
+   intent stays fully legible, nothing is retained, and the re-read reconstructs
+   the identical value.
+3. *Stash the value server-side and carry a claim-check token.* For values that are
+   neither small nor time-addressable. One opaque argument in an otherwise legible
+   intent, and server memory held until eviction.
+4. *Hand over the closure* — code and environment both, behind a key. Everything is
+   pinned and nothing is legible.
+
+Be clear about which of those this library actually gives you: the first, because it
+is ordinary Clojure, and the fourth, as an =inline= escape hatch that has not moved
+into this repo yet. The two in the middle are design, not code here. And the second
+only exists if your data layer can name its own past. The claim underneath it — that
+the snapshot machinery a UI framework has to invent is inversely proportional to how
+addressable its data layer is, so that a time-addressable store makes rung 2 a long
+in a vector and leaves rungs 3 and 4 unbuilt — is the sharpest untested assertion in
+this document. It has no experiment behind it yet.
+
+One consequence for replay, stated plainly because it cuts the other way. A
+late-bound read resolves against /current/ state, so replaying a logged intent
+re-executes it rather than reconstructing what the render actually saw. A retained
+closure gets that fidelity for free, and loses it entirely the moment it is
+evicted. Binding late reads to a render-time basis would give Offworld both —
+faithful and durable, with nothing pinned. Also not built.
+
 ** The stage ladder
 
 =nextjournal.offworld.staging= makes the ladder explicit:
@@ -423,7 +493,7 @@ express is already expressible in Clojure at a stage that has the values.
 Every registration has a /deadline/ — the stage past which an unresolved reference
 is stranded. Actions must expand at their side's expand stage; effects run at their
 side's fx stage; placeholders get until just before fx, because interpolation runs
-twice.
+again at every node on the way there.
 
 ** What a machine can check
 
@@ -542,10 +612,10 @@ is a path and an id. That sounds like two things. It's one.
 Replicant hands the DOM node to placeholder- and action-handlers, and that's enough.
 No refs, no hooks, no =componentDidMount=.
 
-The demo's map widget is the full pattern in twenty lines. On mount, an action
-constructs a MapLibre object and calls the injected =remember= fn, which stores it
-in a =WeakMap= keyed by the node. Later, another element's handler names the node's
-id, and =🪐/recall= gets the object back to call methods on it.
+The demo's map widget is the full pattern in twenty lines. On mount, a client
+effect constructs a MapLibre object and calls the injected =remember= fn, which
+stores it in a =WeakMap= keyed by the node. Later, another element's handler names
+the node's id, and =🪐/recall= gets the object back to call methods on it.
 
 #+begin_src clojure
 [:div {:id id
@@ -601,22 +671,22 @@ anywhere else in a design.
 
 *An event buys name-decoupling, never time-decoupling.* =dispatchEvent= runs its
 listeners on the current call stack and returns after the last one — same task, same
-microtask checkpoint. Against a direct call it buys exactly three things: late
-binding of the callee, zero-or-many callees, and error isolation. It buys nothing
-about /when/. You can get scheduling by wrapping the dispatch in
-=requestAnimationFrame=, but then the rAF is doing all of the work, and a client
-effect can schedule its own next dispatch just as easily.
+microtask checkpoint. Against a direct call it buys late binding of the callee,
+zero-or-many callees, and error isolation, and nothing whatsoever about /when/.
+Wrap the dispatch in =requestAnimationFrame= and the rAF is doing all the work.
 
 *Bubbling routes by containment; injection routes by naming.* Containment routing
 makes the topology of your markup part of your control-flow graph — wrap something
 in a div, move a cell into a sticky header, and you have silently changed who hears
 an intent. React conceded this the moment physical placement diverged from logical
 composition: "Events from portals propagate according to the React tree rather than
-the DOM tree." They built the alternative and documented it as the behaviour.
+the DOM tree." Faced with the two diverging, they built a second propagation path
+that follows composition instead of containment, and documented it as the
+behaviour.
 
 *So what do we do instead?* We pass the ids in, and the intent names its recipients.
-Here is the omnibox handling =Enter= on a choice item — one handler acting on four
-elements, all of them named at the site that decides:
+Here is the omnibox handling =Enter= on a choice item — one handler acting on three
+named elements plus the event itself, all of them spelled at the site that decides:
 
 #+begin_src clojure
 "Enter" [[:event/prevent-default]
@@ -648,6 +718,18 @@ Which leaves a short list, every entry of which is someone outside your render-f
 DOM you didn't render, consumers that arrive without a re-render, and the browser
 itself as the consumer of a default action.
 
+*And one fair concession.* Not every custom event is a hop standing in for a call.
+A single gesture can reasonably fire two differently-named events doing different
+jobs — a per-frame one that never leaves the client, and one on release that
+commits to the server. For the per-frame announcement a public DOM name is the
+right mechanism: the widget is /offering/ something any container may subscribe to,
+not addressing a recipient it could have named. What that buys is weaker than
+injection, and the difference is worth stating precisely — an ancestor can observe
+the announcement, cancel it, or re-emit a changed one, but it cannot restructure
+what was meant, the way a middle layer restructures an intent that arrives as data.
+So: for the commit leg this section's argument holds. For the broadcast leg, the
+name is doing real work.
+
 One escape hatch is worth keeping: a single ancestor listener reading =.target=, in
 place of N per-element handlers, is a real optimization. What it costs is literacy —
 the render code stops saying what a handler means at the site where it means it. Per
@@ -674,6 +756,15 @@ Two constraints fall out of the pipeline, and they're worth stating together:
   event whose =target= the platform may still rewrite. Cancellation is the one thing
   that can't be deferred.
 
+And one thing the pipeline doesn't settle. Between the commit and the morph that
+confirms it, something has to /own/ the property the gesture was changing — the
+column width, say — and keep re-asserting it across any morph that lands in the
+gap, until the server's own render finally carries the settled value. Offworld has
+places to hold a client-owned value (=data-ignore-morph=, Replicant's per-node
+memory) and no vocabulary at all for the /handoff/ — when the client may stop
+asserting. That is hand-rolled per gesture today, and it is the one part of a rich
+seam this design doesn't yet make legible.
+
 * Working in it
 
 ** No treasure hunt
@@ -685,19 +776,11 @@ the path might call =stopPropagation=. If there's a shadow boundary in between, 
 runtime, in the live DOM, which means the DOM is the document — and reading it is a
 treasure hunt.
 
-Here, the answer is in the form you're already looking at:
-
-#+begin_src clojure
-[:button {:on {:click [[::randomize
-                        [:event/key-modifiers]
-                        (get-season stem)]]}}
- "Randomize (shift-click to reset)"]
-#+end_src
-
-Clicking this means =::randomize=, with the modifier keys and the current season.
+Here, the answer is the form you are already looking at. The =randomize-button=
+walked through under [[*The loop, walked][The loop, walked]] states its whole story where it is written:
+clicking it means =::randomize=, with the modifier keys and the current season.
 Nothing else is going to happen, no ancestor is going to intercept it, and no
-element elsewhere in the tree has quietly subscribed. What happens is stated in full
-at the site of the intent.
+element elsewhere in the tree has quietly subscribed.
 
 That's local reasoning in the strict sense: the unit you have to understand is a
 single form, and understanding it doesn't require holding the rest of the
@@ -776,8 +859,8 @@ pipeline on the JVM.
 
 ** What this gives an agent
 
-Everything above matters more for a coding agent than for a person, because an agent
-has less context and no eyes.
+Locality, greppability and a REPL-runnable dispatch matter more for a coding agent
+than for a person, because an agent has less context and no eyes.
 
 - *The unit of change is one form in one file.* An agent editing an intent doesn't
   need a model of the runtime DOM, because the DOM never held any of the wiring.
@@ -789,7 +872,8 @@ has less context and no eyes.
   Both name the key. Neither requires reproducing a user interaction.
 - *The vocabulary is a map you can print.* =(nxr/get-registry)= is the whole
   contract — no implicit registration, no lifecycle protocol, no framework state to
-  reason about. (With one exception, below: placeholders /are/ an ambient rule.)
+  reason about. (With one exception, taken up in [[*What it costs][What it costs]]: placeholder
+  interpolation /is/ an ambient rule that the registry doesn't confine.)
 
 Turn the checker on while working:
 
@@ -799,7 +883,8 @@ Turn the checker on while working:
 
 ** What it costs
 
-Honest inventory, because the gaps are real and the first two bite daily.
+Honest inventory. The gaps are real, and the first two below — a call site that
+doesn't show its staging, and a silently-swallowed typo — bite daily.
 
 *A call site doesn't show its staging.* Reading =[[:effects/save path v] [::pan-to
 id 4.89 52.38]]=, nothing tells you that the first runs on the server and the second
@@ -835,13 +920,14 @@ that needs three things still takes three things. That's the trade for signature
 that tell the truth, and it is a trade.
 
 *Placeholders are an ambient rule, and an unresolved one is invisible.* This is the
-sharpest edge in the design. Interpolation postwalks the entire action tree, so a
-placeholder is recognised by /shape/ — a keyword-headed vector — at any depth, in
-any argument position. Which means a placeholder that fails to resolve, because of a
-typo or a stale client bundle or a registration that never ran, is indistinguishable
-from a vector you meant to write. It travels onward as data, and nothing reports it.
-The tell is specific: a value arrives server-side as =["~:event.target/scroll-top"]=
-instead of a number, while the rendered HTML looks perfectly correct.
+sharpest edge in the design. Interpolation walks the entire action tree, children
+first, and recognises a placeholder by looking a vector's head up in the registry —
+at any depth, in any argument position, map keys included. Which means a placeholder
+that fails to resolve, because of a typo or a stale client bundle or a registration
+that never ran, is indistinguishable from a vector you meant to write. It travels
+onward as data, and nothing reports it. The tell is specific: a value arrives
+server-side as =["~:event.target/scroll-top"]= instead of a number, while the
+rendered HTML looks perfectly correct.
 
 The reverse direction is live too. Interpolation runs again on the server, against
 the /server's/ registry, so a keyword-headed literal you authored can be captured by
@@ -859,16 +945,26 @@ appears, so at a use site you can see that =[:event.target/value]= is a client
 placeholder — but the negative signal is /absence/ of colour, which is also what
 ordinary data looks like, and a source-level scan cannot see a client bundle that
 shipped without the registration. Nexus also offers =^:nexus/skip-interpolation= to
-exempt a value from the postwalk — but it is opt-in, and framed as a performance
-escape hatch rather than a correctness one, so the default remains "every
-keyword-headed vector is a candidate."
+exempt a value and everything under it from the walk — but it is opt-in, and its own
+docs frame it as a performance escape hatch rather than a correctness one, so the
+default remains "every vector is a candidate."
 
 The honest fix is not a lint. It is to make a placeholder a distinguishable /value/
 — a tagged literal or a record — so that "is this a placeholder?" is a property of
-the thing rather than of what happens to be in a registry. Unresolved would become
-an error, authored data could never be captured, and the check would hold at runtime
-rather than only over source. The cost is some of the plain-data aesthetic. Not
+the value itself rather than of whatever happens to be in a registry. Unresolved
+would become an error, authored data could never be captured, and the check would
+hold at runtime rather than only over source. The cost is some of the plain-data aesthetic. Not
 done.
+
+*And the cost underneath all of those: this is an execution model.* Any library that
+decides for you how an interaction is sequenced carries a risk its authors rarely
+spell out and its users rarely hold in full — a lesson re-frame learned about its
+own machinery over a decade, and one Offworld inherits by being downstream of it.
+The mitigation here is deliberate rather than accidental: keep the machinery small
+enough to read end to end (three kinds of registration, one loop, one metadata tag),
+and make what it decides inspectable rather than ambient. Placeholder interpolation
+is the one rule that currently fails that second test, which is why it gets the
+longest entry in this inventory rather than a footnote.
 
 * Three modes
 
@@ -895,6 +991,14 @@ morph diffing make that cheaper than it sounds, and it buys an enormous
 simplification: there is one state, in one place, and the DOM is a pure function of
 it. Committing to top-down rendering is the trade.
 
+Note what the library is /not/ deciding there. Rendering on every change is a watch
+the demo's server installs; a loop ticking on its own interval and pushing only when
+the render differs is the same contract with a different schedule. Offworld's side
+of it is intents in by request, HTML out — nothing in the library assumes either
+policy. A burst of eight dispatches costs eight pushes under the per-change watch
+and exactly one under a capped loop, without a line of view code changing.
+Scheduling changes how many times the browser is told, never what is true.
+
 ** CSR
 
 Replicant's dispatch goes straight to Nexus against a local atom. =client-handled?=
@@ -908,8 +1012,12 @@ answers =true= for everything, so no split happens and no payload is ever encode
      (🌠/offline-dispatch dispatch-data actions))))
 #+end_src
 
-The SSR page prefetches this bundle and hands off to it in the background, so the
-first paint costs no JavaScript and the app becomes a rich client afterwards.
+The intended arc is that the SSR page paints from server HTML with no JavaScript on
+the critical path, prefetches this bundle, and hands off to it in the background so
+the app becomes a rich client afterwards. The prefetch and the handoff hook are
+wired (release builds only). The last step isn't: the handed-off bundle registers
+its dispatch fn but never takes over rendering, so today =?csr= is how you actually
+get the client-rendered app. Finishing the takeover is small and unstarted.
 
 ** Offline: the third mode
 
@@ -917,8 +1025,8 @@ This is where representing intents as data stops being an aesthetic preference.
 
 An SSR page that loses its connection is normally dead — its state lives on a server
 it can't reach. Offworld's answer is to have the server /leave a snapshot behind/.
-=offline-capable= wraps a subtree, encodes the paths that subtree actually needs,
-and parks them in a =data-offworld-sync= attribute next to it:
+=offline-capable= wraps a subtree in a div, encodes the paths that subtree actually
+needs, and parks them in a =data-offworld-sync= attribute on the wrapper:
 
 #+begin_src clojure
 (🌠/offline-capable
@@ -936,14 +1044,19 @@ Replicant — in the browser, from the same render-fns, with no server.
 
 Dispatches keep working. Server-bound actions can't run, so =offline-dispatch=
 appends them to an action log and runs everything locally against the offline stem.
-On reconnect, =go-online!= ships the log to =/offworld-go-online=, where the server
-drains it into the real system as though it had arrived all along.
 
 A log of intents is replayable because an intent is a value. That is the whole
-argument for data, cashed out.
+argument for data, cashed out — and the going-offline half of it works: the demo
+makes the divergence visible on purpose, each truck showing a "Client" status and a
+"Server" status that disagree while you're disconnected.
 
-The demo makes the divergence visible on purpose: each truck shows a "Client" status
-and a "Server" status, and offline they disagree until you reconnect.
+The coming-back half is where this mode stops being finished. =go-online!= is meant
+to ship the log to =/offworld-go-online= and have the server drain it into the real
+system as though it had arrived all along. What it does today is interpolate the log
+and the offline stem straight into a query string un-encoded, into a handler whose
+decode step is commented out. The shape is right and the leg does not work. Treat
+offline as a demonstration that the representation supports replay, not as a
+reconnect story you can ship.
 
 * Ordering
 
@@ -961,30 +1074,41 @@ is written twice.
 =propose!= stamps on the client, =check= decides on the server, returning =:fx= of
 =[:dispatch actions]=, =[:drop]=, or =[:timeout opts]=.
 
-*Status:* the policy vocabulary and both implementations are done and tested. The
-call site in =divert*= that would stamp outgoing dispatches is still commented out.
-Ordering is available to you deliberately, not automatically.
+*Status:* the policy vocabulary and both implementations are written, and they are
+pure functions you can drive from a REPL. Nothing else in the repo touches them —
+=order= has no call site, no test, and no use in the demo, and the line in =divert*=
+that would stamp outgoing dispatches is commented out. So this is a designed and
+implemented namespace, not an exercised one. Read it before you rely on it.
 
 * Objections
 
-*Isn't this Greenspunning?* Partly, and unavoidably — see [[*You can't not defunctionalize][above]]. The
-question isn't whether to build an abstract machine but whether to admit you have
-one. The specific charge worth taking seriously is reifying control-flow, and the
-staging law answers it by narrowing the case to one: eliding a round trip.
+*Isn't this Greenspunning?* Partly, and unavoidably — see the argument under
+[[*You can't not defunctionalize][You can't not defunctionalize]]. The question isn't whether to build an abstract
+machine but whether to admit you have one. The specific charge worth taking
+seriously is reifying control-flow, and the staging law answers it by narrowing the
+case to one: eliding a round trip.
 
 *Why not infer the boundary with macros?* Hyper and Electric Clojure both do
 versions of this, and they buy real ergonomics. What they don't leave you with is a
 value. Each step away from data reinvents a little more of defunctionalization's
-tag-and-dispatch machinery while giving up the list [[*You can't not defunctionalize][above]] — nothing to walk,
-nothing to check, nothing to colour, nothing to log, and a behaviour change that
-shows up in review as an altered string.
+tag-and-dispatch machinery while giving up the seven properties listed under
+[[*You can't not defunctionalize][You can't not defunctionalize]] — nothing to walk, nothing to check, nothing to
+colour, nothing to log, and a behaviour change that shows up in review as an altered
+string.
 
-*Isn't shipping data slower than shipping code?* It's a space-age problem — the
-kind that gets cheaper every year, in the way that mattered for garbage collection.
-Brotli and morph diffing already put it under the noise floor for this demo. And
-the data form is a source, not an obligation: a dispatch whose shape is statically
-known can in principle be compiled to direct client code, with the interpreter
-retained as a reference implementation.
+*Isn't shipping data slower than shipping code?* Two costs get confused here, and
+they behave differently. Measured on a 10,000-row table in a separate benchmark
+harness: on the /wire/, compression handles it — the whole table's markup came to
+around 200KB Brotli'd, and replacing each cell's inline intent with a shared
+template, or with an opaque server-held token, bought about 12% more. On /parse/,
+neither move helped at all: the browser decompresses back to full text, so parse
+time tracks the raw uncompressed byte count, which barely changed across the three
+forms. Worth knowing before optimising in the wrong direction — the
+opaque-reference alternative is the smaller-on-the-wire one, not the faster one.
+And the data form is a source, not an obligation: a dispatch whose shape is
+statically known can in principle be compiled to direct client code, with the
+interpreter kept as a reference implementation. The honest cost of that idea is two
+implementations that would have to be proven to agree. Nothing of it is built.
 
 *Why not signals?* A signal is a defunctionalized /setter on a mutable place/ —
 stringly-typed, with its meaning in a callback rather than on the wire. That's a fine
@@ -992,6 +1116,13 @@ representation for residual state that genuinely wants a cell: a column width,
 =<details open>=. It's a poor one for intent, which wants to be logged, replayed,
 and carried across a boundary. Offworld uses no signals and no cells; residual
 presentation state goes on the DOM node itself, or in Replicant's per-node memory.
+
+Don't read that more broadly than it goes. "Not data" is not the same as "a place".
+A client-side capability addressed by an id — /here is a one-shot thunk, call it
+when you're done with it/ — is neither a mutable cell nor a setter, and it is no
+more stringly-typed than a registered keyword. Designs built on signals reach for
+that rung too. The critique lands on making the place-cell your general model of
+client state, not on every mechanism that isn't a Clojure vector.
 
 *Why not cursors?* A cursor is a read/write handle onto a path inside a larger
 value: read here, write here, and the caller doesn't have to know. It's the most
@@ -1024,6 +1155,14 @@ your hand. Offworld starts from after.
 What we keep is the addressing half. =🌿/+= extends a path and =🌿/local= reads at
 it: a lens with no write handle. Reading at a path was never the problem.
 
+Which makes the stem itself a fair thing to point at. =🌿/local= plus
+=[:effects/save path v]= /is/ a cursor with the two halves left apart, and Offworld
+reaches for it deliberately — for a component's own local state, where the state
+tree is isomorphic with the render call tree, so addressing by path introduces no
+coupling the composition didn't already have. This is not a purity claim. The line
+is about committing to the place model /globally/, for shared and domain state, and
+then discovering that every component knows the shape of the whole store.
+
 re-frame took this position a decade ago and put it more bluntly: "Please, just say
 no. We already know where that goes. As your programs get bigger, the use of these
 two-way constructs will encourage control logic into all the wrong places and you'll
@@ -1045,37 +1184,65 @@ is residual turns out to be knowable per application, not per widget.
 *Do I have to register everything?* For a one-off server operation, no. An =inline=
 macro registers the closure at render time against the current connection and emits
 =[[:fx/invoke "<token>"]]=; the server looks the token up and calls it, and the
-whole table is dropped when the connection closes. That is the closure rung — the
-same shape a framework built entirely on minted keys uses — available here as an
-escape hatch rather than as the default.
+whole table is dropped when the connection closes. This is the top rung of the
+ladder under [[*Early or late, per value][Early or late, per value]] — code and environment both, pinned behind a
+key — offered here as an escape hatch rather than built on.
 
-Be clear about what it costs, because it costs the entire list [[*You can't not defunctionalize][above]]. The
-intent on the wire is a UUID, so there is nothing to check, nothing to colour beyond
-=:fx/invoke= itself, nothing to authorize by shape, and nothing to replay — the
-token dies with the connection. It also runs only on the server, so it is no answer
-at all for residual /client/ state, which is the complaint the previous paragraph
-was about. Two different escape hatches for two different kinds of ceremony.
+Be clear about what it costs, because it costs every property in the list under
+[[*You can't not defunctionalize][You can't not defunctionalize]]. The intent on the wire is a UUID, so there is
+nothing to check, nothing to colour beyond =:fx/invoke= itself, nothing to authorize
+by shape, and nothing to replay — the token dies with the connection. It also mints
+a fresh token on every render, so an attribute a stable key would leave alone churns
+on each morph. And it runs only on the server, so it is no answer at all to the
+other kind of ceremony complaint — "you made me register an action to toggle a
+boolean," which is about residual /client/ state. Two escape hatches, two different
+complaints; neither covers the other.
 
-(Both =inline= and the atlas currently live in the playground repo rather than in
-Offworld.)
+(Neither =inline= nor the atlas ships in this library. Both were built in a separate
+research repo and would have to be moved here.)
 
 *Where's the component model?* There isn't one, and the demo does without: a path
 for identity, an id for addressing, a =WeakMap= for lifetime, and life-cycle hooks
 that dispatch ordinary actions. Adding a component abstraction would mostly mean
 rebuilding what the DOM already does.
 
+*Is this the right bet for my app?* Often not, and the honest answer is worth more
+than a pitch.
+
+If your app is connected-only and CRUD-shaped, the simplest thing that could work is
+one global default — every interaction an opaque server closure behind a minted key,
+no registry, no side tag, no staging vocabulary to learn. Designs of exactly that
+shape are running real production apps today; this one is not. For that shape of
+app, one global default very likely beats a vocabulary of per-interaction choices,
+and saying otherwise would be selling.
+
+Two things survive that concession, and they are on different clocks. The first is
+narrower than the pitch and more solid: even in an app that never renders a frame in
+the browser, one data DSL spanning client state and server state at a single
+authoring site is an ergonomic win, and what it displaces there isn't a rival
+framework — it's the platform's own answer, a stringly-typed attribute cell plus a
+bundle of JavaScript to give it meaning. The second is the hybrid dividend — offline,
+handover, a client-side branch that saves a round trip — and that one is a
+hypothesis. The properties this document describes are real and checkable. That they
+add up to advantages is what still needs proving, and the burden is on this design,
+not on the simpler one.
+
 * Status
 
 Honest inventory, since this is a research library and not a product.
 
 - *Solid:* the dispatch split, placeholders, the side tag, SSR and CSR modes, the
-  stem, the staging analysis, both ordering policies.
-- *Working, unpolished:* offline mode — it round-trips in the demo, but
-  =select-paths= is a blunt API and =cache-queries= is stubbed.
+  stem, the staging analysis.
+- *Written but unexercised:* both ordering policies. Implemented and readable, with
+  no call site, no test, and no use in the demo.
+- *Half working:* offline mode. Going offline works — subtrees re-render locally
+  from the parked snapshot and dispatches keep running. Coming back doesn't: the
+  action log is shipped un-encoded and the receiving handler's decode is commented
+  out. =select-paths= is also a blunt API, and =cache-queries= is collected but never
+  read. The CSR handoff is in the same state — prefetch and hook wired, takeover not.
 - *Seeded, incomplete:* dependency tracing (=🌿/q=, =🌿/trace=, =::🌿/deps=) — the
   runtime trace works; the static registry behind =defc=/=defq= is not wired.
-  Ordering is not attached to outgoing dispatches.
-- *Built, but living next door:* the divert atlas — static classification of every
+- *Built, but in a different repo:* the divert atlas — static classification of every
   nexus key by side and kind — and =offworld-atlas-mode=, which font-locks it into
   any Clojure buffer with eldoc and hover readings. The classifier reads Offworld's
   =staging= namespace directly and arguably belongs here. It is an editing aid, not
@@ -1112,3 +1279,11 @@ Prior art and the arguments we're answering.
 - [[https://arxiv.org/pdf/2111.10413][CPS, defunctionalization, accumulations and associativity]] — Danvy et al. "For
   programs that dynamically generate new closures… no new constants and no
   extensible case expressions are needed."
+- [[https://www.w3.org/2001/tag/doc/leastPower.html][Berners-Lee & Mendelsohn: the rule of least power]] — why the weaker notation is
+  the one you can analyse, which is the rule the whole staging ladder follows
+- [[https://www.itu.dk/people/sestoft/pebook/][Jones, Gomard & Sestoft: Partial Evaluation]] — binding-time analysis, the static /
+  dynamic split that [[*Early or late, per value][Early or late, per value]] is an informal version of
+- [[https://docs.datomic.com/reference/filters.html][Datomic: database filters]] — =as-of= and =basis-t=, the coordinate-into-history
+  that makes rung 2 of that ladder a long instead of a snapshot store
+- [[https://www.enterpriseintegrationpatterns.com/patterns/messaging/StoreInLibrary.html][Enterprise Integration Patterns: Claim Check]] — store the payload, pass a token,
+  redeem it later; rung 3
