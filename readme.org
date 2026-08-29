@@ -20,12 +20,9 @@ Three libraries do the heavy lifting:
   patching a live DOM tree in place to match a new HTML fragment, pushed down a
   long-lived HTTP response the server keeps writing to.
 
-Offworld adds one idea, and the rest of the library follows from it:
-
-#+begin_quote
-An interaction is a /staged computation/. Represent it as data, and mark each
-handler with the stage it runs at.
-#+end_quote
+Offworld adds one idea, and the rest of the library follows from it: *an
+interaction is a staged computation — represent it as data, and mark each handler
+with the world it runs in.*
 
 /Staged/ because the parts of one interaction can't all run at the same moment.
 What the season is now, the server knows at render time; which modifier key you
@@ -399,12 +396,10 @@ distinction is ignored entirely.
 
 ** The law
 
-#+begin_quote
-Computation authored at stage N may *consume* only values already resolved by some
-stage ≤ N. It may *carry* — nest, restructure, pass through — a reference to a
-later-stage value as opaque data, but never compute with its contents before its
-stage arrives.
-#+end_quote
+*The staging law.* Computation authored at stage N may *consume* only values
+already resolved by some stage ≤ N. It may *carry* — nest, restructure, pass
+through — a reference to a later-stage value as opaque data, but never compute
+with its contents before its stage arrives.
 
 The =randomize-button= above obeys this without saying so: =(get-season stem)= is
 consumed at render because the server has it; =[:event/key-modifiers]= is only
@@ -412,12 +407,9 @@ carried, because nothing at render time can know it.
 
 The law also says when to reach for a data-level conditional, and the answer is
 "almost never". Since expansion recurs, a handler can branch with =if= over values
-that are already interpolated. The one case the law forces is:
-
-#+begin_quote
-The client must decide whether to go to the server *at all*, using a value only
-available at client-dispatch time.
-#+end_quote
+that are already interpolated. The one case the law forces is this: *the client
+must decide whether to go to the server at all, using a value only available at
+client-dispatch time.*
 
 Everywhere else the branch and the value it tests are at the same stage. Here they
 aren't: the value appears in the browser and the code that would branch on it runs
@@ -430,20 +422,21 @@ So the library ships exactly one conditional — =guard=, in
 argument is interpolated like any other, and if the resulting value is truthy the
 guard expands to the actions that follow it, otherwise to nothing.
 
-That first argument is a /value/, not an expression — there is no =:== to compare
-with — so you register a placeholder that answers the question:
+That first argument is a /value/, not an expression. There is no data notation
+for === or =not=, and deliberately so — the comparison is ordinary Clojure,
+written inside a placeholder that answers the question:
 
 #+begin_src clojure
 (nxr/register-placeholder! ::enter?
   (fn [dd] (= "Enter" (.-key (:replicant/dom-event dd)))))
 
-{:on {:keydown [[::🛡/guard [::enter?]
+{:on {:keydown [[::🚦/guard [::enter?]
                  [::commit [:event.target/value]]]]}}
 #+end_src
 
 When the guard expands to nothing there is no server action left to divert, so no
 request is made — which is the whole trick. To wrap actions you already hold,
-=(into [::🛡/guard pred] actions)=. Require =nextjournal.offworld.guard= from code
+=(into [::🚦/guard pred] actions)=. Require =nextjournal.offworld.guard= from code
 the client bundle loads, or the registration never runs there.
 
 Sending everything and letting the server decide is always /correct/ — it just
@@ -682,12 +675,9 @@ listener is indistinguishable from one that worked.
 
 *When does bubbling still win?* Not on subscriber count — any consumer set
 derivable at render time is injectable, and under =view = f(state)= that's all of
-them. The real discriminator is *authorship*:
-
-#+begin_quote
-Bubbling is the interop protocol with code that isn't in your render tree. Inside
-your render tree it buys nothing that injection doesn't.
-#+end_quote
+them. The real discriminator is authorship. *Bubbling is the interop protocol
+with code that isn't in your render tree; inside your render tree it buys nothing
+that injection doesn't.*
 
 Which leaves DOM you didn't render, consumers arriving without a re-render, and
 the browser as the consumer of a default action — plus one fair concession. A
@@ -703,11 +693,7 @@ markup. Per element by default; delegate on measured cost.
 
 ** Frame-perfect work
 
-#+begin_quote
-An intent is one per decision, not one per sample.
-#+end_quote
-
-Nexus should start and stop a gesture. It should never see a =pointermove=. The
+*One per decision, not one per sample.* Nexus should start and stop a gesture. It should never see a =pointermove=. The
 per-frame work — the drag preview, the pointer capture, the style writes — belongs
 inside a client effect owning its own rAF loop, torn down by a second intent. If
 you're dispatching per frame, the granularity is wrong.
