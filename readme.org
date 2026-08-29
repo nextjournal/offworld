@@ -11,9 +11,14 @@ Offworld splits each interaction at dispatch time.
 
 Three libraries do the heavy lifting:
 
-- *Replicant* — hiccup, a dispatch hook, life-cycle hooks. No component model.
-- *Nexus* — a registry of expansions, effects and placeholders, and a loop that drains a vector of actions.
-- *Datastar* — attribute-driven client behaviour, SSE-driven DOM morphing.
+- *Replicant* — renders Clojure data structures to DOM, and hands you one hook
+  where every interaction arrives, plus hooks for elements appearing and leaving.
+  No component model.
+- *Nexus* — a table of named handlers, and a loop that drains a list of things to
+  do by looking each one up as it goes.
+- *Datastar* — attribute-driven client behaviour, and DOM /morphing/ over SSE:
+  patching a live DOM tree in place to match a new HTML fragment, pushed down a
+  long-lived HTTP response the server keeps writing to.
 
 Offworld adds one idea, and the rest of the library follows from it:
 
@@ -22,9 +27,16 @@ An interaction is a /staged computation/. Represent it as data, and mark each
 handler with the stage it runs at.
 #+end_quote
 
-No component model, no reactive graph, no signals, no compiler inferring where
+/Staged/ because the parts of one interaction can't all run at the same moment.
+What the season is now, the server knows at render time; which modifier key you
+were holding, only the browser knows, and only once you've clicked. A staged
+computation is one value whose parts are evaluated at different points along that
+chain, rather than code that runs all at once.
+
+So: no component model, no reactive graph, no signals, no compiler inferring where
 your code runs. A vector of intents, a registry of handlers, and one piece of
-metadata — =^::🪐/server= or =^::🪐/client= — saying where a handler lives.
+metadata — =^::🪐/server= or =^::🪐/client= — saying where a handler lives. Terms
+that might be unfamiliar are collected in the [[*Glossary][Glossary]] at the end.
 
 ** Quickstart
 
@@ -37,7 +49,7 @@ bb test-cljs      # node tests via shadow
 - [[http://localhost:8000][localhost:8000]] — server-rendered. The browser holds no state; the server renders
   hiccup to HTML and morphs it down an SSE connection.
 - [[http://localhost:8000?csr][localhost:8000?csr]] — the same UI, entirely client-side. Replicant reconciles a
-  vdom; no server after the first byte.
+  virtual DOM; no server after the first byte.
 - Kill the server and the SSR page keeps working. See [[*Offline][Offline]].
 
 The library is seven files under a thousand lines: =offworld.cljc=, =stem.cljc=,
@@ -94,22 +106,53 @@ that can see all of them at once.
 Offworld's bet is that one data structure carrying all the stages is worth more
 than the directness you give up.
 
-** You can't not defunctionalize
+** A function can't cross the wire
 
-The objection to actions-as-data is always the same: you've reinvented function
-calls, badly. Greenspun's tenth rule, with a registry.
+Start from what you'd write if nothing were in the way — a button that changes the
+season:
 
-The answer is that there is no version of this program where the machine isn't
-present. A continuation composed during server render has to survive
-serialization, cross a wire, and be applied in a browser. A closure cannot make
-that trip. So you /will/ defunctionalize — replace the function with a first-order
-tag plus its free variables, and a dispatcher that applies them. Reynolds' move,
-forced by physics rather than chosen for elegance.
+#+begin_src clojure
+[:button {:on {:click (fn [] (set-season! :winter))}} "Winter"]
+#+end_src
 
-The only question is what you defunctionalize *into*: into strings (an event
-name, a payload key, an interpolated JS expression); into places (a stringly-typed
-attribute cell whose meaning lives in a callback); into macros (inferred staging,
-expanded at compile time); or into data (a Clojure vector).
+That handler is a *closure*: a function bundled together with the bindings it
+captured from where it was written. In a browser-only app this is fine, because
+the function is created and called in the same place.
+
+Now render that same button on the server. The click will happen in a browser,
+later, on a different machine, and the only thing a server ever hands over is
+text — HTML, and whatever the HTML carries. A closure has no written form. You can
+print its source, but the bindings it captured (a database connection, the current
+season, the user) were never text and can't become text.
+
+So you do the only thing available: leave the function where it can run, give it a
+name, and send the name along with the values it needs.
+
+#+begin_src clojure
+[:button {:on {:click [[:set-season :winter]]}} "Winter"]
+#+end_src
+
+The browser sends that vector back. The server looks =:set-season= up in a table,
+finds the function, applies it to =:winter=. Nothing crossed the wire but a
+keyword and a value.
+
+That move has a name — *defunctionalization* — and it's worth knowing, because
+once you see it you see it everywhere. Reynolds described it in 1972 as a compiler
+technique: replace a function value with a tag plus the values it captured, and
+have one dispatcher apply the tag to them. That's precisely what the two snippets
+above do.
+
+The reason to raise it here is that it isn't a style choice you can decline. Any
+framework that runs one interaction across two machines defunctionalizes, because
+a closure can't be serialized. The only real question is what it defunctionalizes
+*into*:
+
+- into *strings* — an event name, a payload key, a JavaScript expression pasted
+  into an attribute
+- into *places* — a named cell in the markup whose meaning lives in a callback
+  registered somewhere else
+- into *macros* — a compiler that infers which side each expression belongs to
+- into *data* — a Clojure vector
 
 Offworld picks data. Not because data is virtuous, but because of what a value
 admits that the other three don't:
@@ -136,8 +179,12 @@ admits that the other three don't:
 Two more are reachable and unbuilt: authorizing a dispatch by its /shape/ before
 anything runs, and compiling a statically-known dispatch to direct client code.
 
-The abstract machine is either Nexus, or it's an ad-hoc mental model in a
-colleague's head. It's never not immanent.
+None of this comes free, and the fair objection is easy to state: a table of names
+you look functions up in is an interpreter, and writing one is usually a mistake.
+That's taken up under [[*Objections][Objections]]. The short reply is that the interpreter is there
+either way. Either it's Nexus — written down, inspectable, the same on both sides
+— or it's an unwritten convention in a colleague's head.
+
 
 * The loop, walked
 
@@ -185,7 +232,8 @@ language only the browser can read.
 
 The click fires. =divert= decodes the payload and dispatches it against a /client
 view/ of the registry — one whose placeholders are filtered to the client-marked
-ones. Interpolation happens per action as Nexus reaches it, so
+ones. Each action is then /interpolated/ — walked, with every placeholder
+replaced by the value it stands for — as Nexus reaches it, so
 =[:event/key-modifiers]= resolves against the real DOM event and
 =[[::randomize [:shift nil nil] :spring]]= is what expands.
 
@@ -276,7 +324,8 @@ data; "expansion" is the handler that turns one into more.)
 
 Expansion recurs, and each action is interpolated just before it expands. So a
 handler always receives interpolated values and can branch on them with plain
-Clojure — you almost never need to reify control flow as data.
+Clojure — you almost never need to express control flow as data rather than as
+code.
 
 ** Effects
 
@@ -494,7 +543,8 @@ registry it's aiming at isn't finished. Treat =deps= as documentation today.
 position in the /render/ composition — not from a mount-time counter, an insertion
 order, or a place in the DOM. That's what makes it survive morphing: Datastar
 replaces nodes underneath you, but it cannot perturb a name the markup itself
-derives. Content-addressing, applied to identity.
+derives: the name is a function of what the thing /is/ in the composition, not of
+when or where it appeared.
 
 The =::🌿/el= placeholder closes the loop, resolving a path or id to a live node
 at client-dispatch time:
@@ -893,7 +943,8 @@ Placeholder interpolation is the one rule that currently fails that second test.
 
 *Isn't this Greenspunning?* Partly, and unavoidably. The question isn't whether to
 build an abstract machine but whether to admit you have one. The charge worth
-taking seriously is reifying control flow, and the staging law answers it by
+taking seriously is turning control flow into data, and the staging law answers
+it by
 narrowing that case to one: eliding a round trip.
 
 *Why not infer the boundary with macros?* Hyper and Electric Clojure do versions
@@ -938,8 +989,8 @@ reason too — a cursor is a closure over a path, so it can't cross the wire, an
 defunctionalizing it gives you back =[:effects/save path v]=. A cursor is what you
 have /before/ the boundary forces your hand.
 
-We keep the addressing half: =🌿/+= extends a path, =🌿/local= reads at it, a lens
-with no write handle. Reading at a path was never the problem — which makes the
+We keep the addressing half: =🌿/+= extends a path, =🌿/local= reads at it — the
+read end of a cursor with no write end attached. Reading at a path was never the problem — which makes the
 stem itself fair to point at, since =🌿/local= plus =[:effects/save path v]= /is/
 a cursor with the halves left apart. Offworld reaches for that deliberately for a
 component's own local state, where the state tree is isomorphic with the render
@@ -967,7 +1018,7 @@ application, not per widget.
 and emits =[[::inline/invoke "<token>"]]=; the server looks the token up and calls
 it, and the table is dropped when the connection closes.
 
-It costs every property listed under [[*You can't not defunctionalize][You can't not defunctionalize]]: the intent on the
+It costs every property listed under [[*A function can't cross the wire][A function can't cross the wire]]: the intent on the
 wire is a UUID, so there's nothing to check, colour, authorize by shape, or replay
 — the token dies with the connection. It mints a fresh token per render, so an
 attribute a stable key would leave alone churns on each morph. And it runs only on
@@ -1019,6 +1070,44 @@ This is a research library, not a product.
   unresolved one fails loudly instead of passing as data.
 - *Speculative:* compiling statically-known dispatches to direct client code.
 
+* Glossary
+
+Terms this document uses, in the sense it uses them.
+
+*From the three libraries underneath*
+
+- hiccup :: Clojure vectors as markup — =[:button {:class "x"} "Click"]=. Replicant renders it.
+- morph :: patching an existing DOM tree in place to match a new HTML fragment, keeping the nodes that didn't change. Datastar's alternative to replacing a subtree.
+- SSE :: server-sent events. One long-lived HTTP response the server keeps writing to, so it can push without being asked.
+- action :: one =[:keyword arg arg]= vector. Nexus's unit of work.
+- dispatch :: handing Nexus a vector of actions and letting it drain them.
+- expansion :: a handler that receives an action and returns /more actions/. Where decisions live. (Nexus also calls these action handlers.)
+- effect :: a handler at the end of the chain. It mutates something and returns nothing useful.
+- placeholder :: a vector standing for a value that doesn't exist yet, like =[:event.target/value]=.
+- interpolation :: walking an action tree and replacing every placeholder with the value it stands for.
+- interceptor :: a function Nexus calls at a named point in its loop — before a dispatch, before each action, after each effect — which can inspect or rewrite what's passing through.
+
+*Offworld's own vocabulary*
+
+- intent :: a whole =:on= vector: the actions one user gesture means. The unit you author.
+- stage :: one link in the fixed chain a hybrid interaction passes through — render, then client state, expansion and effects, then the same three on the server.
+- staged computation :: an interaction written as one value whose parts are evaluated at different stages, rather than as code that runs all at once.
+- the side tag :: =^::🪐/server= or =^::🪐/client= metadata on a handler, saying which machine it needs.
+- divert :: the client-side split. It runs the client half of a dispatch locally and hands the server half back to Datastar.
+- stem :: the whole application state, passed down to a render-fn as an argument, alongside a path saying where that render-fn lives inside it.
+- SSR / CSR :: server-side and client-side rendering. Offworld runs the same code in both, plus an offline third mode.
+
+*Terms borrowed from elsewhere*
+
+- closure :: a function together with the bindings it captured where it was written. The captured half is why one can't be sent over a wire.
+- defunctionalization :: replacing a function value with a name plus the values it captured, and one dispatcher that applies the name to them. Reynolds, 1972.
+- ambient authority :: the power to affect something you never named and can't see. =stopPropagation= is the example here: a leaf silences listeners it has never heard of.
+- residual state :: the small presentational facts a UI accumulates that nothing else needs — is this disclosure open, what is half-typed in this box.
+- cursor :: a read/write handle onto one path inside a larger value, so the holder can get and set without knowing where it is.
+- signal :: a mutable cell that notifies dependents when it changes. The reactive-graph primitive Offworld doesn't use.
+- prop drilling :: passing state down through every intermediate call, so a render-fn's arguments are its whole scope.
+- Greenspun's tenth rule :: the joke that every large program contains an ad-hoc, informally-specified implementation of half of Lisp. Invoked whenever someone builds an interpreter without meaning to.
+
 * Sources
 
 - [[https://replicant.fun/][Replicant]] — rendering, life-cycle hooks, [[https://replicant.fun/tutorials/javascript-interop/][JS interop]] and per-node memory
@@ -1037,6 +1126,8 @@ This is a research library, not a product.
   "escape hatch to the shadow DOM encapsulation model"
 - [[https://react.dev/reference/react-dom/createPortal][React: createPortal]] — events propagate by the React tree, not the DOM tree
 - [[https://blog.logrocket.com/deep-internals-event-delegation/][Internals of event delegation]]
+- [[https://dl.acm.org/doi/10.1145/800194.805852][Reynolds: Definitional Interpreters for Higher-Order Programming Languages]] (1972)
+  — where defunctionalization is introduced
 - [[https://arxiv.org/pdf/2111.10413][CPS, defunctionalization, accumulations and associativity]] — Danvy et al.
 - [[https://www.w3.org/2001/tag/doc/leastPower.html][Berners-Lee & Mendelsohn: the rule of least power]] — why the weaker notation is
   the one you can analyse, which is the rule the staging ladder follows
