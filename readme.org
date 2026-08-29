@@ -52,8 +52,9 @@ bb test-cljs      # node tests via shadow
   virtual DOM; no server after the first byte.
 - Kill the server and the SSR page keeps working. See [[*Offline][Offline]].
 
-The library is seven files under a thousand lines: =offworld.cljc=, =stem.cljc=,
-=staging.cljc=, =order.cljc=, =inline.cljc=, =util.cljc=, =nexus/registry.cljc=.
+The library is eight files under a thousand lines: =offworld.cljc=, =stem.cljc=,
+=staging.cljc=, =order.cljc=, =guard.cljc=, =inline.cljc=, =util.cljc=,
+=nexus/registry.cljc=.
 Everything under =demo/= is the demo.
 
 * Why
@@ -223,8 +224,9 @@ data-on:click="((_sp)=>_sp&&@get('/offworld-dispatch',{payload:{offworld:_sp}}))
 There /is/ string interpolation here, but as dumb transport rather than code
 generation: one opaque blob in one fixed slot, beside a dispatch URL constant for
 the whole app. The JavaScript around it is byte-identical on every element, and no
-part of what an action /means/ is ever assembled into it. Not "no interpolation"
-but *one* interpolation — as against the common pattern where each seam
+part of what an action /means/ is ever assembled into it.
+
+Compare that against the common pattern where each seam
 hand-writes its own attribute expression, so every interaction invents a little
 language only the browser can read.
 
@@ -271,10 +273,18 @@ before it crosses while a server-stage placeholder crosses untouched.
 ** Across the wire, and back
 
 The server-bound remainder is transit-encoded and handed back to the Datastar
-expression, which =@get=s it to =/offworld-dispatch=. Nexus drains it against the
-system atom. A watch on that atom re-renders the entire UI, runs =replicant->d*=
-over it, renders to a string, and pushes it down the SSE connection as a
-=datastar-patch-elements= event. Datastar morphs the DOM.
+expression, which sends it to =/offworld-dispatch=. There, Nexus drains it — the
+same loop and the same registry as in the browser, now reaching the handlers that
+needed a server, against the server's own state.
+
+Offworld stops there. How a server effect turns into a new DOM is not the
+library's business, and there are several defensible answers: push on every state
+change, push on a fixed interval only when the render differs, throttle to a
+frame, re-render only the subtree that changed. The demo takes the first — a watch
+on the system atom re-renders the whole UI, runs =replicant->d*= over it, renders
+it to a string, and pushes it down the SSE connection as a
+=datastar-patch-elements= event, which Datastar morphs into the page. Offworld's
+half of that contract is narrow: intents in by request, HTML out.
 
 ** The point
 
@@ -411,12 +421,37 @@ on the server, after the round trip you were trying to avoid. Concretely, a
 keydown handler that should only commit on =Enter=: with no client-side branch,
 every keystroke is a request the server answers by doing nothing.
 
+So the library ships exactly one conditional, =nextjournal.offworld.guard/when=.
+It is an ordinary client-side expansion: its first argument is interpolated like
+any other, and if the resulting value is truthy the guard expands to the actions
+that follow it, otherwise to nothing.
+
+That first argument is a /value/, not an expression — there is no =:== to compare
+with — so you register a placeholder that answers the question:
+
+#+begin_src clojure
+(nxr/register-placeholder! ::enter?
+  (fn [dd] (= "Enter" (.-key (:replicant/dom-event dd)))))
+
+{:on {:keydown [[::🛡/when [::enter?]
+                 [::commit [:event.target/value]]]]}}
+#+end_src
+
+When the guard expands to nothing there is no server action left to divert, so no
+request is made — which is the whole trick. To wrap actions you already hold,
+=(into [::🛡/when pred] actions)=. Require =nextjournal.offworld.guard= from code
+the client bundle loads, or the registration never runs there.
+
 Sending everything and letting the server decide is always /correct/ — it just
-costs the trip. So the guard exists for exactly one purpose and should never grow
+costs the trip. So the guard exists for that one purpose and should never grow
 into a general control-flow construct. There is no =:and=, no =:or=, no =:cond=;
 one guard, deliberately too weak to be tempting, because everything a richer
 version could express is already expressible in Clojure at a stage that has the
 values.
+
+It does cost one thing. Nesting actions in argument position is exactly what the
+staging checker can't follow, so a typo'd action inside a guard isn't reported
+before it runs the way a top-level one is.
 
 ** Early or late, per value
 
@@ -696,8 +731,8 @@ The same expression, three runtimes. This is what the library is named after.
 ** SSR
 
 The browser holds no state. This is the mode walked through above: =divert=
-splits, the server drains its half into an atom, a watch re-renders the whole UI
-and pushes it down an SSE connection, and Datastar morphs.
+splits, and the server drains its half. What comes next is the part the
+walkthrough left open, and the demo's answer is to re-render on every change:
 
 #+begin_src clojure
 (add-watch system ::ui/render
@@ -713,13 +748,10 @@ and morph diffing make it cheaper than it sounds, and it buys one state in one
 place with the DOM a pure function of it. Committing to top-down rendering is the
 trade.
 
-Note what the library is /not/ deciding there. Rendering on every change is a
-watch the demo's server installs; a loop ticking on its own interval and pushing
-only when the render differs is the same contract on a different schedule.
-Offworld's side is intents in by request, HTML out — so a burst of eight
-dispatches costs eight pushes under the watch and one under a capped loop, without
-a line of view code changing. Scheduling changes how often the browser is told,
-never what is true.
+That schedule is the demo's choice and the first thing to revisit under load. A
+burst of eight dispatches costs eight pushes under this watch and one under a loop
+that pushes on a fixed interval, without a line of view code changing — scheduling
+changes how often the browser is told, never what is true.
 
 ** CSR
 
@@ -1052,7 +1084,7 @@ burden is on this design, not the simpler one.
 This is a research library, not a product.
 
 - *Solid:* the dispatch split, placeholders, the side tag, SSR and CSR modes, the
-  stem, the staging analysis, =inline=.
+  stem, the staging analysis, the round-trip guard, =inline=.
 - *Implemented and tested, no worked example:* both ordering policies and the two
   interceptors that apply them. Exercised by tests, not by a UI that races.
 - *Half working:* offline mode. Going offline works — subtrees re-render locally
