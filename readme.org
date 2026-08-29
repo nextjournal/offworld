@@ -1,0 +1,126 @@
+* 🪐 Offworld
+
+** 🫧Bubbling
+"When an event bubbles, it becomes part of your component’s API and every consumer along the event’s path must understand the event. It’s important to understand how bubbling works so you can choose the most restrictive bubbling configuration that works for your component." (https://developer.salesforce.com/docs/platform/lwc/guide/events-propagation.html)
+
+
+
+** 💉Injection
+
+** 🫧Bubble or 💉Inject?
+Bubbling is nonlocal reasoning on magic strings (true?).
+
+A feature depends on 1 broadcaster, N subscribers.
+We lose unidirectionality, square the complexity.
+
+With 💉injection, actions target specific element(s), and can throw if they aren't present.
+Reasonability depends on a toplevel `def` (def contract, def some-html-id).
+
+Then, clojure ensures (some) consistency across magic-string sites (single basis, can be renamed once).
+But, sensible default:
+`def` is no better than `🌿/path`, and with isomorphic render/DOM, why not (never not feasible)?
+
+Drawback of data is just a "space-age" (hickey) problem.
+D*+brotli take us to the space-age.
+Why not commit to topdown rendering?
+
+(Note: do i just need to learn bubbling?)
+TODO prior art critique of event bubbling?
+
+(Idea: Could the browser event loop "host" nexus' interceptor-stack?)
+
+Injection provides everything bubbling can, but the wiring is static (not dynamic). 
+
+- 🫧bubble: staged values combine at dispatch time, visible in devtools
+- 💉inject: staged values combine at render time, visible in DOM
+
+Clojure removes the need to bubble.
+Injection is free, due to structural sharing.
+
+The injection bet: a render-fn composes intents passed in by its outer callers. It composes a staged computation, using the nexus dsl. It's all visible at render-time, thus, it's all readable concretly from the DOM. This composition style is possible because it's defunctionalized. Putting a staged computation together is just putting data together.
+
+** Staged Computation
+*** Continuation-passing style
+Instead of returning a value, you pass on the environment and a mandate.
+
+*** Server continuations
+
+*** Defunctionalization
+What's an "abstract machine"?
+It's either nexus, or it's an ad-hoc mental model.
+You can't not defunctionalize; the machine's never not immanent.
+
+A registry, and an apply fn.
+
+*** δλ🫧 Defunctional Bubbling
+We combine late-bound values as a datastructure.
+
+*** δλ💉 Defunctional Injection
+
+
+
+*** But really, bubble or inject?
+You can't not defunctionalize.
+The choice is:
+Strings, js/Objects, Macros, Compilation? Or, data?
+
+*** Formal proofs for bubbling vs. injection (use tla+?)
+Prove: anything that can be bubbled can be injected
+Prove: injection names itself, bubbling names the other
+
+"For programs that 'dynamically generate' new closures...
+no new constants and no extensible case expressions are needed."
+(danvy-nielsen 2001) (dynamic action expansion)
+
+*** Staging
+Here's the full UI loop:
+
+| stage           | inputs             | action       | outputs           |
+|-----------------+--------------------+--------------+-------------------|
+| Morph           | ↪SSE message   --> | morph        | --> new DOM       |
+|-----------------+--------------------+--------------+-------------------|
+| Client Dispatch | actions        --> | ↪interpolate |                   |
+|                 | client-event   --> | expand       |                   |
+|                 | client-state   --> | recur↩       |                   |
+|                 |                    | interpolate  |                   |
+|                 |                    | effect       |                   |
+|                 |                    | interpolate  | --> client-fx     |
+|-----------------+--------------------+--------------+-------------------|
+| HTTP Request    | server-actions --> | serialize    | --> dispatch RPC  |
+|-----------------+--------------------+--------------+-------------------|
+| Server Dispatch | server-state   --> | ↪interpolate |                   |
+|                 |                    | expand       |                   |
+|                 |                    | recur↩       |                   |
+|                 |                    | interpolate  |                   |
+|                 |                    | effect       | --> server-fx     |
+|-----------------+--------------------+--------------+-------------------|
+| Render          | server-state   --> | render       | --> new actions   |
+|                 |                    |              | --> SSE-message↩  |
+
+
+
+**** Morph Time 
+**** Client Dispatch Time
+(((interpolate))), 
+**** HTTP Request Time
+**** Server Dispatch Time
+**** Render Time
+
+*** The Staging Law
+A stage can pass along values bound to a later stage. For instance, 
+
+** Reusability, composition
+How shall we compose the first-order data representing a staged computation?
+*** Composing strings
+*** 🪙A treasure hunt for strings
+Helps optimize performance, costs mental load.
+*** Compiling strings
+critique of hyper?
+*** Composing data
+
+
+
+"Even for programs which "dynamically generate" no"
+no new constants and no extensible
+case expressions are needed
+
