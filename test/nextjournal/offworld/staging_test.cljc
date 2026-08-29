@@ -8,7 +8,7 @@
    [nextjournal.offworld :as-alias ow]))
 
 (def ^:private nexus
-  "A registry with one action / effect / placeholder per side. Server handlers
+  "A registry with one action / effect / placeholder per world. Server handlers
   carry the ^::🪐/server marker; unmarked handlers default to client."
   {:nexus/expansions   {:ex/client (fn [])
                         :ex/server ^::ow/server (fn [])}
@@ -26,9 +26,9 @@
     (is (= :server/fx     (:stage (staging/lookup nexus :fx/server))))
     (is (= :client/expand (:stage (staging/lookup nexus :ex/client))))
     (is (= :server/expand (:stage (staging/lookup nexus :ex/server)))))
-  (testing "sides, and n increases client -> server"
-    (is (= :client (:side (staging/lookup nexus :pl/client))))
-    (is (= :server (:side (staging/lookup nexus :pl/server))))
+  (testing "worlds, and n increases client -> server"
+    (is (= :client (:world (staging/lookup nexus :pl/client))))
+    (is (= :server (:world (staging/lookup nexus :pl/server))))
     (is (< (:n (staging/lookup nexus :pl/client))
            (:n (staging/lookup nexus :pl/server)))))
   (testing "unregistered key"
@@ -41,7 +41,7 @@
         ph     (first (filter staging/keyword-headed? (rest action)))]
     (is (= :effect (:kind (staging/info action))) "action head tagged")
     (is (= :placeholder (:kind (staging/info ph))) "nested placeholder tagged")
-    (is (= :client (:side (staging/info ph))))))
+    (is (= :client (:world (staging/info ph))))))
 
 (deftest stranded-at-server
   (testing "a client placeholder that leaked into the server payload is flagged"

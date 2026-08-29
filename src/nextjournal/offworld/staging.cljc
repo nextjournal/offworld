@@ -12,13 +12,13 @@
       0 render │ 1 client/state │ 2 client/expand │ 3 client/fx
                │ 4 server/state │ 5 server/expand │ 6 server/fx
 
-  offworld's `kind × side` slots straight in. `side` is :server iff the handler
+  offworld's `kind × world` slots straight in. `world` is :server iff the handler
   is marked ^::🪐/server, else :client (the default). Each kind has a *deadline* —
   the stage past which an unresolved/unrun reference is stranded:
 
-    - action: its side's *expand* stage (an action must expand there).
-    - effect: its side's *fx* stage (an effect runs there).
-    - placeholder: its side's *fx* stage. Interpolation runs twice per side
+    - action: its world's *expand* stage (an action must expand there).
+    - effect: its world's *fx* stage (an effect runs there).
+    - placeholder: its world's *fx* stage. Interpolation runs twice per world
       (before expansion AND before effect handling), so a placeholder surviving
       expansion still has a pre-fx pass coming — its deadline is fx, not expand.
 
@@ -61,15 +61,15 @@
 (def ^:private stage->n (into {} (map-indexed (fn [i s] [s i]) stage-order)))
 
 (defn- stage-of
-  "The stage keyword by which a `kind`×`side` reference must have resolved — its
+  "The stage keyword by which a `kind`×`world` reference must have resolved — its
   *deadline*, the point past which it is stranded — or nil.
 
-  Note placeholders: interpolation runs twice per side (once before expansion,
+  Note placeholders: interpolation runs twice per world (once before expansion,
   once before effect handling), so a placeholder may resolve at either pass. Its
   deadline is the *last* one, immediately before fx — NOT expansion. A placeholder
   surviving expansion is not yet stranded; one surviving fx is."
-  [kind side]
-  (case [kind side]
+  [kind world]
+  (case [kind world]
     [:placeholder :client] :client/fx      ; resolves at interp₁ or interp₂; deadline = pre-fx
     [:placeholder :server] :server/fx
     [:action      :client] :client/expand  ; :action and :expansion share the expansion
@@ -107,17 +107,17 @@
 
 (defn lookup
   "Classify a single key `k` against `nexus`. Returns
-  {:key :kind :side :stage :n} for a registered key, or
-  {:key :kind :unknown :side :unknown :stage nil :n nil} when registered nowhere."
+  {:key :kind :world :stage :n} for a registered key, or
+  {:key :kind :unknown :world :unknown :stage nil :n nil} when registered nowhere."
   [nexus k]
   (or (some (fn [[kind reg-key]]
               (let [reg (get nexus reg-key)]
                 (when (contains? reg k)
-                  (let [side  (if (server-handler? (get reg k)) :server :client)
-                        stage (stage-of kind side)]
-                    {:key k :kind kind :side side :stage stage :n (stage->n stage)}))))
+                  (let [world (if (server-handler? (get reg k)) :server :client)
+                        stage (stage-of kind world)]
+                    {:key k :kind kind :world world :stage stage :n (stage->n stage)}))))
             buckets)
-      {:key k :kind :unknown :side :unknown :stage nil :n nil}))
+      {:key k :kind :unknown :world :unknown :stage nil :n nil}))
 
 ;; ---------------------------------------------------------------------------
 ;; Tagging — pure, attaches ::info metadata to every keyword-headed vector.
@@ -184,7 +184,7 @@
   [nexus actions]
   (into []
         (for [i     (refs nexus actions)
-              :when (= :client (:side i))]
+              :when (= :client (:world i))]
           {:type    :stranded-client-ref
            :key     (:key i)
            :kind    (:kind i)
@@ -240,7 +240,7 @@
     vs))
 
 (comment
-  ;; A registry with a server effect, a client effect, and one placeholder of each side:
+  ;; A registry with a server effect, a client effect, and one placeholder of each world:
   (def nexus
     {:nexus/actions      {}
      :nexus/effects      {:fx/server (with-meta (fn []) {::🪐/server true})   ; server/fx (6)
@@ -248,7 +248,7 @@
      :nexus/placeholders {:pl/client    (with-meta (fn []) {})                   ; client/expand (2)
                           :pl/server    (with-meta (fn []) {::🪐/server true})}}) ; server/expand (5)
 
-  (lookup nexus :fx/server) ;=> {:kind :effect :side :server :stage :server/fx :n 6 ...}
+  (lookup nexus :fx/server) ;=> {:kind :effect :world :server :stage :server/fx :n 6 ...}
 
   ;; LEAK: a client placeholder rode into the server payload (interpolation missed it)
   (stranded-at-server nexus [[:fx/server path [:pl/client "x"]]])

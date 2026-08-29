@@ -13,10 +13,10 @@
 
 (defn- fixture [f]
   (let [old      @nxr/!registry
-        shipped  (get-in old [:nexus/expansions ::🛡/when])]
+        shipped  (get-in old [:nexus/expansions ::🛡/guard])]
     (reset! nxr/!registry {})
     (nxr/register-system->state! deref)
-    (swap! nxr/!registry assoc-in [:nexus/expansions ::🛡/when] shipped)
+    (swap! nxr/!registry assoc-in [:nexus/expansions ::🛡/guard] shipped)
     (binding [*ran* (atom [])]
       (try (f) (finally (reset! nxr/!registry old))))))
 
@@ -26,43 +26,43 @@
   (nexus/dispatch (🪐/client-nexus (nxr/get-registry)) (atom {}) {:enter? true :other? false} actions))
 
 (deftest the-shipped-guard-is-registered-and-client-side
-  (let [h (get-in (nxr/get-registry) [:nexus/expansions ::🛡/when])]
+  (let [h (get-in (nxr/get-registry) [:nexus/expansions ::🛡/guard])]
     (is (some? h) "nextjournal.offworld.guard registers it on load")
     (is (🪐/client-marked? h) "and it expands in the browser, which is the point")))
 
 (deftest expands-to-its-actions-when-the-predicate-is-truthy
   (nxr/register-effect! ::client-fx (fn [& _] (note! :ran)))
-  (run [[::🛡/when true [::client-fx]]])
+  (run [[::🛡/guard true [::client-fx]]])
   (is (= [:ran] @*ran*)))
 
 (deftest expands-to-nothing-when-the-predicate-is-falsey
   (nxr/register-effect! ::client-fx (fn [& _] (note! :ran)))
-  (run [[::🛡/when false [::client-fx]]])
+  (run [[::🛡/guard false [::client-fx]]])
   (is (= [] @*ran*)))
 
 (deftest guards-several-actions-at-once
   (nxr/register-effect! ::a (fn [& _] (note! :a)))
   (nxr/register-effect! ::b (fn [& _] (note! :b)))
-  (run [[::🛡/when true [::a] [::b]]])
+  (run [[::🛡/guard true [::a] [::b]]])
   (is (= [:a :b] @*ran*)))
 
 (deftest resolves-its-predicate-from-a-client-placeholder
   (nxr/register-placeholder! ::enter? (fn [dd] (:enter? dd)))
   (nxr/register-placeholder! ::other? (fn [dd] (:other? dd)))
   (nxr/register-effect! ::client-fx (fn [& _] (note! :ran)))
-  (run [[::🛡/when [::other?] [::client-fx]]])
+  (run [[::🛡/guard [::other?] [::client-fx]]])
   (is (= [] @*ran*) "a client-dispatch-time value decides, and this one says no")
-  (run [[::🛡/when [::enter?] [::client-fx]]])
+  (run [[::🛡/guard [::enter?] [::client-fx]]])
   (is (= [:ran] @*ran*) "and this one says yes"))
 
 (deftest elides-the-round-trip
   (nxr/register-placeholder! ::enter? (fn [dd] (:enter? dd)))
   (nxr/register-placeholder! ::other? (fn [dd] (:other? dd)))
   (nxr/register-effect! ::commit ^::🪐/server (fn [& _] (note! :server-ran)))
-  (let [ctx (run [[::🛡/when [::other?] [::commit "value"]]])]
+  (let [ctx (run [[::🛡/guard [::other?] [::commit "value"]]])]
     (is (nil? (::🪐/server-actions ctx))
         "the guard closed, so nothing is bound for the server"))
-  (let [ctx (run [[::🛡/when [::enter?] [::commit "value"]]])]
+  (let [ctx (run [[::🛡/guard [::enter?] [::commit "value"]]])]
     (is (= [[::commit "value"]] (::🪐/server-actions ctx))
         "the guard opened, and the server action diverts as usual")
     (is (= [] @*ran*) "still not executed on the client")))

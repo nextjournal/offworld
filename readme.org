@@ -152,22 +152,23 @@ a closure can't be serialized. The only real question is what it defunctionalize
   into an attribute
 - into *places* — a named cell in the markup whose meaning lives in a callback
   registered somewhere else
-- into *macros* — a compiler that infers which side each expression belongs to
+- into *macros* — a compiler that infers which world each expression belongs to
 - into *data* — a Clojure vector
 
 Offworld picks data. Not because data is virtuous, but because of what a value
 admits that the other three don't:
 
-- *It crosses.* A closure can't be split across a wire. Every action Nexus reaches
-  is classified by the side tag on its head, at any expansion depth. Without this
+- *It crosses.* A closure can't be split across a wire. An action, though, is a
+  vector whose first element names its handler — so Offworld can look that handler
+  up and read which world it belongs to, at any expansion depth. Without this
   there's no hybrid mode at all; the rest of the list is a bonus.
 - *It can be substituted into.* Interpolation walks the tree and replaces what it
-  finds, at every action node, on both sides. That's what "you can =postwalk= it"
+  finds, at every action node, in both worlds. That's what "you can =postwalk= it"
   cashes out to — the mechanism every dispatch depends on.
 - *It can be checked before it runs.* Stranded client references and unregistered
   heads fall out of walking the same structure, statically, without executing
   anything.
-- *It can be shown.* Every key classified by side and kind, coloured in the editor,
+- *It can be shown.* Every key classified by world and kind, coloured in the editor,
   read out on hover. An intent prints at its call site with =#p=.
 - *It can be extended by a caller who doesn't understand it.* A layer that knows
   nothing about a component's concern can still =into= or =mapv= the intent it was
@@ -183,7 +184,7 @@ anything runs, and compiling a statically-known dispatch to direct client code.
 None of this comes free, and the fair objection is easy to state: a table of names
 you look functions up in is an interpreter, and writing one is usually a mistake.
 That's taken up under [[*Objections][Objections]]. The short reply is that the interpreter is there
-either way. Either it's Nexus — written down, inspectable, the same on both sides
+either way. Either it's Nexus — written down, inspectable, the same in both worlds
 — or it's an unwritten convention in a colleague's head.
 
 
@@ -377,10 +378,11 @@ reads the triggering event's own target; a placeholder doing
 =(js/document.getElementById "some-hardcoded-id")= is correct exactly once, and
 wrong the moment the component renders twice.
 
-** The side tag
+** The world tag
 
-The only genuinely new idea, and it's one keyword in metadata. =^::🪐/server=
-means "this handler needs the server". Unmarked means client. In CSR mode the
+The only genuinely new idea, and it's one keyword in metadata. Every handler
+belongs to one of two worlds — 🌍 the server or 🪐 off-world, the browser — and
+=^::🪐/server= says which. Unmarked means client. In CSR mode the
 distinction is ignored entirely.
 
 #+begin_src clojure
@@ -423,10 +425,10 @@ on the server, after the round trip you were trying to avoid. Concretely, a
 keydown handler that should only commit on =Enter=: with no client-side branch,
 every keystroke is a request the server answers by doing nothing.
 
-So the library ships exactly one conditional, =nextjournal.offworld.guard/when=.
-It is an ordinary client-side expansion: its first argument is interpolated like
-any other, and if the resulting value is truthy the guard expands to the actions
-that follow it, otherwise to nothing.
+So the library ships exactly one conditional — =guard=, in
+=nextjournal.offworld.guard=. It is an ordinary client-side expansion: its first
+argument is interpolated like any other, and if the resulting value is truthy the
+guard expands to the actions that follow it, otherwise to nothing.
 
 That first argument is a /value/, not an expression — there is no =:== to compare
 with — so you register a placeholder that answers the question:
@@ -435,13 +437,13 @@ with — so you register a placeholder that answers the question:
 (nxr/register-placeholder! ::enter?
   (fn [dd] (= "Enter" (.-key (:replicant/dom-event dd)))))
 
-{:on {:keydown [[::🛡/when [::enter?]
+{:on {:keydown [[::🛡/guard [::enter?]
                  [::commit [:event.target/value]]]]}}
 #+end_src
 
 When the guard expands to nothing there is no server action left to divert, so no
 request is made — which is the whole trick. To wrap actions you already hold,
-=(into [::🛡/when pred] actions)=. Require =nextjournal.offworld.guard= from code
+=(into [::🛡/guard pred] actions)=. Require =nextjournal.offworld.guard= from code
 the client bundle loads, or the registration never runs there.
 
 Sending everything and letting the server decide is always /correct/ — it just
@@ -503,8 +505,8 @@ would give both fidelity and durability. Not built.
 #+end_src
 
 Every registration has a /deadline/ — the stage past which an unresolved reference
-is stranded. Actions must expand at their side's expand stage, effects run at
-their side's fx stage, placeholders get until just before fx.
+is stranded. Actions must expand at their world's expand stage, effects run at
+their world's fx stage, placeholders get until just before fx.
 
 Not everything is decidable. Whether a handler /consumes/ or /carries/ a value
 lives in its body, so a later-stage reference inside an earlier action might be a
@@ -524,7 +526,7 @@ The analysis functions are pure — =lookup=, =tag=, =refs=, =stranded-at-server
 with no browser.
 
 This works because a dispatch is a tree of keyword-headed vectors and every head
-is a key in a registry whose entry carries the side tag. The whole analysis is a
+is a key in a registry whose entry carries the world tag. The whole analysis is a
 =tree-seq=, a =get-in= and a =meta=; it never runs a handler and never reads one.
 Hand it a closure instead and there's nothing to walk — the only way to find out
 what a body needs is to execute it.
@@ -920,9 +922,9 @@ you can print: =(nxr/get-registry)= is the whole contract.
 *A call site doesn't show its staging.* Reading =[[:effects/save path v] [::pan-to
 id 4.89 52.38]]=, nothing tells you the first runs on the server and the second in
 the browser. It's legible as data and illegible as /staging/. Nothing is actually
-hidden — the registry declares side and shape for every key — so this is a tooling
+hidden — the registry declares world and shape for every key — so this is a tooling
 gap, and largely a closed one: the *divert atlas* statically scans every
-registration site and classifies each key by side and kind, and
+registration site and classifies each key by world and kind, and
 =offworld-atlas-mode= font-locks that into any Clojure buffer (earth green for
 server, off-world violet for client, texture for effect / expansion /
 placeholder), with the reading on hover and at point via eldoc. The same
@@ -1066,7 +1068,7 @@ already does.
 
 *Is this the right bet for my app?* Often not. If your app is connected-only and
 CRUD-shaped, the simplest thing that could work is one global default — every
-interaction an opaque server closure behind a minted key, no registry, no side
+interaction an opaque server closure behind a minted key, no registry, no world
 tag, no staging vocabulary. Designs of exactly that shape run real production apps
 today; this one does not, and saying otherwise would be selling.
 
@@ -1085,7 +1087,7 @@ burden is on this design, not the simpler one.
 
 This is a research library, not a product.
 
-- *Solid:* the dispatch split, placeholders, the side tag, SSR and CSR modes, the
+- *Solid:* the dispatch split, placeholders, the world tag, SSR and CSR modes, the
   stem, the staging analysis, the round-trip guard, =inline=.
 - *Implemented and tested, no worked example:* both ordering policies and the two
   interceptors that apply them. Exercised by tests, not by a UI that races.
@@ -1126,7 +1128,8 @@ Terms this document uses, in the sense it uses them.
 - intent :: a whole =:on= vector: the actions one user gesture means. The unit you author.
 - stage :: one link in the fixed chain a hybrid interaction passes through — render, then client state, expansion and effects, then the same three on the server.
 - staged computation :: an interaction written as one value whose parts are evaluated at different stages, rather than as code that runs all at once.
-- the side tag :: =^::🪐/server= or =^::🪐/client= metadata on a handler, saying which machine it needs.
+- world :: which machine a handler belongs to — 🌍 the server, or 🪐 off-world, the browser. Offworld's one axis of classification.
+- the world tag :: =^::🪐/server= or =^::🪐/client= metadata on a handler, naming its world. Unmarked means client.
 - divert :: the client-side split. It runs the client half of a dispatch locally and hands the server half back to Datastar.
 - stem :: the whole application state, passed down to a render-fn as an argument, alongside a path saying where that render-fn lives inside it.
 - SSR / CSR :: server-side and client-side rendering. Offworld runs the same code in both, plus an offline third mode.

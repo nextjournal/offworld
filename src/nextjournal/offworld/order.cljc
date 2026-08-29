@@ -148,7 +148,7 @@
 
 (defn proposing
   "An :after-dispatch interceptor that stamps outgoing server actions with the
-  ordering policy already tagged on the dispatch. Client side. `!state` holds
+  ordering policy already tagged on the dispatch. Runs on the client. `!state` holds
   the per-policy sequence counters."
   [!state]
   {:phase ::🪐/order-propose
@@ -161,7 +161,7 @@
 
 (defn checking
   "A :before-dispatch interceptor that applies the dispatch's ordering policy
-  before anything runs. Server side. `!state` holds per-policy actor state.
+  before anything runs. Runs on the server. `!state` holds per-policy actor state.
 
   A policy may rewrite the actions, drop them, or ask for a timeout; a dispatch
   carrying no policy passes through untouched. Scheduling is the host's job —
