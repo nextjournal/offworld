@@ -22,8 +22,10 @@
 
 (use-fixtures :each fixture)
 
-(defn- run [actions]
-  (nexus/dispatch (🪐/client-nexus (nxr/get-registry)) (atom {}) {:enter? true :other? false} actions))
+(defn- run-in [dispatch-data actions]
+  (nexus/dispatch (🪐/client-nexus (nxr/get-registry)) (atom {}) dispatch-data actions))
+
+(defn- run [actions] (run-in {:enter? true :other? false} actions))
 
 (deftest the-shipped-guard-is-registered-and-client-side
   (let [h (get-in (nxr/get-registry) [:nexus/expansions ::🚦/guard])]
@@ -66,3 +68,20 @@
     (is (= [[::commit "value"]] (::🪐/server-actions ctx))
         "the guard opened, and the server action diverts as usual")
     (is (= [] @*ran*) "still not executed on the client")))
+
+(deftest picks-between-actions-a-caller-injected
+  (nxr/register-placeholder! ::alt-held? (fn [dd held?] (= held? (:alt? dd))))
+  (nxr/register-effect! ::local (fn [& _] (note! :local)))
+  (nxr/register-effect! ::commit ^::🪐/server (fn [& _] (note! :server-ran)))
+  (let [button (fn [click-ax alt-click-ax]
+                 [(into [::🚦/guard [::alt-held? true]]  alt-click-ax)
+                  (into [::🚦/guard [::alt-held? false]] click-ax)])
+        intent (button [[::local]] [[::commit "x"]])]
+    (let [ctx (run-in {:alt? false} intent)]
+      (is (= [:local] @*ran*) "the plain branch runs, and the render-fn never read either")
+      (is (nil? (::🪐/server-actions ctx)) "nothing crosses"))
+    (reset! *ran* [])
+    (let [ctx (run-in {:alt? true} intent)]
+      (is (= [] @*ran*) "the alt branch is server-bound, so nothing runs locally")
+      (is (= [[::commit "x"]] (::🪐/server-actions ctx))
+          "a guarded server action still diverts"))))

@@ -405,26 +405,46 @@ The =randomize-button= above obeys this without saying so: =(get-season stem)= i
 consumed at render because the server has it; =[:event/key-modifiers]= is only
 carried, because nothing at render time can know it.
 
-The law also says when to reach for a data-level conditional, and the answer is
-"almost never". Since expansion recurs, a handler can branch with =if= over values
-that are already interpolated. The one case the law forces is this: *the client
-must decide whether to go to the server at all, using a value only available at
-client-dispatch time.*
+The same obligation turns up sideways, which is worth naming because it looks at
+first like a different thing. A reusable render-fn handed a =:click-ax= by its
+caller holds a value it may wrap, nest or =into=, and must not interpret — the
+carry clause exactly. What differs is where the opacity comes from. Render
+/cannot/ read =[:event/key-modifiers]=, because the value does not exist yet. A
+button /can/ read the action it was handed, and declines to, because reading it
+would couple the button to a concern that isn't its own. Physics in the first
+case and discipline in the second; one rule covers both.
 
-Everywhere else the branch and the value it tests are at the same stage. Here they
-aren't: the value appears in the browser and the code that would branch on it runs
-on the server, after the round trip you were trying to avoid. Concretely, a
-keydown handler that should only commit on =Enter=: with no client-side branch,
-every keystroke is a request the server answers by doing nothing.
+That is also why render is a single rung on the ladder but not a single moment.
+It is a tree of calls with information flowing strictly downward, so a caller's
+frame is genuinely earlier than its callee's, and what the callee receives is
+already built and not yet read.
 
-So the library ships exactly one conditional — =guard=, in
-=nextjournal.offworld.guard=. It is an ordinary client-side expansion: its first
-argument is interpolated like any other, and if the resulting value is truthy the
-guard expands to the actions that follow it, otherwise to nothing.
+Which gives the rule for when a branch has to be data at all — and it isn't
+"whenever you want a conditional", since expansion recurs and a handler receives
+interpolated values it can branch on with an ordinary =if=:
 
-That first argument is a /value/, not an expression. There is no data notation
-for === or =not=, and deliberately so — the comparison is ordinary Clojure,
-written inside a placeholder that answers the question:
+*A branch has to be data when the value that decides arrives later than the code
+that must choose.*
+
+That happens at two distances. Across the wire: the client must decide whether to
+go to the server /at all/, using something only the browser knows. A keydown
+handler that should commit on =Enter= has no way to ask the server, because the
+answer arrives after the round trip it was trying to avoid — so without a
+client-side branch every keystroke becomes a request the server answers by doing
+nothing. And across a call: a render-fn must choose between actions its caller
+injected, using something that won't exist until the click. A button with distinct
+plain-click and alt-click behaviour cannot pick at render time, and must not look
+inside either alternative to do it.
+
+** The guard
+
+Offworld ships exactly one construct for that, and deliberately only one: =guard=,
+in =nextjournal.offworld.guard=. It is an ordinary client-side expansion whose
+first argument is interpolated like any other — truthy and it expands to the
+actions that follow it, falsey and it expands to nothing.
+
+The first argument is therefore a /value/, not an expression. The comparison is
+ordinary Clojure, written inside a placeholder that answers the question:
 
 #+begin_src clojure
 (nxr/register-placeholder! ::enter?
@@ -434,21 +454,43 @@ written inside a placeholder that answers the question:
                  [::commit [:event.target/value]]]]}}
 #+end_src
 
-When the guard expands to nothing there is no server action left to divert, so no
-request is made — which is the whole trick. To wrap actions you already hold,
-=(into [::🚦/guard pred] actions)=. Require =nextjournal.offworld.guard= from code
-the client bundle loads, or the registration never runs there.
+When the guard expands to nothing there is no server action left for the divert
+interceptor to find, so no request goes out. That is the across-the-wire case, and
+the elision falls out of the existing machinery rather than needing a special case
+anywhere.
 
-Sending everything and letting the server decide is always /correct/ — it just
-costs the trip. So the guard exists for that one purpose and should never grow
-into a general control-flow construct. There is no =:and=, no =:or=, no =:cond=;
-one guard, deliberately too weak to be tempting, because everything a richer
-version could express is already expressible in Clojure at a stage that has the
-values.
+The across-a-call case wraps each alternative instead:
+
+#+begin_src clojure
+(nxr/register-placeholder! ::alt-held?
+  (fn [dd held?] (= held? (.-altKey (:replicant/dom-event dd)))))
+
+(defn button [{:keys [label click-ax alt-click-ax]}]
+  [:button {:on {:click [(into [::🚦/guard [::alt-held? true]]  alt-click-ax)
+                         (into [::🚦/guard [::alt-held? false]] click-ax)]}}
+   label])
+#+end_src
+
+=button= never reads either action, and neither branch is chosen until the click.
+If the alternative that wins turns out to be server-bound it diverts normally —
+the guard and the split compose without either knowing about the other.
+
+Note what neither example contains. There is no =:not=, no =:and=, no =:cond=, and
+no notation for comparison at all. A placeholder takes arguments, so the
+comparison lives inside one and the negation is just a different argument.
+Anything genuinely logical goes in an expansion you register, which receives
+interpolated values and branches in plain Clojure — the guard is only the
+zero-registration version of that, kept too weak to be worth reaching for when a
+handler would do.
+
+To wrap actions you already hold, =(into [::🚦/guard pred] actions)=. Require
+=nextjournal.offworld.guard= from code the client bundle loads, or the
+registration never runs there.
 
 It does cost one thing. Nesting actions in argument position is exactly what the
 staging checker can't follow, so a typo'd action inside a guard isn't reported
 before it runs the way a top-level one is.
+
 
 ** Early or late, per value
 
