@@ -66,8 +66,9 @@ rather than code that runs all at once.
 ** Quickstart: run the demo
 
 #+begin_src sh
-bb dev # shadow-cljs watch + http-kit on :8000 + clerk on :9001 bb
-test-clj # jvm tests bb test-cljs # node tests via shadow
+bb dev       # shadow-cljs watch + http-kit on :8000 + clerk on :9001
+bb test-clj  # jvm tests
+bb test-cljs # node tests via shadow
 #+end_src
 
 - [[http://localhost:8000][localhost:8000]] — server-rendered. The browser holds no state; the
@@ -143,8 +144,8 @@ Here's what you'd write if nothing were in the way.
 It's a button that changes the season:
 
 #+begin_src clojure
-  [:button {:on {:click #(set-season! :winter)}}
-   "Winter"]
+[:button {:on {:click #(set-season! :winter)}}
+ "Winter"]
 #+end_src
 
 That handler is a *closure*: a function bundled together with the
@@ -177,7 +178,7 @@ The way we rewrote this code is a standard technique, called
 *defunctionalization*. It's worth knowing, because once you see it you
 see it everywhere. Reynolds described it in 1972 as a compiler
 technique: replace a function value with a tag plus the values it
-captured, and invoke dispatch procedure to apply the tag to values.
+captured, and run a central dispatch procedure to apply the tag to values.
 
 In our case, isn't an optional style choice.  Any framework that runs
 one interaction across two machines uses defunctionalization, because
@@ -187,14 +188,13 @@ defunctionalize our closure into? For instance,
 - A *string* :: an event name, a payload key, a JavaScript expression
   pasted into an attribute
 - A *place* :: a signal, a web-component attr, a named cell in the
-  markup whose meaning lives in a
-callback registered somewhere else
+  markup whose meaning lives in a callback registered somewhere else
 - A *macro expression* :: relying on a compiler that infers which
   world each expression belongs to
 - A *data-structure* :: for instance, an EDN vector
 
 Offworld chooses data. Not because data is virtuous, but because of what
-data-as-a-value admits that the others don't:
+data admits that the others don't:
 
 - *It crosses.* A closure can't be split across a wire. An action,
   though, is a vector whose first element names its handler. a lookup
@@ -238,9 +238,11 @@ holiday panel, where shift-clicking means something different from
 clicking.
 
 #+begin_src clojure
-(defn randomize-button [{::🌿/keys [stem]}] [:button {:on {:click
-  [[::randomize [:event/key-modifiers] (get-season stem)]]}}
-  "Randomize (shift-click to reset)"])
+(defn randomize-button [{::🌿/keys [stem]}]
+  [:button {:on {:click [[::randomize
+                          [:event/key-modifiers]
+                          (get-season stem)]]}}
+   "Randomize (shift-click to reset)"])
 #+end_src
 
 Two of that vector's three elements are at different stages, and the
@@ -249,8 +251,9 @@ notation shows which is which.
 ** Render — on the server
 
 =(get-season stem)= is an ordinary function call. It runs /now/, and
-what lands in the vector is the value
-=:spring=. =[:event/key-modifiers]= is not a call. It's a vector and
+what lands in the vector is the value =:spring=.
+
+=[:event/key-modifiers]= is not a call. It's a vector and
 it stays one, naming a value that doesn't exist yet because the click
 hasn't happened.
 
@@ -289,12 +292,15 @@ expands.
 =::randomize= is client-marked, so it expands here:
 
 #+begin_src clojure
-(nxr/register-action! ::randomize ^::🪐/client (fn [_ key-mods season]
-  (let [path [::path :to :season] reset?  (contains? (into #{}
-  key-mods) :shift) rand-season (first (rand-nth (seq (dissoc
-  season->holiday season))))] (if reset?  [[:browser/alert "Holiday
-  season has been reset."]  [:effects/save path :spring]]
-  [[:effects/save path rand-season]]))))
+(nxr/register-action! ::randomize ^::🪐/client
+  (fn [_ key-mods season]
+    (let [path        [::path :to :season]
+          reset?      (contains? (into #{} key-mods) :shift)
+          rand-season (first (rand-nth (seq (dissoc season->holiday season))))]
+      (if reset?
+        [[:browser/alert "Holiday season has been reset."]
+         [:effects/save path :spring]]
+        [[:effects/save path rand-season]]))))
 #+end_src
 
 The shift-key branch is decided in the browser with no round trip — an
@@ -350,9 +356,7 @@ was dispatched. The split is a runtime decision, not an authoring one.
 
 * The vocabulary
 
-Five concepts. That's the whole surface.
-
-** Intents
+** Intent
 
 A vector of action-vectors, under =:on= in hiccup, keyed by DOM event
 name.  Life-cycle hooks take the same shape, and
@@ -366,20 +370,22 @@ below renders as =data-on:scroll__throttle.100ms=:
 
 {:replicant/on-mount [[::init id {:center center}]]}
 
-{:on {:scroll ^{:datastar/modifiers [:throttle.100ms]} [[::ng/scroll
-              path [:event.target/scroll-top]
-              [:event.target/scroll-left]]]}}
+{:on {:scroll ^{:datastar/modifiers [:throttle.100ms]}
+      [[::ng/scroll path
+        [:event.target/scroll-top]
+        [:event.target/scroll-left]]]}}
 #+end_src
 
-** Expansions
+** Expansion
 
 A handler that receives state and arguments and returns /more
 actions/. Where decisions live.
 
 #+begin_src clojure
-(nxr/register-action! ::ng/scroll ^::🪐/server (fn [_ path top left]
-  [[:effects/save (concat path [:scroll-top]) top] [:effects/save
-  (concat path [:scroll-left]) left]]))
+(nxr/register-action! ::ng/scroll ^::🪐/server
+  (fn [_ path top left]
+    [[:effects/save (concat path [:scroll-top]) top]
+     [:effects/save (concat path [:scroll-left]) left]]))
 #+end_src
 
 (=register-expansion!= is Nexus's newer name for the same
@@ -391,23 +397,28 @@ expands. So a handler always receives interpolated values and can
 branch on them with plain Clojure — you almost never need to express
 control flow as data rather than as code.
 
-** Effects
+** Effect
 
 The drain. An effect is a leaf: it mutates something and returns
 nothing useful.
 
 #+begin_src clojure
-{:node/focus (fn [ctx _ node] (.focus node)) :event/prevent-default
- #(.preventDefault (get-evt %)) :effects/save ^:nexus/batch
- ^::🪐/server (fn [_ system path-vs] (swap! system (fn [state] (reduce
- (fn [acc [path v]] (assoc-in acc path v)) state path-vs))))}
+{:node/focus            (fn [ctx _ node] (.focus node))
+ :event/prevent-default #(.preventDefault (get-evt %))
+ :effects/save          ^:nexus/batch ^::🪐/server
+                        (fn [_ system path-vs]
+                          (swap! system
+                                 (fn [state]
+                                   (reduce (fn [acc [path v]] (assoc-in acc path v))
+                                           state
+                                           path-vs))))}
 #+end_src
 
 A rule that keeps the registry small: /if an argument decides where to
 write, that's not a new effect./ It's =:effects/save= with a different
 path. Registering =:set-scroll-top= beside it is a smell.
 
-** Placeholders
+** Placeholder
 
 A named value that doesn't exist yet. Interpolation replaces the
 vector with the value at every action node on the way down, so a
@@ -415,10 +426,12 @@ placeholder that survives one expansion still resolves before the
 effect runs.
 
 #+begin_src clojure
-{:event.target/value #(some-> % get-evt .-target .-value)
- :event/key-modifiers (fn [dd] (let [e (:replicant/dom-event dd)]
- [(when (.-shiftKey e) :shift) (when (.-altKey e) :alt) (when
- (.-ctrlKey e) :ctrl)]))}
+{:event.target/value  #(some-> % get-evt .-target .-value)
+ :event/key-modifiers (fn [dd]
+                        (let [e (:replicant/dom-event dd)]
+                          [(when (.-shiftKey e) :shift)
+                           (when (.-altKey e) :alt)
+                           (when (.-ctrlKey e) :ctrl)]))}
 #+end_src
 
 Prefer event-relative placeholders to global
@@ -427,7 +440,7 @@ target; a placeholder doing =(js/document.getElementById
 "some-hardcoded-id")= is correct exactly once, and wrong the moment
 the component renders twice.
 
-** The world tag
+** The world-tag
 
 The only genuinely new idea, and it's one keyword in metadata. Every
 handler belongs to one of two worlds — 🌍 the server or 🪐 off-world,
@@ -436,12 +449,12 @@ CSR mode the distinction is ignored entirely.
 
 #+begin_src clojure
 (nxr/register-action! ::scan ^::🪐/client (fn [_ plate] ...))
-(nxr/register-action! ::add-filter ^::🪐/server (fn [state path v]
-...))
+(nxr/register-action! ::add-filter ^::🪐/server (fn [state path v] ...))
 
 (nextjournal.offworld.nexus.registry/register-many!
- {:nexus/system->state deref :nexus/effects {...}  :nexus/placeholders
- {...}})
+ {:nexus/system->state deref
+  :nexus/effects       {...}
+  :nexus/placeholders  {...}})
 #+end_src
 
 * Staging
@@ -507,11 +520,11 @@ comparison is ordinary Clojure, written inside a placeholder that
 answers the question:
 
 #+begin_src clojure
-(nxr/register-placeholder! ::enter?  (fn [dd] (= "Enter" (.-key
-  (:replicant/dom-event dd)))))
+(nxr/register-placeholder! ::enter?
+  (fn [dd] (= "Enter" (.-key (:replicant/dom-event dd)))))
 
-{:on {:keydown [[::🚦/guard [::enter?]  [[::commit
-                 [:event.target/value]]]]]}}
+{:on {:keydown [[::🚦/guard [::enter?]
+                 [[::commit [:event.target/value]]]]]}}
 #+end_src
 
 When the guard expands to nothing there is no server action left for
@@ -522,12 +535,13 @@ machinery rather than needing a special case anywhere.
 The across-a-call case wraps each alternative instead:
 
 #+begin_src clojure
-(nxr/register-placeholder! ::alt-held?  (fn [dd held?] (= held?
-  (.-altKey (:replicant/dom-event dd)))))
+(nxr/register-placeholder! ::alt-held?
+  (fn [dd held?] (= held? (.-altKey (:replicant/dom-event dd)))))
 
-(defn button [{:keys [label click-ax alt-click-ax]}] [:button {:on
-  {:click [[::🚦/guard [::alt-held? true] alt-click-ax] [::🚦/guard
-  [::alt-held? false] click-ax]]}} label])
+(defn button [{:keys [label click-ax alt-click-ax]}]
+  [:button {:on {:click [[::🚦/guard [::alt-held? true] alt-click-ax]
+                         [::🚦/guard [::alt-held? false] click-ax]]}}
+   label])
 #+end_src
 
 =button= never reads either action, and neither branch is chosen until
@@ -672,7 +686,8 @@ a body needs is to execute it.
 
 #+begin_quote
 What comes from something else? Stem. [fn:bladerunner_stem]
-#+end_quote 
+#+end_quote
+
 Two familiar options, both real. *Prop drilling* gives honest signatures
 — the arguments /are/ the scope — but changing the UI tree means
 re-drilling everything, and every render-fn invents its own convention
@@ -691,8 +706,9 @@ That's the *stem*: the whole state carried down as a value, alongside a
 *path* saying where /this/ render-fn lives inside it.
 
 #+begin_src clojure
-(defn main-view [state] (for [k [:dresden :hanover]] (station-panel
-  (🌿/+ state [:stations k] {:station k}))))
+(defn main-view [state]
+  (for [k [:dresden :hanover]]
+    (station-panel (🌿/+ state [:stations k] {:station k}))))
 #+end_src
 
 =🌿/+= extends the path and merges in configuration; =🌿/>= replaces the
@@ -710,8 +726,8 @@ rides along untouched. Three concerns stay apart by convention:
 #+begin_src clojure
 (defn get-season [stem] (get-in stem [::path :to :season] :spring))
 
-(defn get-day {::🌿/deps #{`get-season}} [stem] (season->holiday
-  (get-season stem)))
+(defn get-day {::🌿/deps #{`get-season}} [stem]
+  (season->holiday (get-season stem)))
 #+end_src
 
 Getters are just functions of the stem. =::🌿/deps= is a seed for
@@ -733,8 +749,8 @@ The =::🌿/el= placeholder closes the loop, resolving a path or id to a
 live node at client-dispatch time:
 
 #+begin_src clojure
-[[:node/hide-popover [::🌿/el popover-id]] [:node/focus [::🌿/el
- choice-id]]]
+[[:node/hide-popover [::🌿/el popover-id]]
+ [:node/focus [::🌿/el choice-id]]]
 #+end_src
 
 To build a persistent "component" with JavaScript batteries included,
@@ -755,11 +771,13 @@ another element's handler names the node's id and =🪐/recall= gets the
 object back.
 
 #+begin_src clojure
-[:div {:id id :data-ignore-morph true :replicant/on-mount [[::init id
-       {:center center}]]}]
+[:div {:id                 id
+       :data-ignore-morph  true
+       :replicant/on-mount [[::init id {:center center}]]}]
 
-[:button {:on {:click [[::pan-to id 4.89 52.38] [:effects/save path
-                       {:center [4.89 52.38]}]]}} "Amsterdam"]
+[:button {:on {:click [[::pan-to id 4.89 52.38]
+                       [:effects/save path {:center [4.89 52.38]}]]}}
+ "Amsterdam"]
 #+end_src
 
 The =WeakMap= subordinates the JS object's lifetime to the
@@ -824,10 +842,11 @@ handler acting on three named elements plus the event itself, all
 spelled at the site that decides:
 
 #+begin_src clojure
-"Enter" [[:event/prevent-default] [:node/hide-popover [::🌿/el
-         popover-id]] [:node/blur [::🌿/el anchor-id]]
-         [:node/set-checked [::🌿/el choice-id] true] [:effects/conj
-         (conj path :filters) (first filters-to-add) #{}]]
+"Enter" [[:event/prevent-default]
+         [:node/hide-popover [::🌿/el popover-id]]
+         [:node/blur [::🌿/el anchor-id]]
+         [:node/set-checked [::🌿/el choice-id] true]
+         [:effects/conj (conj path :filters) (first filters-to-add) #{}]]
 #+end_src
 
 This is exactly what a component framework would express by
@@ -942,10 +961,15 @@ part the walkthrough left open, and the demo's answer is to re-render
 on every change:
 
 #+begin_src clojure
-(add-watch system ::ui/render (fn [_ _ _ new-state]
-  (broadcast-elements!  (sse-message {:event "datastar-patch-elements"
-  :lines [["elements" (-> new-state 🌿/init-state ui/render
-  🪐/replicant->d* rstr/render)]]}))))
+(add-watch system ::ui/render
+           (fn [_ _ _ new-state]
+             (broadcast-elements!
+              (sse-message {:event "datastar-patch-elements"
+                            :lines [["elements" (-> new-state
+                                                    🌿/init-state
+                                                    ui/render
+                                                    🪐/replicant->d*
+                                                    rstr/render)]]}))))
 #+end_src
 
 Yes — that re-renders everything, every time, and sends it over the
@@ -966,9 +990,11 @@ client view is applied and no diverting interceptor is installed, so
 nothing splits and no payload is ever encoded.
 
 #+begin_src clojure
-(r/set-dispatch!  (fn [dispatch-data actions] (if js/navigator.onLine
- (nxr/dispatch system dispatch-data actions) (🌠/offline-dispatch
- dispatch-data actions))))
+(r/set-dispatch!
+ (fn [dispatch-data actions]
+   (if js/navigator.onLine
+     (nxr/dispatch system dispatch-data actions)
+     (🌠/offline-dispatch dispatch-data actions))))
 #+end_src
 
 The intended arc is that the SSR page paints from server HTML with no
@@ -991,13 +1017,13 @@ a div, encodes the paths that subtree actually needs, and parks them
 in a =data-offworld-sync= attribute:
 
 #+begin_src clojure
-  (🌠/offline-capable
-   {:id           "scan-game-offline"
-    :render-fn    #'scan/offline-game
-    :select-paths #{[::scan/scans] [::scan/plates]}
-    ::🌿/path     [:scan-game]
-    ::🌿/stem     stem}
-   (scan/game (🌿/+ state [:scan-game])))
+(🌠/offline-capable
+ {:id           "scan-game-offline"
+  :render-fn    #'scan/offline-game
+  :select-paths #{[::scan/scans] [::scan/plates]}
+  ::🌿/path     [:scan-game]
+  ::🌿/stem     stem}
+ (scan/game (🌿/+ state [:scan-game])))
 #+end_src
 
 On the =offline= event, offworld collects every such node,
@@ -1032,10 +1058,10 @@ two interceptors of its own rather than a step buried in the
 split. Nothing in this library installs either:
 
 #+begin_src clojure
-  (update nexus :nexus/interceptors
-          conj (📈/proposing !counters))   ; client
-  (update nexus :nexus/interceptors
-          conj (📈/checking !actor-state)) ; server
+(update nexus :nexus/interceptors
+        conj (📈/proposing !counters))   ; client
+(update nexus :nexus/interceptors
+        conj (📈/checking !actor-state)) ; server
 #+end_src
 
 =proposing= runs =:after-dispatch= and stamps whatever is on its way
@@ -1086,8 +1112,8 @@ chain:
 
 #+begin_src clojure
 [:button {:on {:click #p [[::randomize [:event/key-modifiers]
-                           (get-season stem)]]}} "Randomize
-                           (shift-click to reset)"]
+                           (get-season stem)]]}}
+ "Randomize (shift-click to reset)"]
 
 ;; => [[:nextjournal.offworld.demo.ui.holiday/randomize
 ;;      [:event/key-modifiers] :spring]]
@@ -1110,9 +1136,9 @@ likewise — the arguments /are/ the scope, so calling one is calling a
 function. No mounting, no test renderer, no jsdom.
 
 #+begin_src clojure
-  (nexus/expand-actions (nxr/get-registry) nil actions dispatch-data)
-  (staging/unregistered-actions (nxr/get-registry) dispatch)
-  (station-panel (🌿/+ state [:stations :dresden] {:station :dresden}))
+(nexus/expand-actions (nxr/get-registry) nil actions dispatch-data)
+(staging/unregistered-actions (nxr/get-registry) dispatch)
+(station-panel (🌿/+ state [:stations :dresden] {:station :dresden}))
 #+end_src
 
 *** What this gives an agent
