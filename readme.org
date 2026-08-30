@@ -496,13 +496,9 @@ expansion returns — so a caller's injected actions drop straight in with no
 wrapping. Require =nextjournal.offworld.guard= from code the client bundle loads,
 or the registration never runs there.
 
-One caveat, now a narrow one. Actions nested in argument position are invisible to
-anything that reads source, so a typo inside a guard is not something a static
-pass can find. The runtime checker does find it, because once the guard has
-expanded its actions are ordinary actions like any other. What still slips through
-is the shape mistake — =[::🚦/guard pred [::a]]= where =[[::a]]= was meant — since
-the malformed element never becomes an action Nexus reaches, and so never arrives
-anywhere the checker is looking.
+Its actions are checked like any others. Once the guard expands, what it was
+holding is an ordinary action, and the runtime checker sees it at that point the
+same way it sees everything else.
 
 
 ** Early or late, per value
@@ -546,59 +542,58 @@ would give both fidelity and durability. Not built.
 
 ** What a machine can check
 
-=nextjournal.offworld.staging= makes the ladder explicit:
+Two violations are worth naming, and both are the /backward/ case, where a carry
+has nowhere left to go:
 
-#+begin_src clojure
-[:render :client/state :client/expand :client/fx :server/state :server/expand :server/fx]
-#+end_src
+- =:stranded-client-ref= — a client-stage reference that has reached a server
+  stage. It resolves only in the browser, every client stage is already past, and
+  the context its resolver needs is gone.
+- =:unregistered-action= — a dispatched key that resolves to no handler, and would
+  otherwise be a silent no-op.
 
-Every registration has a /deadline/ — the stage past which an unresolved reference
-is stranded. Actions must expand at their world's expand stage, effects run at
-their world's fx stage, placeholders get until just before fx.
+The forward case isn't decidable, and Offworld doesn't guess: whether a handler
+/consumes/ or /carries/ a value lives in its body, so a later-stage reference
+sitting inside an earlier action may be a perfectly legal carry.
 
-Not everything is decidable. Whether a handler /consumes/ or /carries/ a value
-lives in its body, so a later-stage reference inside an earlier action might be a
-perfectly legal carry, and Offworld doesn't guess. What /is/ decidable is the
-backward case, where a carry has nowhere to go: =:stranded-client-ref=, a
-client-stage reference that survived into the server-bound payload, whose resolver
-context is gone; and =:unregistered-action=, a dispatched head resolving to no
-handler, which would otherwise be a silent no-op.
-
-Both checks run from two vantages, and the difference is the whole story. Reading
-source — or a dispatch you built by hand in a REPL — sees only what was literally
-spelled. Most dispatches aren't literal: an expansion computes its actions, a
-caller injects them, a guard nests them. So the same checks also run as an
-interceptor at Nexus's =:before-action= phase, where every action is fully spelled
-out by the time it arrives:
+*At runtime, as an interceptor.* This is the real check. It sits at Nexus's
+=:before-action= phase and sees every action Nexus reaches, at any expansion
+depth, in whichever world it is installed in. An action that an expansion
+computed, a caller injected, or a guard nested is by then an ordinary action like
+any other, and is checked like one.
 
 #+begin_src clojure
 (-> nexus
     (update :nexus/interceptors conj (staging/checker))
     🪐/client-nexus)
 
-(staging/warn-on!)   ;; the checks are silent until you ask for them
+(staging/warn-on!)   ;; silent until you ask for it
 (staging/report)     ;; grouped summary of everything seen this session
 #+end_src
 
-It fires for every action Nexus reaches, at any expansion depth, in either world —
-so a key that only exists after an expansion ran, or one nested inside a guard, is
-reported when it arrives rather than never. Install it before =client-nexus=
-appends the divert interceptor: interceptors run in order, and divert empties the
-queue for the actions it claims, so anything behind it never sees them.
+Install it before =client-nexus= appends the divert interceptor: interceptors run
+in order, and divert empties the queue for the actions it claims. Which world it
+runs in decides how much it checks — a client-stage reference is legal on the
+client and stranded only once it reaches the server, so =:stranded-client-ref= is
+a server-world check while =:unregistered-action= applies in both.
 
-Which world it runs in decides how much it checks. A client-stage reference is
-legal on the client and stranded on the server, so =:stranded-client-ref= is a
-server-world check, while =:unregistered-action= applies in both.
+*Over source, as a lint.* The same two checks are pure functions — =lookup=,
+=tag=, =refs=, =stranded-at-server=, =unregistered-actions= — so you can also run
+them over a dispatch in a test, in a REPL, or over source that was never loaded.
+That is worth having: it puts violations in front of you before anything runs.
 
-The analysis functions are pure — =lookup=, =tag=, =refs=, =stranded-at-server=,
-=unregistered-actions= — so you can run them over a dispatch in a test or a REPL
-with no browser.
+It is a lint, though, and not a verdict, and the gap is structural rather than a
+matter of effort. A static pass sees only what the source literally spells, and
+most dispatches aren't literal — actions get computed by expansions, handed in by
+callers, assembled out of state. So a clean static pass means /no violations among
+the ones that could be read/, and never /no violations/. Taken that way it is
+useful. Taken as validation it will eventually lie to you, which is why the
+interceptor is the one that runs in anger.
 
-This works because a dispatch is a tree of keyword-headed vectors and every head
-is a key in a registry whose entry carries the world tag. The whole analysis is a
-=tree-seq=, a =get-in= and a =meta=; it never runs a handler and never reads one.
-Hand it a closure instead and there's nothing to walk — the only way to find out
-what a body needs is to execute it.
+Either vantage works at all because a dispatch is a tree of keyword-headed
+vectors, and every key is a registry entry carrying the world tag — so the whole
+analysis is a =tree-seq=, a =get-in= and a =meta=, never running a handler and
+never reading one. Hand it a closure instead and there is nothing to walk, since
+the only way to learn what a body needs is to execute it.
 
 
 * State: the stem
@@ -994,7 +989,9 @@ classifier builds a synthetic registry and runs the staging checks without loadi
 or executing anything. Caveats, none fatal: the classification is /per key/, so it
 says what =:effects/save= always is rather than whether this dispatch is
 well-formed; the analysis is textual rather than macroexpanded; and the faces
-table is a generated snapshot that drifts unless regenerated.
+table is a generated snapshot that drifts unless regenerated. It is a lint, in
+other words, with the coverage a lint has — the runtime checker is what actually
+validates a dispatch.
 
 *Placeholders are an ambient rule, and an unresolved one is invisible.* The
 sharpest edge in the design. Interpolation walks the entire action tree, children
@@ -1018,7 +1015,7 @@ rather than of whatever happens to be in a registry. Unresolved would become an
 error, and authored data could never be captured. Not done.
 
 *A silent no-op is possible.* An unregistered action does nothing and says nothing
-unless =warn-on!= is on. Turn it on in dev.
+on its own. Install =staging/checker= and turn =warn-on!= on in dev.
 
 *Stack traces point at the loop.* An effect that throws traces through Nexus's
 dispatch loop, not the render-fn that composed the intent. Nexus's action log
