@@ -29,7 +29,7 @@
      (id (path path-or-state) suffixes)
      (ou/encode (into (->v path-or-state) suffixes)))))
 
-(nxr/register-placeholder! ::🌿/el ^::🪐/client
+(def el ^::🪐/client
   (fn [_ path-or-id]
     #?(:cljs
        (js/document.getElementById

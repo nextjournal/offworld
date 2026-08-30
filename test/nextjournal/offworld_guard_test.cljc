@@ -5,6 +5,7 @@
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
    [nextjournal.offworld :as 🪐]
+   [nextjournal.offworld.standard :as std]
    [nextjournal.offworld.staging :as staging]
    [nextjournal.offworld.guard :as 🚦]))
 
@@ -13,11 +14,10 @@
 (defn- note! [k] (swap! *ran* conj k))
 
 (defn- fixture [f]
-  (let [old      @nxr/!registry
-        shipped  (get-in old [:nexus/expansions ::🚦/guard])]
+  (let [old @nxr/!registry]
     (reset! nxr/!registry {})
     (nxr/register-system->state! deref)
-    (swap! nxr/!registry assoc-in [:nexus/expansions ::🚦/guard] shipped)
+    (std/register-standard-nexus!)
     (binding [*ran* (atom [])]
       (try (f) (finally (reset! nxr/!registry old))))))
 
@@ -30,7 +30,7 @@
 
 (deftest the-shipped-guard-is-registered-and-client-side
   (let [h (get-in (nxr/get-registry) [:nexus/expansions ::🚦/guard])]
-    (is (some? h) "nextjournal.offworld.guard registers it on load")
+    (is (some? h) "register-standard-nexus! registers it")
     (is (🪐/client-marked? h) "and it expands in the browser, which is the point")))
 
 (deftest expands-to-its-actions-when-the-predicate-is-truthy

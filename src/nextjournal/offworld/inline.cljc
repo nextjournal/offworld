@@ -1,30 +1,24 @@
 (ns nextjournal.offworld.inline
   (:require
-   [nexus.registry :as nxr]
-   [nextjournal.offworld :as-alias 🪐])
+   [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld.conn :as conn])
   #?(:cljs (:require-macros [nextjournal.offworld.inline :refer [inline]])))
-
-#?(:clj (defonce !closures (atom {})))
 
 #?(:clj (def ^:dynamic *conn-id* nil))
 
 #?(:clj
    (defn register! [f]
-     (let [tok (str (random-uuid))]
-       (when *conn-id*
-         (swap! !closures assoc-in [*conn-id* tok] f))
-       tok)))
+     (binding [conn/*conn-id* (or *conn-id* conn/*conn-id*)]
+       (conn/stash! f))))
 
-#?(:clj
-   (defn release! [conn-id]
-     (swap! !closures dissoc conn-id)))
+#?(:clj (defn release! [conn-id] (conn/release! conn-id)))
 
 #?(:clj
    (defmacro inline [& body]
      `[[::invoke (register! (fn [] ~@body))]]))
 
-(nxr/register-effect! ::invoke ^::🪐/server
-  (fn [_ system tok]
+(def invoke ^::🪐/server
+  (fn [ctx system tok]
     #?(:clj
-       (when-let [f (get-in @!closures [(::🪐/conn-id @system) tok])]
-         (f)))))
+       (let [conn-id (or (conn/id (:dispatch-data ctx)) (::🪐/conn-id @system))]
+         (when-let [f (conn/fetch conn-id tok)] (f))))))
