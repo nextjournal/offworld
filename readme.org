@@ -869,12 +869,15 @@ procedures are simply /fast enough/.
 
 ** Per-frame work
 
-*An intent is one per decision, not one per sample.* The decision here is not
-whether Nexus sees a =pointermove= — it can — but whether the /server/ does.
+Gestures sample. A drag fires =pointermove= sixty times a second, and every one of
+them is a dispatch.
 
-In SSR every dispatch runs =divert=, and only a dispatch left holding server
-actions becomes an HTTP request. So the rule that matters is that the per-frame
-leg must be client-only. The demo's column resizer is the shape:
+*Sample client actions freely. Commit to the server once.*
+
+In SSR every dispatch runs =divert=, and only a dispatch still holding server
+actions becomes a request: the generated attribute is =_sp && @get(…)=, so one
+that resolves entirely in the browser never calls out. The demo's column resizer
+is the shape.
 
 #+begin_src clojure
 {:on {:pointerdown [[::rz/grab]]
@@ -884,49 +887,46 @@ leg must be client-only. The demo's column resizer is the shape:
                      [[::rz/commit path c [::rz/width grid-id idx]]]]]}}
 #+end_src
 
-=::rz/preview= is client-marked and writes =gridTemplateColumns= directly, so a
-frame's dispatch resolves entirely in the browser, =divert= returns nothing, and
-the generated attribute — =_sp && @get(…)= — never makes the call. =::rz/commit=
-is server-marked and sits behind a guard that only opens on =pointerup=. Sixty
-dispatches a second, one request per gesture.
+=::rz/preview= is client-marked and writes =gridTemplateColumns= directly, so the
+per-frame leg stays in the browser. =::rz/commit= is server-marked and sits behind
+a guard that opens only on =pointerup=. Sixty dispatches, one request.
 
-Note also which value crosses. The width isn't carried from the drag; it is read
-back off the element at commit time by =[::rz/width grid-id idx]=, at the last
-moment before the action leaves. The per-frame leg writes to the DOM and the
-commit leg reads from it, so nothing has to accumulate drag state anywhere.
+Note which value crosses. The width is never accumulated during the drag — it is
+read back off the element at commit time by =[::rz/width grid-id idx]=, at the
+last moment before the action leaves. The preview writes to the DOM and the
+commit reads from it, so no drag state has to live anywhere.
 
-If even the client-side dispatch per frame is too much — and it is measurable
-work, a transit decode and a full Nexus pass each time — the next move is to
-give one client effect its own =requestAnimationFrame= loop, started by
-=pointerdown= and torn down by =pointerup=. That costs you the legibility this
-example has, where every frame's behaviour is spelled at the element. Reach for
-it on a measurement, not on principle.
+Per-frame dispatch is not free: a transit decode and a Nexus pass each time. It is
+cheap enough to be the default, and what it buys is a gesture whose behaviour is
+spelled at the element like everything else. The alternative — one client effect
+owning a =requestAnimationFrame= loop, started and torn down by two intents — is
+faster and illegible by comparison, an escape hatch for a seam you have measured
+and found wanting.
 
-*=preventDefault= is a separate constraint, and a sharper one.* The browser
-honours it only while it is dispatching the event — inside the handler it called,
-in the same task. That window is not one of Offworld's stages; it is the browser
-mechanism that /starts/ them, and it has closed by the time anything asynchronous
-resumes. So =[:event/prevent-default]= has to be a client effect, and it has to
-be reached before the dispatch yields.
+One thing this doesn't settle. Between the commit and the morph that confirms it,
+something has to /own/ the property the gesture was changing and keep re-asserting
+it across any morph landing in the gap. The resizer gets away with it because the
+drag writes the same property the server's render will write. Offworld has places
+to hold a client-owned value (=data-ignore-morph=, Replicant's per-node memory)
+and no vocabulary at all for the /handoff/ — when the client may stop asserting.
+That is hand-rolled per gesture today, and it is the one part of a rich seam this
+design doesn't make legible.
 
-Nexus makes that reachable, because it interleaves interpolation and effects
-rather than resolving a whole intent up front: each action is interpolated as it
-is reached, and its effect runs before the next action is looked at. Put
-=[:event/prevent-default]= first and it runs first, before the placeholders in
-later actions have been read at all. The same property cuts the other way, and is
-worth knowing — a placeholder in a later action reads the /live/ event at the
+** The synchronous window
+
+The browser honours =preventDefault= only while it is dispatching the event:
+inside the handler it called, in the same task. That window is not one of
+Offworld's stages — it is the browser mechanism that /starts/ them — and it has
+closed by the time anything asynchronous resumes. So =[:event/prevent-default]=
+has to be a client effect, and it has to be reached before the dispatch yields.
+
+Nexus makes that straightforward, because it interleaves interpolation and effects
+rather than resolving an intent up front. Each action is interpolated as it is
+reached, and its effect runs before the next action is looked at, so
+=[:event/prevent-default]= written first runs first — before the placeholders in
+later actions have been read at all. The same property cuts the other way and is
+worth knowing: a placeholder in a later action reads the /live/ event at the
 moment it is reached, not a snapshot taken when the dispatch began.
-
-And one thing the pipeline doesn't settle. Between the commit and the morph that
-confirms it, something has to /own/ the property the gesture was changing — the
-column width, here — and keep re-asserting it across any morph landing in the
-gap. The resizer gets away with it because the drag writes the same property the
-server's render will write, and a morph mid-drag is rare enough to look like a
-flicker rather than a bug. Offworld has places to hold a client-owned value
-(=data-ignore-morph=, Replicant's per-node memory) and no vocabulary at all for
-the /handoff/: when the client may stop asserting. That is hand-rolled per
-gesture today, and it is the one part of a rich seam this design doesn't make
-legible.
 
 
 * Three modes
