@@ -441,7 +441,15 @@ inside either alternative to do it.
 Offworld ships exactly one construct for that, and deliberately only one: =guard=,
 in =nextjournal.offworld.guard=. It is an ordinary client-side expansion whose
 first argument is interpolated like any other — truthy and it expands to the
-actions that follow it, falsey and it expands to nothing.
+actions it was handed, falsey and it expands to nothing.
+
+That it is an expansion and not a placeholder is the load-bearing part, and it is
+what lets one guard wrap a whole branch. Interpolation substitutes a placeholder
+/in place/, so a placeholder returning a vector of actions would land where a
+single action was expected and quietly do nothing. An expansion is defined to
+return a vector of actions, which is precisely what a guard produces. Build this
+on placeholders and you are pushed toward wrapping each action in its own guard
+instead.
 
 The first argument is therefore a /value/, not an expression. The comparison is
 ordinary Clojure, written inside a placeholder that answers the question:
