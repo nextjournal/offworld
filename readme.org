@@ -451,7 +451,7 @@ ordinary Clojure, written inside a placeholder that answers the question:
   (fn [dd] (= "Enter" (.-key (:replicant/dom-event dd)))))
 
 {:on {:keydown [[::🚦/guard [::enter?]
-                 [::commit [:event.target/value]]]]}}
+                 [[::commit [:event.target/value]]]]]}}
 #+end_src
 
 When the guard expands to nothing there is no server action left for the divert
@@ -466,8 +466,8 @@ The across-a-call case wraps each alternative instead:
   (fn [dd held?] (= held? (.-altKey (:replicant/dom-event dd)))))
 
 (defn button [{:keys [label click-ax alt-click-ax]}]
-  [:button {:on {:click [(into [::🚦/guard [::alt-held? true]]  alt-click-ax)
-                         (into [::🚦/guard [::alt-held? false]] click-ax)]}}
+  [:button {:on {:click [[::🚦/guard [::alt-held? true]  alt-click-ax]
+                         [::🚦/guard [::alt-held? false] click-ax]]}}
    label])
 #+end_src
 
@@ -483,13 +483,17 @@ interpolated values and branches in plain Clojure — the guard is only the
 zero-registration version of that, kept too weak to be worth reaching for when a
 handler would do.
 
-To wrap actions you already hold, =(into [::🚦/guard pred] actions)=. Require
-=nextjournal.offworld.guard= from code the client bundle loads, or the
-registration never runs there.
+Its second argument is a vector of actions — the same shape =:on= takes and an
+expansion returns — so a caller's injected actions drop straight in with no
+wrapping. Require =nextjournal.offworld.guard= from code the client bundle loads,
+or the registration never runs there.
 
-It does cost one thing. Nesting actions in argument position is exactly what the
-staging checker can't follow, so a typo'd action inside a guard isn't reported
-before it runs the way a top-level one is.
+It does cost one thing, and the vector argument sharpens it. Nesting actions in
+argument position is exactly what the staging checker can't follow, so nothing
+inside a guard is reported before it runs — not a typo'd action key, and not
+=[::🚦/guard pred [::a]]= written where =[[::a]]= was meant. Both are silent
+no-ops. Teaching the checker to descend into a guard's actions would close it, and
+is not done.
 
 
 ** Early or late, per value
