@@ -443,14 +443,6 @@ in =nextjournal.offworld.guard=. It is an ordinary client-side expansion whose
 first argument is interpolated like any other — truthy and it expands to the
 actions it was handed, falsey and it expands to nothing.
 
-That it is an expansion and not a placeholder is the load-bearing part, and it is
-what lets one guard wrap a whole branch. Interpolation substitutes a placeholder
-/in place/, so a placeholder returning a vector of actions would land where a
-single action was expected and quietly do nothing. An expansion is defined to
-return a vector of actions, which is precisely what a guard produces. Build this
-on placeholders and you are pushed toward wrapping each action in its own guard
-instead.
-
 The first argument is therefore a /value/, not an expression. The comparison is
 ordinary Clojure, written inside a placeholder that answers the question:
 
@@ -491,17 +483,26 @@ interpolated values and branches in plain Clojure — the guard is only the
 zero-registration version of that, kept too weak to be worth reaching for when a
 handler would do.
 
+And if a general-purpose guard still reads as the top of a slope — a conditional
+today, an expression language by Christmas — then don't use it. Register an
+action of your own, named for what it means where you are: =[::commit-on-enter
+path]= rather than a guard wrapped around a commit. The branch is then ordinary
+Clojure inside your own handler, the call site says more than any combinator
+would, and there is no general notation sitting in the vocabulary inviting a
+second one.
+
 Its second argument is a vector of actions — the same shape =:on= takes and an
 expansion returns — so a caller's injected actions drop straight in with no
 wrapping. Require =nextjournal.offworld.guard= from code the client bundle loads,
 or the registration never runs there.
 
-It does cost one thing, and the vector argument sharpens it. Nesting actions in
-argument position is exactly what the staging checker can't follow, so nothing
-inside a guard is reported before it runs — not a typo'd action key, and not
-=[::🚦/guard pred [::a]]= written where =[[::a]]= was meant. Both are silent
-no-ops. Teaching the checker to descend into a guard's actions would close it, and
-is not done.
+One caveat, now a narrow one. Actions nested in argument position are invisible to
+anything that reads source, so a typo inside a guard is not something a static
+pass can find. The runtime checker does find it, because once the guard has
+expanded its actions are ordinary actions like any other. What still slips through
+is the shape mistake — =[::🚦/guard pred [::a]]= where =[[::a]]= was meant — since
+the malformed element never becomes an action Nexus reaches, and so never arrives
+anywhere the checker is looking.
 
 
 ** Early or late, per value
@@ -563,10 +564,31 @@ client-stage reference that survived into the server-bound payload, whose resolv
 context is gone; and =:unregistered-action=, a dispatched head resolving to no
 handler, which would otherwise be a silent no-op.
 
+Both checks run from two vantages, and the difference is the whole story. Reading
+source — or a dispatch you built by hand in a REPL — sees only what was literally
+spelled. Most dispatches aren't literal: an expansion computes its actions, a
+caller injects them, a guard nests them. So the same checks also run as an
+interceptor at Nexus's =:before-action= phase, where every action is fully spelled
+out by the time it arrives:
+
 #+begin_src clojure
-(staging/warn-on!)   ;; divert warns on every dispatch
+(-> nexus
+    (update :nexus/interceptors conj (staging/checker))
+    🪐/client-nexus)
+
+(staging/warn-on!)   ;; the checks are silent until you ask for them
 (staging/report)     ;; grouped summary of everything seen this session
 #+end_src
+
+It fires for every action Nexus reaches, at any expansion depth, in either world —
+so a key that only exists after an expansion ran, or one nested inside a guard, is
+reported when it arrives rather than never. Install it before =client-nexus=
+appends the divert interceptor: interceptors run in order, and divert empties the
+queue for the actions it claims, so anything behind it never sees them.
+
+Which world it runs in decides how much it checks. A client-stage reference is
+legal on the client and stranded on the server, so =:stranded-client-ref= is a
+server-world check, while =:unregistered-action= applies in both.
 
 The analysis functions are pure — =lookup=, =tag=, =refs=, =stranded-at-server=,
 =unregistered-actions= — so you can run them over a dispatch in a test or a REPL
@@ -1128,7 +1150,7 @@ burden is on this design, not the simpler one.
 This is a research library, not a product.
 
 - *Solid:* the dispatch split, placeholders, the world tag, SSR and CSR modes, the
-  stem, the staging analysis, the round-trip guard, =inline=.
+  stem, the staging analysis and its runtime checker, the guard, =inline=.
 - *Implemented and tested, no worked example:* both ordering policies and the two
   interceptors that apply them. Exercised by tests, not by a UI that races.
 - *Half working:* offline mode. Going offline works — subtrees re-render locally

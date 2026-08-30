@@ -4,6 +4,7 @@
   (:require
    #?(:clj  [clojure.test :refer [deftest is testing]]
       :cljs [cljs.test :refer-macros [deftest is testing]])
+   [nexus.core :as nexus]
    [nextjournal.offworld.staging :as staging]
    [nextjournal.offworld :as-alias ow]))
 
@@ -100,3 +101,50 @@
       (is (= :expansion (:kind v)))
       (is (= :client/expand (:stage v)))
       (is (string? (:message v)) "message builds without NPE"))))
+
+;; ---------------------------------------------------------------------------
+;; The runtime checker. Static analysis sees what the source spells; this sees
+;; what the handlers actually produced.
+
+(defn- caught
+  "Dispatch `actions` against `nexus-map` with the checker installed, and return
+  the violations it reported."
+  [nexus-map actions & [{:keys [world] :or {world :server}}]]
+  (let [seen (atom [])
+        nx   (-> nexus-map
+                 (assoc :nexus/system->state deref)
+                 (update :nexus/interceptors (fnil conj [])
+                         (staging/checker {:world world
+                                           :on-violation #(swap! seen into %)})))]
+    (staging/warn-on!)
+    (try (nexus/dispatch nx (atom {}) {} actions)
+         (finally (staging/warn-off!)))
+    @seen))
+
+(deftest checker-sees-what-an-expansion-produced
+  (let [nx {:nexus/expansions {:ex/emit (fn [_] [[:fx/typo]])}
+            :nexus/effects    {:fx/known (fn [& _])}}]
+    (is (= [:fx/typo] (map :key (caught nx [[:ex/emit]] {:world :client})))
+        "an unregistered action that only exists after expansion")
+    (is (empty? (staging/unregistered-actions nx [[:ex/emit]]))
+        "which checking the dispatch you authored cannot see")))
+
+(deftest checker-flags-a-client-ref-that-reached-a-server-stage
+  (let [nx {:nexus/effects      {:fx/server ^::ow/server (fn [& _])}
+            :nexus/placeholders {:pl/client (fn [_] :x)}}
+        vs (caught nx [[:fx/server [:pl/client]]] {:world :server})]
+    (is (some #(= :stranded-client-ref (:type %)) vs))
+    (is (empty? (filter #(= :stranded-client-ref (:type %))
+                        (caught nx [[:fx/server [:pl/client]]] {:world :client})))
+        "and the same reference is perfectly legal while still on the client")))
+
+(deftest checker-is-silent-unless-warning-is-on
+  (let [seen (atom [])
+        nx   {:nexus/system->state deref
+              :nexus/effects       {}
+              :nexus/interceptors  [(staging/checker
+                                    {:world :server
+                                     :on-violation #(swap! seen into %)})]}]
+    (staging/warn-off!)
+    (nexus/dispatch nx (atom {}) {} [[:fx/nope]])
+    (is (= [] @seen))))

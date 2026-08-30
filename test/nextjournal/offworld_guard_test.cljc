@@ -5,6 +5,7 @@
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
    [nextjournal.offworld :as 🪐]
+   [nextjournal.offworld.staging :as staging]
    [nextjournal.offworld.guard :as 🚦]))
 
 (def ^:dynamic *ran* nil)
@@ -85,3 +86,19 @@
       (is (= [] @*ran*) "the alt branch is server-bound, so nothing runs locally")
       (is (= [[::commit "x"]] (::🪐/server-actions ctx))
           "a guarded server action still diverts"))))
+
+(deftest the-checker-reaches-inside-a-guard
+  (nxr/register-effect! ::local (fn [& _] (note! :local)))
+  (let [seen (atom [])
+        nx   (-> (nxr/get-registry)
+                 (update :nexus/interceptors (fnil conj [])
+                         (staging/checker {:world :client
+                                           :on-violation #(swap! seen into %)}))
+                 🪐/client-nexus)]
+    (staging/warn-on!)
+    (try (nexus/dispatch nx (atom {}) {}
+                         [[::🚦/guard true [[::local] [::typo]]]])
+         (finally (staging/warn-off!)))
+    (is (= [:local] @*ran*) "the good action still runs")
+    (is (= [::typo] (map :key @seen))
+        "and the typo nested inside the guard is reported once it expands")))

@@ -199,7 +199,7 @@
 ;; Runtime reporting — the "warn at runtime" surface. Off by default; flip with
 ;; (warn-on!). Observed violations accumulate in `observed` for later `report`.
 
-(defonce ^{:doc "Whether divert* should warn on staging violations."} -warn?
+(defonce ^{:doc "Whether the runtime checks warn on staging violations."} -warn?
   (volatile! false))
 
 (defn warn-on!  [] (vreset! -warn? true))
@@ -224,6 +224,32 @@
     (log! (str "⚠ offworld staging: " (count vs) " violation(s):\n"
                (str/join "\n" (map #(str "  • " (:message %)) vs)))))
   violations)
+
+(defn checker
+  "A `:before-action` interceptor running the staging checks against every action
+  Nexus reaches — at any expansion depth, in either world, on whatever the
+  handlers actually produced rather than on what the source happened to spell.
+  Silent unless `warn-on!` has been called.
+
+  Install it before `nextjournal.offworld/client-nexus` appends the divert
+  interceptor: interceptors run in order, and divert empties the queue for the
+  actions it claims, so anything after it never sees them.
+
+  `:world` decides whether stranded-client-ref is checked, since a client-stage
+  reference is only stranded once it has reached a server stage; it defaults to
+  the runtime this was compiled for. `:on-violation` defaults to `warn!`."
+  ([] (checker {}))
+  ([{:keys [world on-violation]
+     :or   {world #?(:clj :server :cljs :client)}}]
+   (let [report! (or on-violation warn!)]
+     {:phase ::check
+      :before-action
+      (fn [{:keys [nexus action] :as ctx}]
+        (when (and action (warning?))
+          (let [vs (cond-> (unregistered-actions nexus action)
+                     (= :server world) (into (stranded-at-server nexus action)))]
+            (when (seq vs) (report! vs))))
+        ctx)})))
 
 (defn report
   "Side-effecting. Print a grouped summary of everything seen this session."
