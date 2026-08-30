@@ -37,23 +37,23 @@ Offworld commits to one idea:
 and 🌏server. Express it as a plain vector of actions, each tagged
 with the world it runs in.*
 
+The stage where a given action runs then follows from what you've declared:
+the world it's tagged with, and the kind of handler which you've registered:
+
 #+begin_src clojure
-;; an intent — the actions one click means, written where the click is
+;; The intent behind a click:
 [:button {:on {:click [[::pan-to id 4.89 52.38]
                        [:effects/save path {:center [4.89 52.38]}]]}}
  "Amsterdam"]
 
-;; each action, tagged with the world it runs in
+;; Each action, tagged by the world it runs in:
 (nxr/register-effect! ::pan-to      ^::🪐/client (fn [ctx _ id lng lat] ...))
 (nxr/register-effect! :effects/save ^::🪐/server (fn [_ system path v] ...))
 #+end_src
 
-One click, two worlds, one vector — the map pans in the browser while
-the new centre is saved on the server, and nothing in the intent names
-a stage.
-
-The stage where a given action runs then follows from what you've declared:
-the world it's tagged with, and the kind of handler which you've registered.
+One click, one intent-vector, two worlds.
+When the user clicks, the map is repositioned in the browser, and
+the new position is saved on the server.
 
 We stage the intent, because the parts of one interaction can't all
 run at the same moment. Only the server knows your app's current
