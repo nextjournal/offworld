@@ -34,9 +34,26 @@ Offworld promotes:
 Offworld commits to one idea:
 
 *A user-intent is a staged computation, split across worlds: 🪐client
-and 🌏server. Represent the computation as a set of pure-data actions,
-and tag each action by the world it runs in.  Together, the world-tag and
-the nexus handler-type indicate the stage where it runs.*
+and 🌏server. Express it as a plain vector of actions, each tagged
+with the world it runs in.*
+
+#+begin_src clojure
+;; an intent — the actions one click means, written where the click is
+[:button {:on {:click [[::pan-to id 4.89 52.38]
+                       [:effects/save path {:center [4.89 52.38]}]]}}
+ "Amsterdam"]
+
+;; each action, tagged with the world it runs in
+(nxr/register-effect! ::pan-to      ^::🪐/client (fn [ctx _ id lng lat] ...))
+(nxr/register-effect! :effects/save ^::🪐/server (fn [_ system path v] ...))
+#+end_src
+
+One click, two worlds, one vector — the map pans in the browser while
+the new centre is saved on the server, and nothing in the intent names
+a stage.
+
+The stage where a given action runs then follows from what you've declared:
+the world it's tagged with, and the kind of handler which you've registered.
 
 We stage the intent, because the parts of one interaction can't all
 run at the same moment. Only the server knows your app's current
@@ -1158,33 +1175,37 @@ fails that second test.
 
 * Objections
 
-** Are we smelling Greenspun's tenth rule?
+** Do I smell Greenspun's tenth rule?
 Perhaps. But, a careful study
 of server-side rendering shows that some kind of reified procedure
 (i.e. defunctionalization) is unavoidable. The question isn't whether
 to build an abstract machine, but whether to admit you have built one.
 
-The worst part of lisp-in-lisp is when data represents control-flow,
-and the staging law answers it by narrowing that case to one: eliding
-a round trip.
+The worst part of lisp-in-lisp is when data represents control-flow.
+Offworld offers a standard 
 
 ** Why not infer the client/server boundary with macros?
-Hyper and Electric Clojure do versions of this and buy real
-ergonomics. What they don't leave you with is a value — so nothing to
-walk, check, colour or log, and a behaviour change that shows up in
-review as an altered string.
+Hyper and Electric Clojure do versions of this, offering real
+ergonomics.  What they don't leave you with is a value. There's
+nothing to walk, check, tag or log. Changes to intents show up as
+new compiler output.
 
 ** Isn't shipping data slower than shipping code?
-Two costs get confused. Measured on a 10,000-row table: on the /wire/,
-compression handles it — the markup came to around 200KB Brotli'd, and
-replacing each cell's inline intent with a shared template or an
-opaque server-held token bought about 12% more. On /parse/, neither
-move helped at all, because the browser decompresses back to full text
-and parse time tracks raw bytes. The opaque-reference alternative is
-the smaller one, not the faster one. And the data form is a source,
-not an obligation: a statically-known dispatch could in principle
-compile to direct client code, at the cost of two implementations that
-must be proven to agree. Not built.
+We kept confusing two costs, and measuring a large table separated
+them. On the /wire/, compression absorbs the cost: inline intents are
+enormously repetitive, which is the case compression handles best.
+Rendering each intent with a shared template or an opaque server-held
+token only buys a marginal further reduction.
+
+On /parse/, those replacements don't help at all, because the browser
+decompresses back to full text and parse time tracks the uncompressed
+byte count, which they barely move. The opaque-reference alternative
+is the smaller one, not the faster one.
+
+Intents as data are a pattern, not an obligation. For instance, a
+statically-known dispatch could in principle compile to direct client
+code, at the cost of two implementations that must be proven to agree.
+
 
 ** Why not signals?
 A signal is a defunctionalized /setter on a mutable place/ —
