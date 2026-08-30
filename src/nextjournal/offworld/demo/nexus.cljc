@@ -7,6 +7,8 @@
    [nextjournal.offworld.demo.ui.omnibox :as-alias ob]
    [nextjournal.offworld :as-alias 🪐]
    nextjournal.offworld.nexus.registry
+   [nextjournal.offworld.standard :as std]
+   nextjournal.offworld.demo.ui.resizer
    nextjournal.offworld.demo.mapbox
    nextjournal.offworld.demo.scan))
 
@@ -75,3 +77,5 @@
    :document/element-by-id   (fn [_ id] #?(:cljs (js/document.getElementById id)))}})
 
 (batching/install!)
+
+(std/register-standard-nexus!)

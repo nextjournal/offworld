@@ -3,6 +3,7 @@
    [nextjournal.offworld.demo.ui.omnibox :as omnibox-ui]
    [nextjournal.offworld.demo.ui.nested-grid :as ng]
    [nextjournal.offworld.demo.ui.holiday :as holiday]
+   [nextjournal.offworld.demo.ui.resizer :as resizer]
    [nextjournal.offworld.demo.load-builder :as lb]
    [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld.demo.mapbox :as mb]
@@ -34,4 +35,5 @@
       ::🌿/stem           stem
       #_#_:cache-queries [#'scan/get-scans #'scan/get-plates]}
      (scan/game (🌿/+ state [:scan-game])))
-    (holiday/panel (🌿/+ state [:panel]))]])
+    (holiday/panel (🌿/+ state [:panel]))
+    (resizer/panel (🌿/+ state [:resizer]))]])

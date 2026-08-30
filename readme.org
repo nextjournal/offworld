@@ -1,4 +1,5 @@
-#+TITLE: 🪐 Offworld #+OPTIONS: toc:2 num:nil
+#+TITLE: 🪐 Offworld
+#+OPTIONS: toc:2 num:nil
 
 * 🪐 Offworld
 
@@ -62,7 +63,7 @@ you were holding, at the moment you click. Thus, an intent is one
 value, whose parts are evaluated at different points along that chain,
 rather than code that runs all at once.
 
-** Quickstart
+** Quickstart: run the demo
 
 #+begin_src sh
 bb dev # shadow-cljs watch + http-kit on :8000 + clerk on :9001 bb
@@ -73,11 +74,12 @@ test-clj # jvm tests bb test-cljs # node tests via shadow
   server renders hiccup to HTML and morphs it down an SSE connection.
 - [[http://localhost:8000?csr][localhost:8000?csr]] — the same UI, entirely client-side. Replicant
   reconciles a virtual DOM; no server after the first byte.
-- Kill the server and the SSR page keeps working. See [[*Offline][Offline]].
+- Cut the server connection, and the SSR page keeps working. See [[*Offline][Offline]].
 
-The library is eight files under a thousand lines: =offworld.cljc=,
-=stem.cljc=, =staging.cljc=, =order.cljc=, =guard.cljc=, =inline.cljc=,
-=util.cljc=, =nexus/registry.cljc=.  Everything under =demo/= is the demo.
+The library is eleven files, still under a thousand lines: =offworld.cljc=,
+=stem.cljc=, =staging.cljc=, =order.cljc=, =standard.cljc=, =guard.cljc=,
+=claim.cljc=, =conn.cljc=, =inline.cljc=, =util.cljc=, =nexus/registry.cljc=.
+Everything under =demo/= is the demo.
 
 * Why
 
@@ -867,26 +869,45 @@ procedures are simply /fast enough/.
 
 ** Per-frame work
 
-*An intent is one per decision, not one per sample.* Nexus should start and stop a
-gesture; it should never see a =pointermove=.
+*An intent is one per decision, not one per sample.* The decision here is not
+whether Nexus sees a =pointermove= — it can — but whether the /server/ does.
 
-The reason is specific to SSR and it isn't a matter of taste: there, a dispatch
-that reaches the server is an HTTP request. A drag handler that dispatches every
-frame is sixty requests a second, each encoding a payload, waking the server's
-dispatch loop and producing a render. The per-frame work — the drag preview, the
-pointer capture, the style writes — belongs in a client effect owning its own
-=requestAnimationFrame= loop, started by one intent and torn down by another. Two
-dispatches per gesture rather than a hundred.
+In SSR every dispatch runs =divert=, and only a dispatch left holding server
+actions becomes an HTTP request. So the rule that matters is that the per-frame
+leg must be client-only. The demo's column resizer is the shape:
 
-In CSR that cost is gone and the shape still holds, because the same code runs in
-both worlds.
+#+begin_src clojure
+{:on {:pointerdown [[::rz/grab]]
+      :pointermove [[::🚦/guard [::rz/dragging?]
+                     [[::rz/preview grid-id idx]]]]
+      :pointerup   [[::🚦/guard [::rz/dragging?]
+                     [[::rz/commit path c [::rz/width grid-id idx]]]]]}}
+#+end_src
+
+=::rz/preview= is client-marked and writes =gridTemplateColumns= directly, so a
+frame's dispatch resolves entirely in the browser, =divert= returns nothing, and
+the generated attribute — =_sp && @get(…)= — never makes the call. =::rz/commit=
+is server-marked and sits behind a guard that only opens on =pointerup=. Sixty
+dispatches a second, one request per gesture.
+
+Note also which value crosses. The width isn't carried from the drag; it is read
+back off the element at commit time by =[::rz/width grid-id idx]=, at the last
+moment before the action leaves. The per-frame leg writes to the DOM and the
+commit leg reads from it, so nothing has to accumulate drag state anywhere.
+
+If even the client-side dispatch per frame is too much — and it is measurable
+work, a transit decode and a full Nexus pass each time — the next move is to
+give one client effect its own =requestAnimationFrame= loop, started by
+=pointerdown= and torn down by =pointerup=. That costs you the legibility this
+example has, where every frame's behaviour is spelled at the element. Reach for
+it on a measurement, not on principle.
 
 *=preventDefault= is a separate constraint, and a sharper one.* The browser
 honours it only while it is dispatching the event — inside the handler it called,
 in the same task. That window is not one of Offworld's stages; it is the browser
 mechanism that /starts/ them, and it has closed by the time anything asynchronous
-resumes. So =[:event/prevent-default]= has to be a client effect, and it has to be
-reached before the dispatch yields.
+resumes. So =[:event/prevent-default]= has to be a client effect, and it has to
+be reached before the dispatch yields.
 
 Nexus makes that reachable, because it interleaves interpolation and effects
 rather than resolving a whole intent up front: each action is interpolated as it
@@ -897,12 +918,15 @@ worth knowing — a placeholder in a later action reads the /live/ event at the
 moment it is reached, not a snapshot taken when the dispatch began.
 
 And one thing the pipeline doesn't settle. Between the commit and the morph that
-confirms it, something has to /own/ the property the gesture was changing — a
-column width, say — and keep re-asserting it across any morph landing in the gap.
-Offworld has places to hold a client-owned value (=data-ignore-morph=, Replicant's
-per-node memory) and no vocabulary at all for the /handoff/: when the client may
-stop asserting. That's hand-rolled per gesture today, and it's the one part of a
-rich seam this design doesn't make legible.
+confirms it, something has to /own/ the property the gesture was changing — the
+column width, here — and keep re-asserting it across any morph landing in the
+gap. The resizer gets away with it because the drag writes the same property the
+server's render will write, and a morph mid-drag is rare enough to look like a
+flicker rather than a bug. Offworld has places to hold a client-owned value
+(=data-ignore-morph=, Replicant's per-node memory) and no vocabulary at all for
+the /handoff/: when the client may stop asserting. That is hand-rolled per
+gesture today, and it is the one part of a rich seam this design doesn't make
+legible.
 
 
 * Three modes
