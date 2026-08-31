@@ -6,21 +6,26 @@
       [[:effects/save path v]
        [:node/focus [::🌿/el id]]]
 
-  Every registered action / effect / placeholder resolves at a fixed *stage* in
-  the pipeline (C19's six, plus render as stage 0):
+  Every registered action / effect / placeholder resolves in one of two *worlds*,
+  and those worlds sit in a five-stage pipeline:
 
-      0 render │ 1 client/state │ 2 client/expand │ 3 client/fx
-               │ 4 server/state │ 5 server/expand │ 6 server/fx
+      0 render │ 1 morph │ 2 client │ 3 request │ 4 server
 
-  offworld's `kind × world` slots straight in. `world` is :server iff the handler
-  is marked ^::🪐/server, else :client (the default). Each kind has a *deadline* —
-  the stage past which an unresolved/unrun reference is stranded:
+  `world` is :server iff the handler is marked ^::🪐/server, else :client (the
+  default) — and that world IS the stage it resolves at. There is no finer
+  deadline inside a world. Nexus drains a dispatch to completion, so an expansion
+  emitted by an expansion still expands, and a placeholder surviving expansion
+  still meets the pre-fx interpolation pass. Being *late* within a world is not
+  something that can happen.
 
-    - action: its world's *expand* stage (an action must expand there).
-    - effect: its world's *fx* stage (an effect runs there).
-    - placeholder: its world's *fx* stage. Interpolation runs twice per world
-      (before expansion AND before effect handling), so a placeholder surviving
-      expansion still has a pre-fx pass coming — its deadline is fx, not expand.
+  Three of the five stages are not registration targets. `render` is ordinary
+  Clojure at the authoring site. `morph` and `request` are transports: nothing
+  authored resolves there, but real time passes and messages can be lost,
+  delayed, reordered or forged — see `nextjournal.offworld.order`.
+
+  `request` is also the boundary the decidable violation is stated against. It is
+  where the server-bound remainder is serialized, so a client reference still
+  standing as a vector by then arrives on the server as inert data.
 
   ## The staging law and what is checkable
 
@@ -35,11 +40,11 @@
 
   What IS decidable is the BACKWARD case, because there carry has no destination:
 
-  => VIOLATION `:stranded-client-ref` — a client-stage reference that survives
-     into server-bound actions. It resolves only on the client; every client
-     stage is already past and its resolver context (DOM/event) is gone. It can
-     be neither consumed (no value) nor carried (nowhere left to carry it). No
-     handler-body analysis required.
+  => VIOLATION `:stranded-client-ref` — a client-world reference that survives
+     past `request` into server-bound actions. It resolves only on the client,
+     that stage is now behind it, and its resolver context (DOM/event) is gone.
+     It can be neither consumed (no value) nor carried (nowhere left to carry
+     it). No handler-body analysis required.
 
   => VIOLATION `:unregistered-action` — a dispatched action head that resolves to
      no registered handler: it runs as a silent no-op.
@@ -55,30 +60,15 @@
 
 (def stage-order
   "The pipeline's fixed stage order. A value resolved at stage i may be consumed
-  only by computation at stage j >= i."
-  [:render :client/state :client/expand :client/fx :server/state :server/expand :server/fx])
+  only by computation at stage j >= i.
 
-(def ^:private stage->n (into {} (map-indexed (fn [i s] [s i]) stage-order)))
-
-(defn- stage-of
-  "The stage keyword by which a `kind`×`world` reference must have resolved — its
-  *deadline*, the point past which it is stranded — or nil.
-
-  Note placeholders: interpolation runs twice per world (once before expansion,
-  once before effect handling), so a placeholder may resolve at either pass. Its
-  deadline is the *last* one, immediately before fx — NOT expansion. A placeholder
-  surviving expansion is not yet stranded; one surviving fx is."
-  [kind world]
-  (case [kind world]
-    [:placeholder :client] :client/fx      ; resolves at interp₁ or interp₂; deadline = pre-fx
-    [:placeholder :server] :server/fx
-    [:action      :client] :client/expand  ; :action and :expansion share the expansion
-    [:action      :server] :server/expand  ; bucket in nexus — same deadline for both
-    [:expansion   :client] :client/expand
-    [:expansion   :server] :server/expand
-    [:effect      :client] :client/fx
-    [:effect      :server] :server/fx
-    nil))
+  Only :client and :server are registration targets — a handler's world is its
+  stage, and no finer rung is checkable, because nexus drains a dispatch to
+  completion within a world. :render is ordinary Clojure at the authoring site;
+  :morph and :request are transports where nothing authored resolves, named
+  because real time passes there and messages can be lost, delayed, reordered or
+  forged."
+  [:render :morph :client :request :server])
 
 ;; ---------------------------------------------------------------------------
 ;; Stage lookup — the one place that reads registry metadata.
@@ -106,18 +96,18 @@
 (defn- server-handler? [h] (contains? (meta h) ::🪐/server))
 
 (defn lookup
-  "Classify a single key `k` against `nexus`. Returns
-  {:key :kind :world :stage :n} for a registered key, or
-  {:key :kind :unknown :world :unknown :stage nil :n nil} when registered nowhere."
+  "Classify a single key `k` against `nexus`. Returns {:key :kind :world} for a
+  registered key, or {:key :kind :unknown :world :unknown} when registered
+  nowhere. The world is the stage; see `stage-order`."
   [nexus k]
   (or (some (fn [[kind reg-key]]
               (let [reg (get nexus reg-key)]
                 (when (contains? reg k)
-                  (let [world (if (server-handler? (get reg k)) :server :client)
-                        stage (stage-of kind world)]
-                    {:key k :kind kind :world world :stage stage :n (stage->n stage)}))))
+                  {:key   k
+                   :kind  kind
+                   :world (if (server-handler? (get reg k)) :server :client)})))
             buckets)
-      {:key k :kind :unknown :world :unknown :stage nil :n nil}))
+      {:key k :kind :unknown :world :unknown}))
 
 ;; ---------------------------------------------------------------------------
 ;; Tagging — pure, attaches ::info metadata to every keyword-headed vector.
@@ -177,10 +167,10 @@
                          " is not registered (runs as a silent no-op)")})))
 
 (defn stranded-at-server
-  "Pure. Client-stage references still present in `actions` — a server-bound
-  payload, or actions seen at a server stage. Each resolves only on the client,
-  a stage now in the past whose context is gone, so it can be neither consumed
-  nor carried anywhere useful."
+  "Pure. Client-world references still present in `actions` — a server-bound
+  payload, or actions seen at a server stage. Each had to resolve before the
+  `request` stage; past it the client context its resolver needs is gone, so it
+  can be neither consumed nor carried anywhere useful."
   [nexus actions]
   (into []
         (for [i     (refs nexus actions)
@@ -188,12 +178,12 @@
           {:type    :stranded-client-ref
            :key     (:key i)
            :kind    (:kind i)
-           :stage   (:stage i)
-           :message (str (name (:kind i)) " " (:key i) " is client-stage ("
-                         (name (:stage i)) ") but survives into server-bound "
-                         "actions — its resolver needs client context that no "
-                         "longer exists, and every client stage is already past, "
-                         "so it can be neither consumed nor carried")})))
+           :world   (:world i)
+           :message (str (name (:kind i)) " " (:key i) " is client-world but "
+                         "survives into server-bound actions — it had to resolve "
+                         "before the request stage, and the client context its "
+                         "resolver needs no longer exists, so it can be neither "
+                         "consumed nor carried")})))
 
 ;; ---------------------------------------------------------------------------
 ;; Runtime reporting — the "warn at runtime" surface. Off by default; flip with
@@ -269,12 +259,12 @@
   ;; A registry with a server effect, a client effect, and one placeholder of each world:
   (def nexus
     {:nexus/actions      {}
-     :nexus/effects      {:fx/server (with-meta (fn []) {::🪐/server true})   ; server/fx (6)
-                          :fx/client   (with-meta (fn []) {})}                  ; client/fx (3)
-     :nexus/placeholders {:pl/client    (with-meta (fn []) {})                   ; client/expand (2)
-                          :pl/server    (with-meta (fn []) {::🪐/server true})}}) ; server/expand (5)
+     :nexus/effects      {:fx/server (with-meta (fn []) {::🪐/server true})    ; server (4)
+                          :fx/client (with-meta (fn []) {})}                    ; client (2)
+     :nexus/placeholders {:pl/client (with-meta (fn []) {})                     ; client (2)
+                          :pl/server (with-meta (fn []) {::🪐/server true})}})  ; server (4)
 
-  (lookup nexus :fx/server) ;=> {:kind :effect :world :server :stage :server/fx :n 6 ...}
+  (lookup nexus :fx/server) ;=> {:key :fx/server :kind :effect :world :server}
 
   ;; LEAK: a client placeholder rode into the server payload (interpolation missed it)
   (stranded-at-server nexus [[:fx/server path [:pl/client "x"]]])

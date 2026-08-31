@@ -18,23 +18,24 @@
    :nexus/placeholders {:pl/client (fn [])
                         :pl/server ^::ow/server (fn [])}})
 
-(deftest lookup-deadlines
-  (testing "placeholders strand at fx, not expand — interpolation runs again before fx"
-    (is (= :client/fx (:stage (staging/lookup nexus :pl/client))))
-    (is (= :server/fx (:stage (staging/lookup nexus :pl/server)))))
-  (testing "effects strand at fx; actions at expand"
-    (is (= :client/fx     (:stage (staging/lookup nexus :fx/client))))
-    (is (= :server/fx     (:stage (staging/lookup nexus :fx/server))))
-    (is (= :client/expand (:stage (staging/lookup nexus :ex/client))))
-    (is (= :server/expand (:stage (staging/lookup nexus :ex/server)))))
-  (testing "worlds, and n increases client -> server"
+(deftest lookup-worlds
+  (testing "a handler's world is its stage — every kind, both worlds. There is no
+            finer rung: nexus drains a dispatch to completion, so nothing is
+            stranded by being late *within* a world"
     (is (= :client (:world (staging/lookup nexus :pl/client))))
     (is (= :server (:world (staging/lookup nexus :pl/server))))
-    (is (< (:n (staging/lookup nexus :pl/client))
-           (:n (staging/lookup nexus :pl/server)))))
+    (is (= :client (:world (staging/lookup nexus :fx/client))))
+    (is (= :server (:world (staging/lookup nexus :fx/server))))
+    (is (= :client (:world (staging/lookup nexus :ex/client))))
+    (is (= :server (:world (staging/lookup nexus :ex/server)))))
+  (testing "the ladder puts request between the two worlds — the boundary a
+            client reference must resolve before"
+    (is (= [:render :morph :client :request :server] staging/stage-order))
+    (let [n (into {} (map-indexed (fn [i st] [st i]) staging/stage-order))]
+      (is (< (n :client) (n :request) (n :server)))))
   (testing "unregistered key"
     (is (= :unknown (:kind (staging/lookup nexus :no/such))))
-    (is (nil? (:stage (staging/lookup nexus :no/such))))))
+    (is (= :unknown (:world (staging/lookup nexus :no/such))))))
 
 (deftest tagging
   (let [tagged (staging/tag nexus [[:fx/server [:pl/client "x"]]])
@@ -93,14 +94,15 @@
 
 (deftest expansion-stranded-at-server
   (testing "a client expansion surviving into server-bound actions is flagged —
-            regression: it used to resolve to :stage nil and NPE via (name nil)"
+            an expansion strands exactly like a placeholder or an effect does,
+            since the world is the whole of what decides"
     (let [v (first (staging/stranded-at-server
                     {:nexus/expansions {:ex/client (fn [])}} [[:ex/client "x"]]))]
       (is (= :stranded-client-ref (:type v)))
       (is (= :ex/client (:key v)))
       (is (= :expansion (:kind v)))
-      (is (= :client/expand (:stage v)))
-      (is (string? (:message v)) "message builds without NPE"))))
+      (is (= :client (:world v)))
+      (is (string? (:message v))))))
 
 ;; ---------------------------------------------------------------------------
 ;; The runtime checker. Static analysis sees what the source spells; this sees
