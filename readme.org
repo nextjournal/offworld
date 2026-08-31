@@ -82,6 +82,25 @@ The library is eleven files, still under a thousand lines: =offworld.cljc=,
 =claim.cljc=, =conn.cljc=, =inline.cljc=, =util.cljc=, =nexus/registry.cljc=.
 Everything under =demo/= is the demo.
 
+* Lore
+
+It's hard to say this falsibiably, but vision matters.
+That said: if you see an emoji here, just consider it heiroglyphic sugar for a concrete name.
+Offworld combines  Datastar's interstellar symbolism with Replicant's reference to the film /Blade Runner/:
+
+  | Emoji | namespace                    | Technical meaning                                                      | Movie Magic                                                                                                         |
+  |-------+------------------------------+------------------------------------------------------------------------+---------------------------------------------------------------------------------------------------------------------|
+  | 🪐   | nextjournal.offworld/client  | The user's web-browser client.                                         | A remote world of untapped spoils and mystery.                                                                |
+  | 🌎   | nextjournal.offworld/server  | Our web-server.                                                        | Our crumbling world, free to exploit what little remains.                                                           |
+  | 🤖   | cjohansen/nexus              | The Replicant UI framework, by cjohansen                               | A hardy synthetic worker, used to extract wealth for the corporation.                                               |
+  | 🚀   | delaney/datastar             | The Datastar hypermedia framework, by delaney                          | Interstellar transport for replicants, to & from the offworld colonies.                                             |
+  | 🌿   | nextjournal.offworld/stem    | State management for replicant render-fns                              | The inner wiring of a replicant's "world" model, which it projects onto the phenomenal substrate via actions.       |
+  | 🚦   | nextjournal.offworld/guard   | action guarding/dispatch control                                       | Baseline directives from the corporation. If you're considering this action, don't.                                 |
+  | 🎫   | nextjournal.offworld/claim   | A value which rides the dispatch end-to-end, via a server-continuation | Your personal items will be held in a secure vault for the duration of your voyage (subject to routine inspection). |
+  | 🌠   | nextjournal.offworld/offline | Offline-capable rendering & dispatch                                   | What looked like a shooting star was really our crash-landing on a remote world. Don't touch the eggs.              |
+  | 📈   | nextjournal.offworld/order   | Strategies for byzantine fault protection, such as monotonicity        | The order of things: profits are up.                                                                                |
+  | 🪶   | kimo-k/core.lite             | Clojurescript lite-mode (and related facilities)                       | "Like tears in rain" 🕊                                                                                            |
+
 * Why
 
 ** Two paradigms, one program
