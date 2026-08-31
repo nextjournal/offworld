@@ -1,7 +1,7 @@
 #+TITLE: 🪐 Offworld
 #+OPTIONS: toc:2 num:nil
 
-* 🪐 Offworld
+* Use-case
 
 #+begin_quote
 "A new life awaits you in the Offworld colonies. The chance to begin
@@ -115,25 +115,27 @@ once.
 Here's how Offworld models the pipeline. Stages transpire from top to
 bottom; computations flow from left to right:
 
-| stage           | inputs             | action       | outputs           |
-|-----------------+--------------------+--------------+-------------------|
-| Morph           | ↪SSE message   --> | morph        | --> new DOM       |
-|-----------------+--------------------+--------------+-------------------|
-| Client Dispatch | actions        --> | ↪interpolate |                   |
-|                 | client-event   --> | expand       |                   |
-|                 | client-state   --> | recur↩       |                   |
-|                 |                    | interpolate  |                   |
-|                 |                    | effect       | --> client-fx     |
-|-----------------+--------------------+--------------+-------------------|
-| HTTP Request    | server-actions --> | serialize    | --> dispatch RPC  |
-|-----------------+--------------------+--------------+-------------------|
-| Server Dispatch | server-state   --> | ↪interpolate |                   |
-|                 |                    | expand       |                   |
-|                 |                    | recur↩       |                   |
-|                 |                    | effect       | --> server-fx     |
-|-----------------+--------------------+--------------+-------------------|
-| Render          | server-state   --> | render       | --> new actions   |
-|                 |                    |              | --> SSE-message↩  |
+| stage           | inputs             | action       | outputs          |
+|-----------------+--------------------+--------------+------------------|
+| Morph           | ↪SSE message   --> | morph        | --> new DOM      |
+|-----------------+--------------------+--------------+------------------|
+| Client Dispatch | actions        --> | ↪interpolate |                  |
+|                 | client-event   --> | expand       |                  |
+|                 | client-state   --> | recur↩       |                  |
+|                 |                    | interpolate  |                  |
+|                 |                    | effect       | --> client-fx    |
+|-----------------+--------------------+--------------+------------------|
+| HTTP Request    | server-actions --> | interpolate  |                  |
+|                 |                    | serialize    | --> dispatch RPC |
+|-----------------+--------------------+--------------+------------------|
+| Server Dispatch | server-state   --> | ↪interpolate |                  |
+|                 |                    | expand       |                  |
+|                 |                    | recur↩       |                  |
+|                 |                    | interpolate  |                  |
+|                 |                    | effect       | --> server-fx    |
+|-----------------+--------------------+--------------+------------------|
+| Render          | server-state   --> | render       | --> new actions  |
+|                 |                    |              | --> SSE-message↩ |
 
 Offworld's bet is that one data structure carrying all the stages is
 worth more than the directness you give up.
@@ -148,20 +150,18 @@ It's a button that changes the season:
  "Winter"]
 #+end_src
 
-That handler is a *closure*: a function bundled together with the
-bindings it captured from where it was written. In a browser-only app
-this is fine, because the function is created and called in the same
-place.
+That handler is a closure. In a browser-only app, this is fine,
+because the function is created and called in the same place.
 
 Now, render that same button on the server. The click will happen in a
 browser, later, on a different machine. The server hands over text:
 HTML, and whatever it carries.
 
 A closure has no written form. You can print its source, but the
-bindings it captured (a database connection, the current season, the
+bindings it captured (a database connection, the current "season", the
 user) were never text and can't become text.
 
-So you do the only thing available: leave the function where it can
+So, you do the only thing available: leave the function where it can
 run, give it a name, and send the name to the client, along with the
 values it uses:
 
@@ -171,16 +171,17 @@ values it uses:
 
 When the user clicks, the client sends that vector back to the server.
 The server looks up =:set-season= from a table, finds the function,
-applies it to =:winter=. Nothing crossed the wire but a keyword
-and a value.
+applies it to =:winter=. Nothing crossed the wire but a keyword and a
+value.
 
-The way we rewrote this code is a standard technique, called
-*defunctionalization*. It's worth knowing, because once you see it you
-see it everywhere. Reynolds described it in 1972 as a compiler
+This rewrite follows a standard technique, called defunctionalization.
+It's worth knowing, because once you see it you
+see it everywhere. Reynolds (1972) described it as a compiler
 technique: replace a function value with a tag plus the values it
-captured, and run a central dispatch procedure to apply the tag to values.
+captured. Then, run a central dispatch procedure which
+"applies" the tag to the values.
 
-In our case, isn't an optional style choice.  Any framework that runs
+In our case, that's not an optional style choice.  Any framework that runs
 one interaction across two machines uses defunctionalization, because
 a closure can't be serialized.  The real choice is, what shall we
 defunctionalize our closure into? For instance,
@@ -197,30 +198,32 @@ Offworld chooses data. Not because data is virtuous, but because of what
 data admits that the others don't:
 
 - *It crosses.* A closure can't be split across a wire. An action,
-  though, is a vector whose first element names its handler. a lookup
-  tells you what world it belongs to, at any expansion depth. Without
-  this there's no hybrid mode at all; the rest of the list is a bonus.
+  though, is a vector of discrete elements. Looking up the first item
+  tells you what world it belongs to, at any expansion depth.  Without
+  this, there's no hybrid UX at all.
 - *It can be substituted into.* Interpolation walks the tree and
   replaces what it finds, at every action node, in both worlds.
 - *It can be checked before it runs.* Stranded client references and
-  unregistered heads fall out of walking the same structure,
-  statically, without executing anything.
-- *It can be shown.* Every key classified by world and kind, coloured
-  in the editor, read out on hover. An intent prints at its call site
-  with =#p=.
-- *It can be extended by a caller who doesn't understand it.* A layer
-  that knows nothing about a component's concern can still =into= or
-  =mapv= the intent it was handed, so components compose without
-  either layer naming the other's business.
+  unregistered keys can be caught by simply walking the datastrcture,
+  without executing anything.
+- *It can be shown.* An item's stage is clearly laid out on all
+  worlds - client, server, or even your editor.
+- *It can be extended by a caller that can't run it.* This is key to
+  reusability. A render-fn accepts input arguments as its
+  "configuration" contract. Pass ~:blue~ to configure a button's
+  color, or pass an intent to configure what happens when it's
+  clicked. It can transform the intent at render-time, without needing
+  to implement or run it.
 - *It can be recorded and re-run.* Offline mode builds a log while the
   connection is down; reconnecting replays it rather than diffing two
   states.
 - *A change to it reads as a change* — an altered vector in a data diff,
   not an altered string of JavaScript.
-
-Two more are reachable and unbuilt: authorizing a dispatch by its
-/shape/ before anything runs, and compiling a statically-known
-dispatch to direct client code.
+- *It can be authorized.* The server can sign an intent, or validate its
+  items by auth scope.
+- *They can be refunctionalized*. In principle, a prod build could "compile"
+  an intent back to a chain of handler calls, trading the above benefits back
+  in for fast, direct execution.
 
 None of this comes free, and the fair objection is easy to state: a
 table of names you look functions up in is an interpreter, and writing
@@ -229,7 +232,6 @@ one is usually a mistake.  That's taken up under
 is there either way. Either it's Nexus — written down, inspectable,
 the same in both worlds — or it's an unwritten convention in a
 colleague's head.
-
 
 * The loop, walked
 
@@ -250,12 +252,11 @@ notation shows which is which.
 
 ** Render — on the server
 
-=(get-season stem)= is an ordinary function call. It runs /now/, and
-what lands in the vector is the value =:spring=.
+=(get-season stem)= is an ordinary function call. It runs /now/,
+leaving the value =:spring=.
 
-=[:event/key-modifiers]= is not a call. It's a vector and
-it stays one, naming a value that doesn't exist yet because the click
-hasn't happened.
+=[:event/key-modifiers]= is not a call. It names a value that doesn't
+exist yet because the click hasn't happened.
 
 That's the whole notation. Anything you can compute at render time you
 compute with Clojure. Anything you can't, you /name/, and the name
@@ -269,25 +270,23 @@ data-on:click="((_sp)=>_sp&&@get('/offworld-dispatch',{payload:{offworld:_sp}}))
                (nextjournal.offworld.divert('<transit-base64>', evt))"
 #+end_src
 
-There /is/ string interpolation here, but as dumb transport rather
-than code generation: one opaque blob in one fixed slot, beside a
-dispatch URL constant for the whole app. The JavaScript around it is
-byte-identical on every element, and no part of what an action /means/
-is ever assembled into it.
+Note that, this too, is a defunctionalization. We have done string
+interpolation, but it stands as a single dumb transport, rather than
+complex code generation. It puts an opaque blob in one fixed slot, beside a
+dispatch URL which is constant for the whole app. The JavaScript around it is
+byte-identical on every element.
 
-Compare that against the common pattern where each seam hand-writes
-its own attribute expression, so every interaction invents a little
-language only the browser can read.
+Compare that against other datastar patterns, where each expression is
+customized by hand (or codegen), each one inventing its own mini-language
+for conveying values and procedure-calls across stage boundaries.
 
 ** In the browser
 
 The click fires. =divert= decodes the payload and dispatches it
-against a /client view/ of the registry — one whose placeholders are
-filtered to the client-marked ones. Each action is then /interpolated/
-— walked, with every placeholder replaced by the value it stands for —
-as Nexus reaches it, so =[:event/key-modifiers]= resolves against the
-real DOM event and =[[::randomize [:shift nil nil] :spring]]= is what
-expands.
+against the client-marked nexus handler-fns. But first, nexus interpolates
+every action, walking it and resolving any known placeholder-vectors.
+In our example, =[:event/key-modifiers]= resolves against the
+real DOM event, yielding the action =[[::randomize [:key/shift] :spring]]=.
 
 =::randomize= is client-marked, so it expands here:
 
@@ -307,22 +306,13 @@ The shift-key branch is decided in the browser with no round trip — an
 ordinary =if=, in ordinary Clojure, because by this stage the value it
 tests is a value.
 
-The two effects it returns don't live in the same
-place. =:browser/alert= is client-marked and runs
-immediately. =:effects/save= is =^::🪐/server=, so an interceptor at
-Nexus's =:before-action= phase recognises the tag, sets the action
-aside for the server, and empties the rest of that action's queue so
-nothing runs it locally.
+The two effects it returns belong to different worlds.
+=:browser/alert= is marked =^::🪐/client=, whereas
+=:effects/save= is =^::🪐/server=. Nexus executes the client-effect,
+and sets aside the server-effect.
 
-That phase is why the split is trustworthy. It fires for /every/
-action Nexus reaches, at any expansion depth — a server effect
-returned from inside a client expansion three levels down is caught
-exactly like one written at the top of the vector. The boundary is not
-a filter over the dispatch you authored; it is a rule applied to every
-action the dispatch produces. And the action is interpolated against
-the client view before it's set aside, so a client-stage value
-resolves before it crosses while a server-stage placeholder crosses
-untouched.
+We run a final round of interpolation to settle any remaining
+client-placeholders, then the server effect to the server.
 
 ** Across the wire, and back
 
@@ -350,9 +340,9 @@ runtimes, and the boundary between them marked by a single piece of
 metadata on a handler — not by a rewrite, not by a second language,
 not by a naming convention.
 
-In CSR mode the same code runs with no split: the client view isn't
-applied, the interceptor isn't present, and every action runs where it
-was dispatched. The split is a runtime decision, not an authoring one.
+In CSR mode the same code runs with no split: the full handler registry
+is used, and every action runs on the client. Thus, CSR vs SSR is a
+runtime decision, not an authoring one.
 
 * The vocabulary
 
@@ -577,8 +567,7 @@ at that point the same way it sees everything else.
 
 ** Early or late, per value
 
-The law's other half: /each value in an intent picks its own stage/, and
-the choice is made by how you write the argument, not by a setting.
+/Each registered nexus-item within an intent may run in a different stage/.
 
 =(get-season stem)= is early — it runs once, at render, and the result
 is baked into the markup. The clearest case is a
@@ -680,7 +669,6 @@ world tag — so the whole analysis is a =tree-seq=, a =get-in= and a =meta=,
 never running a handler and never reading one. Hand it a closure
 instead and there is nothing to walk, since the only way to learn what
 a body needs is to execute it.
-
 
 * State: the stem
 
@@ -946,7 +934,6 @@ reached, and its effect runs before the next action is looked at, so
 later actions have been read at all. The same property cuts the other way and is
 worth knowing: a placeholder in a later action reads the /live/ event at the
 moment it is reached, not a snapshot taken when the dispatch began.
-
 
 * Three modes
 
