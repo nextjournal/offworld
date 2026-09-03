@@ -137,9 +137,10 @@
    (defn dispatch! [url actions & {:keys [event extra-payload trigger]}]
      (when-let [{:keys [server-payload client-effects]}
                 (divert* {:actions actions :trigger trigger} event)]
-       (let [d*-json   (js/JSON.stringify #js {:offworld (encode-fn (merge server-payload extra-payload))})
-             query-url (str url "?datastar=" (js/encodeURIComponent d*-json))]
-         (js/fetch query-url #js {:method "GET"})))))
+       (let [d*-json (js/JSON.stringify #js {:offworld (encode-fn (merge server-payload extra-payload))})]
+         (js/fetch url #js {:method  "POST"
+                            :headers #js {"Content-Type" "application/json"}
+                            :body    d*-json})))))
 
 #?(:clj
    (defn with-modifiers [k v]
@@ -150,7 +151,7 @@
 
 (defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
                               :or   {serialize-fn ou/encode}}]
-  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+  (str "((_sp)=>_sp&&@post('" dispatch-url "',{payload:{offworld:_sp}}))"
        "(nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions actions
@@ -159,7 +160,7 @@
 
 (defn d*-lifecycle [actions lifecycle & {:keys [serialize-fn extra-payload dispatch-url]
                                          :or   {serialize-fn ou/encode}}]
-  (str "((_sp)=>_sp&&@get('" dispatch-url "',{payload:{offworld:_sp}}))"
+  (str "((_sp)=>_sp&&@post('" dispatch-url "',{payload:{offworld:_sp}}))"
        "(nextjournal.offworld.divert("
        "'" (serialize-fn (merge extra-payload
                                 {:actions   actions
@@ -185,7 +186,7 @@
   a map containing datastar expressions. E.g.:
 
   {:on {:click [[:my-action]]}}
-  {:data-on:click \"@get('/offworld-dispatch', {payload: '[[:my-action]]'})\"}"
+  {:data-on:click \"@post('/offworld-dispatch', {payload: '[[:my-action]]'})\"}"
      [m & {:as opts}]
      (into (dissoc m :on)
            (for [[k v] (:on m)]
