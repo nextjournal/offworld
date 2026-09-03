@@ -69,6 +69,34 @@
         (when (not= lifecycle :replicant/mount)
           {:replicant/memory (recall node)})))))
 
+(defn inject
+  "What a render-fn takes at a seam a caller decides — the actions to run on
+  a click, a scroll, a commit — given the values only the render-fn has.
+
+  Three shapes, all render-time function application:
+
+    a vector   an already-finished dispatch; params are dropped
+    a keyword  an action the caller registered, called with params as its
+               single map argument
+    a function called with params, returns the dispatch
+
+  A keyword is usually the one to reach for: one definition site, greppable,
+  no closure at the call site, and a map argument the render-fn can add to
+  without breaking any handler. Which shapes are available at a given seam
+  is decided by world, not taste — a handler that reads server state must be
+  marked ::🪐/server, and one that emits a client-world placeholder must not
+  be, or the placeholder strands past `request`.
+
+  A vector suits actions the caller can write out in full, since nothing is
+  injected into it — the caller's actions compose with the render-fn's own
+  by ordinary `into`, and nothing quietly appends arguments to a vector that
+  reads as finished at its call site."
+  [x params]
+  (cond
+    (keyword? x) [[x params]]
+    (fn? x)      (x params)
+    :else        x))
+
 (defn server-marked? [x] (contains? (meta x) ::🪐/server))
 
 (defn client-marked? [x] (and x (not (server-marked? x))))

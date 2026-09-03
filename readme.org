@@ -897,6 +897,73 @@ elements, can save lots of markup, if you don't mind giving up some
 explicitness. Prefer per-element listeners, and delegate when you have
 measured a reason to.
 
+*** What a caller injects, and what it may be.
+
+Injection is render-time function application, so what a caller hands a
+render-fn is whatever that application needs. =nextjournal.offworld/inject=
+names the three shapes worth accepting, and a render-fn calls it wherever a
+caller decides what happens:
+
+#+begin_src clojure
+(defn table [{:keys [on-scroll on-sort on-resize row-container-path row-height]}]
+  ;; ...
+  {:on {:scroll (🪐/inject on-scroll {:row-offset [::row-offset row-container-path row-height]
+                                      :row-limit  [::row-limit row-container-path row-height]
+                                      :sort       sort-spec})}})
+#+end_src
+
+A *vector* is a dispatch the caller wrote out in full; nothing is injected
+into it, and it composes with the render-fn's own actions by ordinary
+=into=. This is the right shape when the caller can say the whole thing —
+a resize handle's preview and commit, where =[:event/client-x]= is the only
+late value and the caller can write that name itself:
+
+#+begin_src clojure
+(resizer {:on-resize [[::resize-preview [:event/client-x] [::🌿/el header-path] widths]]
+          :on-commit [[::resize-commit  width-path [:event/client-x] [::🌿/el header-path]]]})
+#+end_src
+
+A *function* is called with the params and returns the dispatch. It is the
+shape that says at the call site "you will be handed something", which a
+bare vector cannot say — so if a render-fn ever wants to append arguments to
+a caller's action, it should take a function instead and let the caller do
+the appending. Nothing should quietly =conj= onto a vector that reads as
+finished where it was written.
+
+A *keyword* names an action the caller registered, called with the params as
+its single map argument. Usually the one to reach for: one definition site,
+greppable, no closure, and the render-fn can add a key to what it injects
+without breaking any handler.
+
+#+begin_src clojure
+(nxr/register-action! ::refetch ^::🪐/server
+  (fn [state {:keys [row-offset row-limit sort]}]
+    [[::λ/fetch (merge (λ/get-params state)
+                       {:offset row-offset :limit row-limit}
+                       (when (seq sort) {:sort sort}))]]))
+
+(table {:on-scroll ::refetch :on-sort ::refetch})
+#+end_src
+
+**** Which shape is available is a staging question, not a taste one.
+
+The handler runs in a world, and the world it needs decides what it may be.
+=::refetch= above is =^::🪐/server= because it reads state — a client-world
+handler has no stem to read. But a handler that /emits/ a client-world
+placeholder must not be server-marked, or the placeholder arrives past
+=request= as inert data, which is the =:stranded-client-ref= violation:
+
+#+begin_src clojure
+;; client world: emits a placeholder that resolves before the request
+(nxr/register-action! ::refetch-fresh
+  (fn [_ {:keys [row-limit]}]
+    [[::λ/fetch {:limit row-limit :selected-columns [::columns-from-localstorage]}]]))
+#+end_src
+
+Same seam, same table, two handlers in different worlds — one because it
+consumes server state, one because it produces a client reference. Reading
+forces server; emitting a client reference forbids it.
+
 ** Per-frame work
 
 Gestures sample. A drag fires =pointermove= sixty times a second, and every one of
