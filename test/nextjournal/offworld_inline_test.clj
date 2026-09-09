@@ -34,3 +34,43 @@
         (nexus/dispatch (nxr/get-registry)
                         (atom {::🪐/conn-id "conn-1"}) {} actions)
         (is (false? @ran) "and it is gone once the connection closes")))))
+
+(defonce !shared (atom 0))
+
+(deftest identical-bodies-share-one-address
+  (let [[[_ t1]] (inline/inline (swap! !shared inc))
+        [[_ t2]] (inline/inline (swap! !shared inc))]
+    (is (inline/derived-token? t1) "a body reading no local is named by its form")
+    (is (= t1 t2) "so two sites spelling it the same way are one entry")))
+
+(deftest a-machine-named-symbol-does-not-move-the-address
+  (let [[[_ t1]] (inline/inline (swap! !shared (fn [n] (inc n)) #(identity %)))
+        [[_ t2]] (inline/inline (swap! !shared (fn [n] (inc n)) #(identity %)))]
+    (is (= t1 t2) "the reader numbers each #() afresh; the address ignores that")))
+
+(defonce !outlives (atom 0))
+
+(deftest a-derived-body-outlives-every-connection
+  (reset! !outlives 0)
+  (let [actions (inline/inline (swap! !outlives inc))]
+    (nxr/register-system->state! deref)
+    (std/register-standard-nexus!)
+    (inline/release! "conn-9")
+    (nexus/dispatch (nxr/get-registry)
+                    (atom {::🪐/conn-id "conn-9"}) {} actions)
+    (is (= 1 @!outlives) "no connection was holding it, and none had to be")))
+
+(deftest a-captured-local-keeps-the-bodies-apart
+  (let [seen (atom [])]
+    (binding [inline/*conn-id* "conn-1"]
+      (let [dispatches (doall (for [v [:a :b]] (inline/inline (swap! seen conj v))))
+            tokens     (map (comp second first) dispatches)]
+        (is (not-any? inline/derived-token? tokens)
+            "the form is not the whole of a body that reads its scope")
+        (is (apply not= tokens) "so each instance is named separately")
+        (nxr/register-system->state! deref)
+        (std/register-standard-nexus!)
+        (doseq [actions dispatches]
+          (nexus/dispatch (nxr/get-registry)
+                          (atom {::🪐/conn-id "conn-1"}) {} actions))
+        (is (= [:a :b] @seen) "and each runs with the value it closed over")))))
