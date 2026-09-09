@@ -2,7 +2,8 @@
   (:require
    [clojure.string :as str]
    [nextjournal.offworld :as-alias 🪐]
-   [nextjournal.offworld.conn :as conn])
+   [nextjournal.offworld.conn :as conn]
+   [nextjournal.offworld.expr :as expr])
   #?(:clj (:import [java.security MessageDigest] [java.util Base64]))
   #?(:cljs (:require-macros [nextjournal.offworld.inline :refer [server!]])))
 
@@ -112,25 +113,132 @@
   [n]
   (nth *slots* n))
 
-(defn client!
-  "Read `ref` on the client and hand its value to the surrounding inline body.
-
-  Only means anything inside `inline`, which hoists the form out of the body
-  before the body is a body at all. `ref` is an ordinary placeholder vector, so
-  the client resolves it with the same machinery a named data action uses and
-  nothing new travels."
-  [ref]
-  (throw (ex-info "client! reads a client value into an inline body, so it means nothing outside one"
-                  {:ref ref})))
-
 #?(:clj
-   (defn- client-form?
+   (defn- client-marker?
      "Whether `x` is a `client!` call.
 
   Matched by name rather than by resolution, so it holds under every alias and
   under a transpiler with no vars to resolve against."
      [x]
      (and (seq? x) (symbol? (first x)) (= "client!" (name (first x))))))
+
+#?(:clj
+   (defn- server-form?
+     [x]
+     (and (seq? x) (symbol? (first x)) (= "server!" (name (first x))))))
+
+#?(:clj
+   (defn client-form
+     "What one `client!` form denotes: an action, or the expression that names one.
+
+  Three arms, told apart by what the author wrote rather than by where it sits.
+  A vector is an action already and passes through unchanged -- the wrapper
+  claims a world rather than building one, which is the whole of its work. A
+  string is a client expression verbatim, the escape hatch, and the one arm
+  nothing downstream can analyze. Anything else is Clojure meant for the
+  client, and the compiler decides what of it crosses."
+     [forms]
+     (let [x (first forms)]
+       (cond
+         (and (= 1 (count forms)) (vector? x)) {:action x}
+         (and (= 1 (count forms)) (string? x)) {:expression x}
+         :else                                 {:body (vec forms)}))))
+
+#?(:clj
+   (defn- compiled
+     "The form that produces a client expression at render time.
+
+  A body with no holes is already a string when the macro finishes, so the
+  render does nothing at all. A body reading the surrounding scope leaves the
+  holes the render fills, which is the same hoist the slots make, one level
+  down: what crosses is a value, and the code that reads it never left."
+     [body env]
+     (let [{:keys [template holes]} (expr/compile-expression body env)]
+       (if (seq holes)
+         `(expr/substitute ~template [~@(map (fn [[h e mode]] [h e mode]) holes)])
+         template))))
+
+#?(:clj
+   (defn- hoisted-ref
+     "The reference a `client!` inside a body becomes.
+
+  A value the body reads is a placeholder either way: an authored one when the
+  author named a registered key, and the generic expression key when they wrote
+  an expression instead. Which is why an anonymous client value costs no new
+  vocabulary -- the anonymity rides as the key's argument."
+     [forms env]
+     (let [{:keys [action expression body]} (client-form forms)]
+       (cond
+         action     action
+         expression [::expr expression]
+         :else      `[::expr ~(compiled body env)]))))
+
+#?(:clj
+   (defn- action-form?
+     [x]
+     (or (server-form? x) (client-marker? x))))
+
+#?(:clj
+   (defn- conditional
+     "A client-side decision whose outcomes are actions, kept as data.
+
+  Recognised rather than compiled, because a conditional between two actions is
+  the one piece of client control flow that does not have to be opaque: the test
+  becomes a placeholder and the branches stay a pair of dispatches. Reach for
+  the compiler only for what is left."
+     [forms env]
+     (let [[x] forms]
+       (when (and (= 1 (count forms))
+                  (seq? x)
+                  (symbol? (first x))
+                  (#{"if" "when"} (name (first x)))
+                  (some action-form? (rest x)))
+         (let [[_ test then else] x]
+           (when (server-form? test)
+             (throw (ex-info "a client-side decision cannot test a server value: that is the split this rung exists to avoid"
+                             {:test test})))
+           `[::choose ~(if (client-marker? test)
+                         (hoisted-ref (rest test) env)
+                         `[::expr ~(compiled [test] env)])
+             (expr/as-dispatch ~(or then []))
+             (expr/as-dispatch ~(or else []))])))))
+
+#?(:clj
+   (defmacro client!
+     "The client's half of an intent, said out loud at the call site.
+
+  Two positions, and the position is what settles the kind, so neither has to
+  be named. Inside a `server!` body it is a value the body reads: the form is
+  hoisted out before the body is a body at all, and the client resolves it
+  ahead of the request. At the top of a dispatch it is a client effect, which
+  runs in the client's own dispatch stage -- before the request too, since that
+  is the only place a client effect can run at all.
+
+  A `server!` in tail position is lifted out beside it rather than nested,
+  because that is what the pipeline does with it: the client's work happens,
+  then the remainder travels. Writing them as siblings says so; nesting them
+  would only look like it meant something else."
+     [& forms]
+     (let [client-part (vec (take-while (complement server-form?) forms))
+           server-tail (vec (drop-while (complement server-form?) forms))
+           _           (when-not (every? server-form? server-tail)
+                         (throw (ex-info "a server! inside client! is the tail, so nothing client-side may follow it"
+                                         {:after (remove server-form? server-tail)})))
+           {:keys [action expression body]} (client-form client-part)
+           client-action (cond
+                           action     action
+                           expression `[::expr! ~expression]
+                           (seq body) (or (conditional body &env)
+                                          `[::expr! ~(compiled body &env)]))]
+       (cond
+         (and client-action (seq server-tail))
+         `[~client-action ~@server-tail]
+
+         client-action
+         `(with-meta ~client-action {::🪐/action true})
+
+         :else
+         `[~@server-tail]))))
 
 #?(:clj
    (defn hoist-slots
@@ -143,12 +251,12 @@
   And two sites differing only in which client value they read share one
   address, because the difference is not in the body any more -- a collision
   that is the hoist working rather than a hash being coarse."
-     [forms]
+     [forms env]
      (let [!refs (atom [])]
        (letfn [(walk [x]
                  (cond
-                   (client-form? x) (let [n (count @!refs)]
-                                      (swap! !refs conj (second x))
+                   (client-marker? x) (let [n (count @!refs)]
+                                      (swap! !refs conj (hoisted-ref (rest x) env))
                                       (list `slot n))
                    (map? x)         (into (empty x) (map (fn [[k v]] [(walk k) (walk v)])) x)
                    (map-entry? x)   x
@@ -178,7 +286,7 @@
   all there is, and sits beside named data actions in one dispatch where it is
   not -- without teaching Replicant's `:on` convention a second shape."
      [& body]
-     (let [{:keys [body refs]} (hoist-slots body)
+     (let [{:keys [body refs]} (hoist-slots body &env)
            marked (fn [action] `(with-meta ~action {::🪐/action true}))]
        (if (seq (captured-locals &env body))
          (marked `[::invoke (register! (fn [] ~@body)) ~@refs])

@@ -10,7 +10,8 @@
                                     thheller/shadow-cljs        {:mvn/version "3.3.6"}
                                     ;; clerk + replicant in sci env, from https://github.com/nextjournal/clerk/pull/794
                                     io.github.nextjournal/clerk {:git/sha "6056c3e3bc2a96a749a0a5f61c3f8d38dbb23a1b"}}}
-           :demo     {:extra-deps {org.clojure/clojurescript      {:mvn/version "1.12.145"}
+           :demo     {:extra-deps {io.github.squint-cljs/squint   {:mvn/version "0.14.203"}
+                                   org.clojure/clojurescript      {:mvn/version "1.12.145"}
                                    no.cjohansen/replicant         {:git/url "https://github.com/cjohansen/replicant.git"
                                                                    :git/sha "29f7644b2848205b835209b0b71980727aacbd9b"}
                                    metosin/reitit                 {:mvn/version "0.9.2"}
@@ -26,6 +27,7 @@
            :shadow   {:extra-deps {thheller/shadow-cljs {:mvn/version "3.3.6"}}
                       :main-opts  ["-m" "shadow.cljs.devtools.cli"]}
            :test-clj {:extra-paths ["test"]
-                      :extra-deps  {io.github.cognitect-labs/test-runner
+                      :extra-deps  {io.github.squint-cljs/squint {:mvn/version "0.14.203"}
+                                    io.github.cognitect-labs/test-runner
                                     {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
                       :main-opts   ["-m" "cognitect.test-runner" "-d" "test"]}}}

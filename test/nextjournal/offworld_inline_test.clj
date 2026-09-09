@@ -4,6 +4,7 @@
    [nexus.core :as nexus]
    [nexus.registry :as nxr]
    [nextjournal.offworld :as 🪐]
+   [nextjournal.offworld.divert :as divert]
    [nextjournal.offworld.inline :as inline]
    [nextjournal.offworld.standard :as std]))
 
@@ -154,3 +155,76 @@
         "one dispatch, one of whose actions is an anonymous body")
     (is (empty? (meta (second (:actions (:data-intent:click attrs)))))
         "and the marker is spent by render time, so nothing transmits it")))
+
+(deftest a-wrapped-action-passes-through-and-says-its-world
+  (let [action (inline/client! [:browser/alert "hi"])]
+    (is (= [:browser/alert "hi"] action) "the wrapper claims a world, it does not build one")
+    (is (get (meta action) 🪐/action-marker) "and it is one action, so it renders as a dispatch")))
+
+(deftest an-expression-is-named-by-the-generic-key
+  (let [action (inline/client! "document.title = 'x'")]
+    (is (= [::inline/expr! "document.title = 'x'"] action)
+        "one registered effect covers every anonymous client expression there will ever be")))
+
+(deftest a-server-tail-is-lifted-out-beside-the-client-work
+  (let [dispatch (inline/client! "document.title = 'x'" (inline/server! (swap! !shared inc)))]
+    (is (= 2 (count dispatch)) "siblings, in the order the pipeline runs them")
+    (is (= ::inline/expr! (ffirst dispatch)))
+    (is (= ::inline/invoke (first (second dispatch))))
+    (is (empty? (meta dispatch)) "and a dispatch of two carries no lone-action marker")))
+
+(deftest nothing-client-side-may-follow-a-server-tail
+  (let [e (try (macroexpand '(nextjournal.offworld.inline/client!
+                              (nextjournal.offworld.inline/server! (println :a))
+                              "document.title = 'x'"))
+               nil
+               (catch Exception e e))]
+    (is (some? e) "the order is not a style question, so it fails at macroexpansion")
+    (is (re-find #"tail" (ex-message (ex-cause e))))))
+
+(defonce !read (atom nil))
+
+(deftest a-body-reads-an-anonymous-client-value-through-the-generic-key
+  (let [[_ _ ref] (inline/server! (reset! !read (inline/client! "document.title")))]
+    (is (= [::inline/expr "document.title"] ref)
+        "the expression is the placeholder's argument, so the vocabulary stays one key")))
+
+(deftest a-client-body-compiles-to-an-expression
+  (let [[k js] (inline/client! (set! document.title "x"))]
+    (is (= ::inline/expr! k))
+    (is (= "document.title = \"x\"" js) "written as Clojure, sent as the expression it means")))
+
+(deftest a-body-reads-a-compiled-client-value
+  (let [[_ _ ref] (inline/server! (reset! !read (inline/client! (= evt.key "Enter"))))]
+    (is (= [::inline/expr "((evt.key) === (\"Enter\"))"] ref))))
+
+(deftest the-surrounding-scope-is-spliced-not-sent
+  (let [threshold 7
+        [_ js]    (inline/client! (> evt.target.value threshold))]
+    (is (= "(evt.target.value > 7)" js)
+        "a local is a value the render already knows, so it arrives as a literal")))
+
+(deftest a-client-conditional-chooses-between-two-actions
+  (let [[k test then else] (inline/client! (if (= evt.key "Enter")
+                                            (inline/server! (swap! !shared inc))
+                                            (inline/client! "document.blur()")))]
+    (is (= ::inline/choose k) "control flow that can be data is data")
+    (is (= [::inline/expr "((evt.key) === (\"Enter\"))"] test)
+        "only the leaf that tests something is opaque")
+    (is (= ::inline/invoke (ffirst then)) "one branch is a server continuation")
+    (is (= [::inline/expr! "document.blur()"] (first else))
+        "the other is client code, and both are legible without running either")))
+
+(deftest a-registered-test-leaves-nothing-opaque-at-all
+  (nxr/register-placeholder! ::dark? (fn [_] true))
+  (nxr/register-system->state! deref)
+  (std/register-standard-nexus!)
+  (reset! !shared 0)
+  (let [dispatch (inline/client! (if (inline/client! [::dark?])
+                                   (inline/server! (swap! !shared inc))
+                                   (inline/client! [:browser/nothing])))]
+    (is (= [::dark?] (second dispatch))
+        "a named client fact needs no expression, so the whole conditional is data")
+    (let [ran (nexus/dispatch (divert/client-nexus (nxr/get-registry)) (atom {}) {} [dispatch])]
+      (is (= [[::inline/invoke]] (mapv (comp vector first) (::🪐/server-actions ran)))
+          "the client decided and only the branch it chose travelled -- no round trip to decide"))))
