@@ -22,8 +22,6 @@
 
 #?(:cljs (defonce memories (js/WeakMap.)))
 
-#?(:cljs (def online? (reify IDeref (-deref [_] js/navigator.onLine))))
-
 (defonce ux (volatile! :csr))
 
 (defn set-ux! [k] (vreset! ux k))
@@ -36,11 +34,15 @@
        :csr nil
        :ssr (.get memories node))))
 
+#?(:cljs (defonce dispatch-url (volatile! "/offworld-dispatch")))
+
+#?(:cljs (defn set-dispatch-url! [url] (vreset! dispatch-url url)))
+
+#?(:cljs (defn get-dispatch-url [] @dispatch-url))
+
 #?(:cljs (def ^:dynamic encode-fn ou/encode))
-#?(:cljs (def ^:dynamic decode-fn ou/decode))
 
 #?(:cljs (defn register-encode-fn! [f] (set! encode-fn f)))
-#?(:cljs (defn register-decode-fn! [f] (set! decode-fn f)))
 
 (declare dispatch!)
 
@@ -54,7 +56,7 @@
 #?(:cljs
    (defn build-lifecycle-map [node payload]
      (let [lifecycle    (:lifecycle payload)
-           dispatch-url (:dispatch-url payload)
+           dispatch-url (or (:dispatch-url payload) (get-dispatch-url))
            conn-id      (:conn-id payload)]
        (merge
         {:replicant/life-cycle lifecycle
@@ -149,20 +151,12 @@
                                (merge (meta actions) (meta server-actions)))))))))
 
 #?(:cljs
-   (defn ^:export divert [payload-arg js-data]
-     (when @online?
-       (let [payload (cond-> payload-arg (string? payload-arg) decode-fn)]
-         (some-> (divert* payload js-data) :server-payload encode-fn)))))
-
-#?(:cljs
    (defn dispatch! [url actions & {:keys [event extra-payload trigger]}]
      (when-let [server-payload (:server-payload
                                 (divert* {:actions actions :trigger trigger} event))]
-       (let [d*-json (js/JSON.stringify
-                      #js {:offworld (encode-fn (merge server-payload extra-payload))})]
-         (js/fetch url #js {:method  "POST"
-                            :headers #js {"Content-Type" "application/json"}
-                            :body    d*-json})))))
+       (js/fetch url #js {:method  "POST"
+                          :headers #js {"Content-Type" "application/json"}
+                          :body    (encode-fn (merge server-payload extra-payload))}))))
 
 #?(:clj
    (defn with-modifiers [k v]
@@ -171,24 +165,52 @@
          k
          (keyword (apply str (name k) (interleave (repeat "__") (map name modifiers))))))))
 
-(defn d*-dispatch [actions & {:keys [serialize-fn extra-payload dispatch-url]
-                              :or   {serialize-fn ou/encode}}]
-  (str "((_sp)=>_sp&&@post('" dispatch-url "',{payload:{offworld:_sp}}))"
-       "(nextjournal.offworld.divert("
-       "'" (serialize-fn (merge extra-payload
-                                {:actions actions
-                                 :trigger :event})) "',"
-       "evt))"))
+(defn intent-attr
+  "The attribute holding the intent for `k`, an event name or a lifecycle name."
+  [k]
+  (keyword (str "data-intent" k)))
 
-(defn d*-lifecycle [actions lifecycle & {:keys [serialize-fn extra-payload dispatch-url]
-                                         :or   {serialize-fn ou/encode}}]
-  (str "((_sp)=>_sp&&@post('" dispatch-url "',{payload:{offworld:_sp}}))"
-       "(nextjournal.offworld.divert("
-       "'" (serialize-fn (merge extra-payload
-                                {:actions   actions
-                                 :trigger   :lifecycle
-                                 :lifecycle lifecycle})) "',"
-       "el))"))
+(defn d*-dispatch
+  "The expression that runs the intent held beside it.
+
+  A constant: it interpolates nothing and carries no payload, because the
+  payload is the sibling attribute's whole value. The event and its modifiers
+  stay on the `data-on` key, so debounce, throttle and the rest come from
+  Datastar rather than from anything here."
+  [_actions & _opts]
+  "@intent(evt)")
+
+(defn d*-lifecycle
+  "The same expression for a lifecycle hook, which has no event to key on."
+  [k]
+  (str "@intent('" (name k) "')"))
+
+(def render-only-meta
+  "Metadata the attributes themselves consume, which therefore has no business
+  being transmitted. Modifiers are the case in hand: they become part of the
+  `data-on` key at render time, so an encoder that carries metadata was sending
+  them for nothing."
+  #{:datastar/modifiers})
+
+(defn- for-the-wire [actions]
+  (cond-> actions
+    (seq (meta actions)) (vary-meta #(apply dissoc % render-only-meta))))
+
+(defn intent
+  "The serialized intent an attribute carries.
+
+  `serialize-fn` is the wire format, and it is injected rather than chosen here
+  on purpose: the format is the contract between a view and whatever interprets
+  the attribute in the browser, which need not be Clojure at all.
+
+  Whatever the format, it lands in an attribute value, so the renderer has to
+  escape it. Replicant's string renderer did not until recently, which the old
+  encoding never noticed: base64 and a single-quoted expression contain no
+  double quote, and JSON is all double quotes."
+  [payload & {:keys [serialize-fn extra-payload]
+              :or   {serialize-fn ou/encode}}]
+  (serialize-fn (-> (merge extra-payload payload)
+                    (update :actions for-the-wire))))
 
 #?(:clj
    (defn attr->d*
@@ -198,9 +220,19 @@
      [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
      (cond-> m
        on-mount   (assoc (with-modifiers :data-init on-mount)
-                         (d*-lifecycle on-mount :replicant/mount opts))
+                         (d*-lifecycle :mount)
+                         (intent-attr :mount)
+                         (intent {:actions   on-mount
+                                  :trigger   :lifecycle
+                                  :lifecycle :replicant/mount}
+                                 opts))
        on-unmount (assoc (with-modifiers :data-on-remove on-unmount)
-                         (d*-lifecycle on-unmount :replicant/unmount opts)))))
+                         (d*-lifecycle :unmount)
+                         (intent-attr :unmount)
+                         (intent {:actions   on-unmount
+                                  :trigger   :lifecycle
+                                  :lifecycle :replicant/unmount}
+                                 opts)))))
 
 #?(:clj
    (defn on-hooks-replicant->d*
@@ -208,24 +240,28 @@
   a map containing datastar expressions. E.g.:
 
   {:on {:click [[:my-action]]}}
-  {:data-on:click \"@post('/offworld-dispatch', {payload: '[[:my-action]]'})\"}"
+  {:data-intent:click \"[[\\\"my-action\\\"]]\" :data-on:click \"@intent(evt)\"}
+
+  Two attributes rather than one expression carrying an encoded payload. The
+  intent is the value of an attribute of its own, so nothing about it is inside
+  an expression, and the expression that runs it is a constant."
      [m & {:as opts}]
      (into (dissoc m :on)
-           (for [[k v] (:on m)]
-             [(with-modifiers (keyword (str "data-on" k)) v) (d*-dispatch v opts)]))))
+           (mapcat (fn [[k v]]
+                     [[(intent-attr k) (intent {:actions v
+                                                :trigger :event}
+                                               opts)]
+                      [(with-modifiers (keyword (str "data-on" k)) v)
+                       (d*-dispatch v opts)]])
+                   (:on m)))))
 
 #?(:clj
    (defn replicant->d*
-     [hiccup & {:as   opts
-                :keys [dispatch-url]
-                :or   {dispatch-url "/offworld-dispatch"}}]
-     (let [opts (-> opts
-                    (assoc :dispatch-url dispatch-url)
-                    (assoc-in [:extra-payload :dispatch-url] dispatch-url))]
-       (walk/postwalk
-        (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
-                                                (#(attr->d* % opts)))))
-        hiccup))))
+     [hiccup & {:as opts}]
+     (walk/postwalk
+      (fn [node] (cond-> node (map? node) (-> (#(on-hooks-replicant->d* % opts))
+                                              (#(attr->d* % opts)))))
+      hiccup)))
 
 (defmacro defc
   {:clj-kondo/lint-as 'clojure.core/defn}
