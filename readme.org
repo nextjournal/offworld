@@ -1,6 +1,34 @@
 #+TITLE: 🪐 Offworld
 #+OPTIONS: toc:2 num:nil
 
+Offworld tries to prioritize the user experience by being intent-driven.
+An intent is one thing, at one place. Its inputs and outputs are fully
+legible - legible where you express it, and legible wherever it goes.
+By "it goes," I mean: staged computations.
+
+Because intent is a staged computation, we model intent as a defunctionalized continuation.
+
+Intent is staged because it relies on values and effects from the browser.
+
+Only the browser can know and do them, not the server.
+
+On the other hand, rendering UI on the server has benefits[citation]. We want to do it.
+
+So, what can we do? We render these client-bound inputs & outputs as
+data-structures. To borrow nexus' vocabulary,
+an input is a "placeholder", and an output is a client "action".
+When the user clicks the button, they commit the intent.
+The client "dispatches" the intent - first it resolves the placeholders,
+then 
+
+will resolve these when it dispatches the user inten
+
+
+the client to resolve when it dispatches the intent. Similarly, we render
+an "action" for any side-effects the client should do. Placeholders,
+actions, and the intent that joins them are all fully legible to any process,
+any time, anywhere.
+
 * Use-case
 
 #+begin_quote
@@ -777,6 +805,86 @@ To build a persistent "component" with JavaScript batteries included,
 all you need is a path and an id. That sounds like two things. It's
 one.
 
+* Inline expressions.
+Some devs feel the registry pattern is too much ceremony - naming everything, lots of
+indirection, and maybe the "abstract machine" just distracts from what's really happening.
+
+They just want a render-fn that's "readable" in the sense that what it "does"
+is inlined. In other words, the counter literally says `(swap! count inc)`
+somewhere in the render-fn's body.
+
+Transparency is reduced, because the client only sees an opaque key, not a server-action.
+The server-bound consequence of the intent is invisible. On the other hand,
+the client-bound inputs and outputs are fully visible, in normative form.
+
+Offworld offers a way to opt into this end of the the transparency/power tradeoff.
+
+Devs can couple place with behavior, by deriving a cursor from the stem.
+
+Devs can invoke a macro, express a mutation inline, and offworld will "compile"
+the resulting continuation out of that. The intent stays anonymous. Instead of
+belonging to the static nexus registry, the server caches it dynamically.
+With an eviction policy that respects the canonical form of the intent (content-addressed?).
+
+#+begin_src clojure
+
+  (defn save-local [state value]
+    [[:fx/save (🌿/path state) value]])
+
+  #?(:cljs )
+
+  (defmacro act!
+    "register a server-side closure under a gensymmed key.
+       return [:invoke :xyz-gensymmed-key]
+       use the same eviction strategy as we use for feather etc.
+       walk & collect inline uses of `client!`. for each use,
+       if its a key-or-vector, put that placeholder vector in the  
+  either look up a registered placeholder, or do the body as a compiled squint expr,
+       placed in the action vector:
+
+       [:invoke :xyz-gensymmed-key {:client-expr1 [::color]
+                                    :client-expr2 'compiled.squint.expr()']]
+      "
+    [])
+
+  (defn blue-button [state]
+    [:button {:on
+              {:click
+               [(server! (let [blue? (= :blue (client! ::color))
+                               next-val (if blue? :foo :bar)]
+                           (client! (alert! "changed color"))
+                           (save-local state next-val)))]}}
+     (🌿/local state)])
+
+  (defn inc-button [state]
+    (let [*ct (cursor state)]
+      [:button {:on {:click [(server! (swap! *ct inc))]}}])) ;; whole closure claim-checked
+
+  (defn inc-button [state]
+    (let [*ct (cursor state)]
+      [:button {:on {:click [(server! (swap! *ct inc))]}}]))
+  
+  (defn inc-button [state]
+    (let [*ct (cursor state)]
+      [:button {:on {:click [(server! (when (client! document.-someState) ;; placeholder
+                                        (swap! *ct inc)))]}}]))
+
+  (defn inc-button [state]
+    (let [*ct (cursor state)
+          x true]
+      [:button {:on {:click [(server! (when (client! (or (server-value x) ;; server-rendered value
+                                                         document.-someState)) ;; placeholder
+                                        (swap! *ct inc)))]}}]))
+
+  (defn inc-button [state]
+    (let [*ct    (cursor state)
+          x      (some-big-query datomic/db)
+          maybe? (some-pred x)]
+      [:button {:on {:click [(server! (when (client! (or (server-claimed (maybe? x)) ;; server-claim-checked closure
+                                                         document.-someState)) ;; placeholder
+                                        (swap! *ct inc)))]}}]))
+#+end_src
+
 * Talking to the browser
 
 ** Life-cycle without a component model
@@ -1297,6 +1405,10 @@ metadata tag), and make what it decides inspectable rather than
 ambient.  Placeholder interpolation is the one rule that currently
 fails that second test.
 
+* Case studies
+** Treasure Hunt
+** Ceremony vs. inlining
+Offworld gives you what a cursor does, where placeful programming makes sense: the element.
 * Objections
 
 ** Do I smell Greenspun's tenth rule?
