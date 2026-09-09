@@ -114,11 +114,30 @@
        `[[::invoke (register! (fn [] ~@body))]]
        `[[::invoke (derive! ~(form-token body) (fn [] ~@body))]])))
 
+(def ^:dynamic *ctx* nil)
+
+(def ^:dynamic *system* nil)
+
+(defn state
+  "The system state, for a body that runs on the server without capturing it.
+
+  Ambient at invoke time rather than hoisted, because the dispatch context is
+  the one thing an inline body needs that must not cross the boundary: reading
+  it through a binding is what lets a body reach per-connection state and still
+  be wholly described by its forms."
+  []
+  (some-> *system* deref))
+
+(defn conn-id
+  "The connection this body is running for."
+  []
+  (or (conn/id (:dispatch-data *ctx*))
+      (::🪐/conn-id (state))))
+
 (def invoke ^::🪐/server
   (fn [ctx system tok]
     #?(:clj
-       (let [f (or (get @!derived tok)
-                   (let [conn-id (or (conn/id (:dispatch-data ctx))
-                                     (::🪐/conn-id @system))]
-                     (conn/fetch conn-id tok)))]
-         (when f (f))))))
+       (binding [*ctx* ctx *system* system]
+         (let [f (or (get @!derived tok)
+                     (conn/fetch (conn-id) tok))]
+           (when f (f)))))))

@@ -74,3 +74,18 @@
           (nexus/dispatch (nxr/get-registry)
                           (atom {::🪐/conn-id "conn-1"}) {} actions))
         (is (= [:a :b] @seen) "and each runs with the value it closed over")))))
+
+(defonce !per-conn (atom {}))
+
+(deftest a-body-reaches-its-connection-without-capturing-it
+  (reset! !per-conn {})
+  (let [actions (inline/inline (swap! !per-conn update (inline/conn-id) (fnil inc 0)))
+        [[_ tok]] actions]
+    (is (inline/derived-token? tok)
+        "ambient context is read, not closed over, so the form is the whole of it")
+    (nxr/register-system->state! deref)
+    (std/register-standard-nexus!)
+    (doseq [c ["conn-a" "conn-b" "conn-a"]]
+      (nexus/dispatch (nxr/get-registry) (atom {::🪐/conn-id c}) {} actions))
+    (is (= {"conn-a" 2 "conn-b" 1} @!per-conn)
+        "one shared entry, and each dispatch runs for its own connection")))
