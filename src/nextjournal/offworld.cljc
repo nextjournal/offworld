@@ -9,6 +9,7 @@
         [nextjournal.offworld.staging :as staging]])
    [datastar :as-alias 🚀]
    [nexus.core :as nexus]
+   [nextjournal.offworld.divert :as divert]
    [nextjournal.offworld.stem :as-alias 🌿]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.util :as ou])
@@ -97,9 +98,19 @@
     (fn? x)      (x params)
     :else        x))
 
-(defn server-marked? [x] (contains? (meta x) ::🪐/server))
+(def server-marked? divert/server-marked?)
 
-(defn client-marked? [x] (and x (not (server-marked? x))))
+(def client-marked? divert/client-marked?)
+
+(def handler-of divert/handler-of)
+
+(def server-action? divert/server-action?)
+
+(def divert-interceptor divert/divert-interceptor)
+
+(def client-placeholders divert/client-placeholders)
+
+(def client-nexus divert/client-nexus)
 
 (defn client-handled? [ux kind nexus [k]]
   (case ux
@@ -110,34 +121,6 @@
   (case ux
     :csr false
     :ssr (server-marked? (get-in nexus [kind k]))))
-
-(def ^:private buckets
-  [:nexus/placeholders :nexus/expansions :nexus/actions :nexus/effects])
-
-(defn handler-of [nexus [k]]
-  (some #(get-in nexus [% k]) buckets))
-
-(defn server-action? [nexus action]
-  (server-marked? (handler-of nexus action)))
-
-(defn divert-interceptor [{:keys [nexus action dispatch-data] :as ctx}]
-  (if (and action (server-action? nexus action))
-    (-> ctx
-        (update ::🪐/server-actions (fnil conj [])
-                (first (nexus/interpolate nexus dispatch-data [action])))
-        (assoc :queue []))
-    ctx))
-
-(defn client-placeholders [nexus]
-  (update nexus :nexus/placeholders
-          #(into {} (filter (comp client-marked? val)) %)))
-
-(defn client-nexus [nexus]
-  (-> nexus
-      client-placeholders
-      (update :nexus/interceptors (fnil conj [])
-              {:phase         ::🪐/divert
-               :before-action divert-interceptor})))
 
 (defn pre-interpolate [nexus dispatch-data actions]
   (nexus/interpolate (client-placeholders nexus) dispatch-data actions))
