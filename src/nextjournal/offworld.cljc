@@ -180,11 +180,6 @@
   [_actions & _opts]
   "@intent(evt)")
 
-(defn d*-lifecycle
-  "The same expression for a lifecycle hook, which has no event to key on."
-  [k]
-  (str "@intent('" (name k) "')"))
-
 (def render-only-meta
   "Metadata the attributes themselves consume, which therefore has no business
   being transmitted. Modifiers are the case in hand: they become part of the
@@ -214,21 +209,28 @@
 
 #?(:clj
    (defn attr->d*
-     "Converts top-level hiccup attributes to datastar expressions.
-  Returns a sorted-map, since datastar depends on some keys appearing
-  earlier in the attributes."
+     "Converts a hiccup node's lifecycle hooks to intent attributes.
+
+  A hook gets an intent and nothing else — no expression, and no `data-on` to
+  evaluate one. An element's arrival and departure are not DOM events, so there
+  is nothing for the engine to listen to; the attribute's own life is the hook,
+  and the plugin holding the attribute is what fires it.
+
+  This is not only tidier. Datastar scans the document during its own module
+  evaluation, and a plugin has to import Datastar in order to register into it,
+  so a plugin's registrations always land behind that first scan. An expression
+  in server-rendered HTML naming a plugin's action therefore finds nothing there
+  on the way in, and works from then on. `data-init` cannot carry a mount hook
+  for that reason. Unmount had a second reason: the engine has no `on-remove`
+  attribute at all, so it took a third-party plugin to fire one."
      [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
      (cond-> m
-       on-mount   (assoc (with-modifiers :data-init on-mount)
-                         (d*-lifecycle :mount)
-                         (intent-attr :mount)
+       on-mount   (assoc (intent-attr :mount)
                          (intent {:actions   on-mount
                                   :trigger   :lifecycle
                                   :lifecycle :replicant/mount}
                                  opts))
-       on-unmount (assoc (with-modifiers :data-on-remove on-unmount)
-                         (d*-lifecycle :unmount)
-                         (intent-attr :unmount)
+       on-unmount (assoc (intent-attr :unmount)
                          (intent {:actions   on-unmount
                                   :trigger   :lifecycle
                                   :lifecycle :replicant/unmount}
