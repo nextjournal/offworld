@@ -4,7 +4,7 @@
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.conn :as conn])
   #?(:clj (:import [java.security MessageDigest] [java.util Base64]))
-  #?(:cljs (:require-macros [nextjournal.offworld.inline :refer [inline]])))
+  #?(:cljs (:require-macros [nextjournal.offworld.inline :refer [server!]])))
 
 #?(:clj (def ^:dynamic *conn-id* nil))
 
@@ -160,7 +160,7 @@
           :refs @!refs}))))
 
 #?(:clj
-   (defmacro inline
+   (defmacro server!
      "Defer `body` to the server, behind a token in a single registered effect.
 
   The token is the body's content address when the body's forms are the whole
