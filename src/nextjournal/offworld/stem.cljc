@@ -4,10 +4,9 @@
      (:require-macros
       [nextjournal.offworld.stem :refer [trace trace-me defq]]))
   (:require
-   #?(:clj [clojure.string :as str])
+   [clojure.string :as str]
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.stem :as-alias 🌿]
-   [nextjournal.offworld.util :as ou]
    [nexus.registry :as nxr]))
 
 (defn ->v [x] (if (sequential? x) (into [] x) [x]))
@@ -22,12 +21,42 @@
   ([state suffix] (into (::🌿/path state [::🌿/local])
                         (->v suffix))))
 
+(def id-separator "--")
+
+(defn- segment-name [x]
+  (if-let [ns' (and (keyword? x) (namespace x))]
+    (str (str/replace ns' "." "-") "_" (name x))
+    (if (keyword? x) (name x) (str x))))
+
+(defn- slug [s]
+  (str/replace s #"[^A-Za-z0-9_-]+" "-"))
+
 (defn id
+  "The element id denoting a stem path.
+
+  A path joined and sanitized rather than encoded, because nothing reads an id
+  back: `el` recomputes it from the same path. A keyword contributes its whole
+  namespace, because a namespace is what keeps two paths apart and abbreviating
+  it invites exactly the collision this scheme cannot rule out; the ids get long
+  and the wire is compressed. The namespace-name boundary stays visible as `_`
+  where a dot is `-`, so the two are not run together. The charset is chosen for
+  where an id is *used* — `[A-Za-z0-9_-]` is what a CSS identifier allows
+  unescaped, which is what makes an id usable in a selector and in the dashed
+  ident an anchor name needs. Encoding it bought reversibility nobody wanted
+  and cost exactly that.
+
+  Sanitizing can in principle collide, where an encoding could not. That is a
+  naming mistake rather than a mechanism, so it is detected in a render instead
+  of paid for in every id."
   ([path-or-state] (id path-or-state []))
   ([path-or-state suffixes]
    (if (map? path-or-state)
      (id (path path-or-state) suffixes)
-     (ou/encode (into (->v path-or-state) suffixes)))))
+     (let [joined (->> (into (->v path-or-state) suffixes)
+                       (map (comp slug segment-name))
+                       (str/join id-separator))]
+       (cond->> joined
+         (re-find #"^[0-9-]" joined) (str "id-"))))))
 
 (def el ^::🪐/client
   (fn [_ path-or-id]
