@@ -100,6 +100,65 @@
              (comp (filter symbol?) (filter locals))
              (tree-seq coll? seq forms)))))
 
+(def ^:dynamic *slots* nil)
+
+(defn slot
+  "The value of the inline body's `n`th hoisted slot.
+
+  What `client!` expands to. The body reads a client value here rather than
+  closing over one, because a closure cannot close over a fact that does not
+  exist yet: the value is read on the client, at dispatch time, and arrives as
+  an argument."
+  [n]
+  (nth *slots* n))
+
+(defn client!
+  "Read `ref` on the client and hand its value to the surrounding inline body.
+
+  Only means anything inside `inline`, which hoists the form out of the body
+  before the body is a body at all. `ref` is an ordinary placeholder vector, so
+  the client resolves it with the same machinery a named data action uses and
+  nothing new travels."
+  [ref]
+  (throw (ex-info "client! reads a client value into an inline body, so it means nothing outside one"
+                  {:ref ref})))
+
+#?(:clj
+   (defn- client-form?
+     "Whether `x` is a `client!` call.
+
+  Matched by name rather than by resolution, so it holds under every alias and
+  under a transpiler with no vars to resolve against."
+     [x]
+     (and (seq? x) (symbol? (first x)) (= "client!" (name (first x))))))
+
+#?(:clj
+   (defn hoist-slots
+     "Split `forms` into a body and the client refs it reads.
+
+  The hoist is what makes the rung: every `client!` form leaves the body and
+  becomes a named argument, so what stays inside is control flow and nothing
+  else. Two consequences fall out. A ref mentioning a local no longer makes the
+  body capture anything, since the ref is evaluated at render time, outside it.
+  And two sites differing only in which client value they read share one
+  address, because the difference is not in the body any more -- a collision
+  that is the hoist working rather than a hash being coarse."
+     [forms]
+     (let [!refs (atom [])]
+       (letfn [(walk [x]
+                 (cond
+                   (client-form? x) (let [n (count @!refs)]
+                                      (swap! !refs conj (second x))
+                                      (list `slot n))
+                   (map? x)         (into (empty x) (map (fn [[k v]] [(walk k) (walk v)])) x)
+                   (map-entry? x)   x
+                   (vector? x)      (mapv walk x)
+                   (set? x)         (into #{} (map walk) x)
+                   (seq? x)         (apply list (map walk x))
+                   :else            x))]
+         {:body (walk forms)
+          :refs @!refs}))))
+
 #?(:clj
    (defmacro inline
      "Defer `body` to the server, behind a token in a single registered effect.
@@ -108,11 +167,16 @@
   of it, and a minted secret when the body reads a local from the surrounding
   scope. The two are indistinguishable on the wire and to the effect, so the
   identity scheme is not part of the intent's vocabulary and a page's served
-  vocabulary does not grow with the number of inline sites."
+  vocabulary does not grow with the number of inline sites.
+
+  Every `client!` form in `body` is hoisted into a slot beside the token, which
+  is the one thing this rung has that the closure above it does not: the client
+  values the intent reads are visible without running it."
      [& body]
-     (if (seq (captured-locals &env body))
-       `[[::invoke (register! (fn [] ~@body))]]
-       `[[::invoke (derive! ~(form-token body) (fn [] ~@body))]])))
+     (let [{:keys [body refs]} (hoist-slots body)]
+       (if (seq (captured-locals &env body))
+         `[[::invoke (register! (fn [] ~@body)) ~@refs]]
+         `[[::invoke (derive! ~(form-token body) (fn [] ~@body)) ~@refs]]))))
 
 (def ^:dynamic *ctx* nil)
 
@@ -128,6 +192,11 @@
   []
   (some-> *system* deref))
 
+(defn system
+  "The system itself, for a body that writes to it without capturing it."
+  []
+  *system*)
+
 (defn conn-id
   "The connection this body is running for."
   []
@@ -135,9 +204,9 @@
       (::🪐/conn-id (state))))
 
 (def invoke ^::🪐/server
-  (fn [ctx system tok]
+  (fn [ctx system tok & slots]
     #?(:clj
-       (binding [*ctx* ctx *system* system]
+       (binding [*ctx* ctx *system* system *slots* (vec slots)]
          (let [f (or (get @!derived tok)
                      (conn/fetch (conn-id) tok))]
            (when f (f)))))))

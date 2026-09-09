@@ -89,3 +89,32 @@
       (nexus/dispatch (nxr/get-registry) (atom {::🪐/conn-id c}) {} actions))
     (is (= {"conn-a" 2 "conn-b" 1} @!per-conn)
         "one shared entry, and each dispatch runs for its own connection")))
+
+(defonce !slotted (atom nil))
+
+(deftest a-client-value-rides-beside-the-token
+  (let [actions   (inline/inline (reset! !slotted (inline/client! [:event.target/value])))
+        [[k tok ref]] actions]
+    (is (= ::inline/invoke k))
+    (is (inline/derived-token? tok) "the ref left the body, so the body is its own whole")
+    (is (= [:event.target/value] ref)
+        "and the client value the intent reads is visible without running it")
+    (nxr/register-system->state! deref)
+    (std/register-standard-nexus!)
+    (nexus/dispatch (nxr/get-registry) (atom {}) {}
+                    [[::inline/invoke tok "typed"]])
+    (is (= "typed" @!slotted) "the slot arrives as an argument")))
+
+(deftest a-hoisted-ref-may-mention-a-local
+  (let [path      [:a :b]
+        actions   (inline/inline (reset! !slotted (inline/client! [::state path])))
+        [[_ tok ref]] actions]
+    (is (inline/derived-token? tok)
+        "the ref is evaluated at render time, outside the body, so nothing is captured")
+    (is (= [::state [:a :b]] ref) "and it carries the value the render computed")))
+
+(deftest two-sites-reading-different-values-share-one-address
+  (let [[[_ t1 r1]] (inline/inline (reset! !slotted (inline/client! [:event.target/value])))
+        [[_ t2 r2]] (inline/inline (reset! !slotted (inline/client! [:node/row])))]
+    (is (= t1 t2) "the difference is in the slots, not the body")
+    (is (not= r1 r2) "which is where it is legible")))
