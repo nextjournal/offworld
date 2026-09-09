@@ -158,6 +158,10 @@
                           :headers #js {"Content-Type" "application/json"}
                           :body    (encode-fn (merge server-payload extra-payload))}))))
 
+(def action-marker
+  "The metadata key marking an `:on` value as one action rather than a dispatch."
+  ::🪐/action)
+
 #?(:clj
    (defn with-modifiers [k v]
      (let [{:datastar/keys [modifiers]} (meta v)]
@@ -184,12 +188,38 @@
   "Metadata the attributes themselves consume, which therefore has no business
   being transmitted. Modifiers are the case in hand: they become part of the
   `data-on` key at render time, so an encoder that carries metadata was sending
-  them for nothing."
-  #{:datastar/modifiers})
+  them for nothing. The lone-action marker is the other: it is a question the
+  preprocessor answers, and the answer is the shape of what it hands on."
+  #{:datastar/modifiers action-marker})
+
+(defn- strip-render-meta [x]
+  (cond-> x
+    (seq (meta x)) (vary-meta #(not-empty (apply dissoc % render-only-meta)))))
 
 (defn- for-the-wire [actions]
-  (cond-> actions
-    (seq (meta actions)) (vary-meta #(apply dissoc % render-only-meta))))
+  (with-meta (mapv strip-render-meta actions)
+    (meta (strip-render-meta actions))))
+
+(defn ->dispatch
+  "An `:on` value as the dispatch it stands for.
+
+  Replicant's convention is that the value is a vector of actions, and an
+  authored value is left exactly as written -- nothing is inferred from its
+  shape, so a hand-written vector still means what Replicant says it means.
+  The one exception is a value a macro produced: an inline body expands to a
+  single action and says so in its metadata, which buys the concision of
+  writing one action where a dispatch goes precisely where it was generated and
+  nowhere else.
+
+  The marker does not survive the wrap, which is the whole of its lifetime: it
+  is a question this function answers, and the answer is the shape of what it
+  hands on. Anything else the author attached rides outward with the wrapper,
+  because a modifier is read off the dispatch rather than off an action."
+  [v]
+  (let [m (meta v)]
+    (if (get m action-marker)
+      (with-meta [(strip-render-meta v)] (not-empty (dissoc m action-marker)))
+      v)))
 
 (defn intent
   "The serialized intent an attribute carries.
@@ -226,12 +256,12 @@
      [{:as m :replicant/keys [on-unmount on-mount]} & {:as opts}]
      (cond-> m
        on-mount   (assoc (intent-attr :mount)
-                         (intent {:actions   on-mount
+                         (intent {:actions   (->dispatch on-mount)
                                   :trigger   :lifecycle
                                   :lifecycle :replicant/mount}
                                  opts))
        on-unmount (assoc (intent-attr :unmount)
-                         (intent {:actions   on-unmount
+                         (intent {:actions   (->dispatch on-unmount)
                                   :trigger   :lifecycle
                                   :lifecycle :replicant/unmount}
                                  opts)))))
@@ -250,11 +280,12 @@
      [m & {:as opts}]
      (into (dissoc m :on)
            (mapcat (fn [[k v]]
-                     [[(intent-attr k) (intent {:actions v
-                                                :trigger :event}
-                                               opts)]
-                      [(with-modifiers (keyword (str "data-on" k)) v)
-                       (d*-dispatch v opts)]])
+                     (let [v (->dispatch v)]
+                       [[(intent-attr k) (intent {:actions v
+                                                  :trigger :event}
+                                                 opts)]
+                        [(with-modifiers (keyword (str "data-on" k)) v)
+                         (d*-dispatch v opts)]]))
                    (:on m)))))
 
 #?(:clj

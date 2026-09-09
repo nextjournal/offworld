@@ -171,12 +171,18 @@
 
   Every `client!` form in `body` is hoisted into a slot beside the token, which
   is the one thing this rung has that the closure above it does not: the client
-  values the intent reads are visible without running it."
+  values the intent reads are visible without running it.
+
+  Expands to one action rather than a whole dispatch, marked so the render
+  preprocessor knows to wrap it. So it reads as the sole handler where that is
+  all there is, and sits beside named data actions in one dispatch where it is
+  not -- without teaching Replicant's `:on` convention a second shape."
      [& body]
-     (let [{:keys [body refs]} (hoist-slots body)]
+     (let [{:keys [body refs]} (hoist-slots body)
+           marked (fn [action] `(with-meta ~action {::🪐/action true}))]
        (if (seq (captured-locals &env body))
-         `[[::invoke (register! (fn [] ~@body)) ~@refs]]
-         `[[::invoke (derive! ~(form-token body) (fn [] ~@body)) ~@refs]]))))
+         (marked `[::invoke (register! (fn [] ~@body)) ~@refs])
+         (marked `[::invoke (derive! ~(form-token body) (fn [] ~@body)) ~@refs])))))
 
 (def ^:dynamic *ctx* nil)
 
