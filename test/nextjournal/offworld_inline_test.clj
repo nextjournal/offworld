@@ -7,6 +7,7 @@
    [nextjournal.offworld.divert :as divert]
    [nextjournal.offworld.expr :as expr]
    [clojure.string :as str]
+   [nextjournal.offworld.stem :as 🌿]
    [nextjournal.offworld.inline :as inline]
    [nextjournal.offworld.standard :as std]))
 
@@ -343,3 +344,26 @@
           "squint emits the identifier the author wrote, so an alias has to be spelled out")
       (is (= #{"clojure_DOT_string"} (expr/runtime-names js))
           "otherwise the expression declares no runtime, the page holds none, and the click throws"))))
+
+(deftest a-place-travels-as-a-path-and-not-as-the-state-around-it
+  (nxr/register-system->state! deref)
+  (std/register-standard-nexus!)
+  (let [render (fn [n] (binding [inline/*conn-id* "conn-l"]
+                         (let [state (🌿/> (🌿/init-state {:box {:w n}}) [:box :w])]
+                           (inline/server! (swap! (inline/local state) inc)))))
+        a      (render 120)
+        b      (render 140)]
+    (is (inline/derived-token? (second a))
+        "the stem's path is what the render holds, so the body is still closed")
+    (is (= (second a) (second b))
+        "and two renders of one place are one address, however the state moved")
+    (is (= [:box :w] (nth a 2))
+        "what is held is the path, not the whole state a stem carries with it")
+    (let [system (atom (🌿/init-state {:box {:w 5}}))]
+      (nexus/dispatch (nxr/get-registry) system {::🪐/conn-id "conn-l"} [a])
+      (is (= 6 (get-in @system [:box :w])) "and the swap reaches the live state there"))))
+
+(deftest a-literal-path-is-already-a-place
+  (binding [inline/*conn-id* "conn-l2"]
+    (let [[_ _ at] (inline/server! (reset! (inline/local [:box :w]) 9))]
+      (is (= [:box :w] at) "so it is held as written, with no stem to ask"))))

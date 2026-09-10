@@ -5,7 +5,8 @@
    [nextjournal.offworld :as-alias 🪐]
    [nextjournal.offworld.claim :as claim]
    [nextjournal.offworld.conn :as conn]
-   [nextjournal.offworld.expr :as expr])
+   [nextjournal.offworld.expr :as expr]
+   [nextjournal.offworld.stem :as 🌿])
   #?(:clj (:import [java.security MessageDigest] [java.util Base64]))
   #?(:cljs (:require-macros [nextjournal.offworld.inline :refer [server!]])))
 
@@ -124,6 +125,15 @@
   under a transpiler with no vars to resolve against."
      [x]
      (and (seq? x) (symbol? (first x)) (= "client!" (name (first x))))))
+
+#?(:clj
+   (defn- local-marker?
+     "Whether `x` is `(local <stem>)` -- the one form whose argument the render
+  evaluates rather than the body, so that a place travels as a path and not as
+  the whole state a stem carries."
+     [x]
+     (and (seq? x) (symbol? (first x)) (= "local" (name (first x)))
+          (= 2 (count x)))))
 
 #?(:clj
    (defn- server-form?
@@ -413,6 +423,16 @@
                  (cond
                    (and (seq? node) (= (quote quote) (first node))) node
 
+                   (local-marker? node)
+                   (let [arg (second node)
+                         ;; a stem knows its own path; a literal path is already one
+                         at  (if (vector? arg) arg `(🌿/path ~arg))]
+                     ;; the argument is the render's to evaluate, so whatever names
+                     ;; it counts as reached-for and the two analyses must agree
+                     (doseq [sym (filter locals (tree-seq coll? seq arg))]
+                       (swap! !held assoc sym ::at-a-path))
+                     (list `local (add! at)))
+
                    (client-marker? node) (add! (hoisted-ref (rest node) env))
 
                    (and (seq? node) (symbol? (first node))
@@ -480,6 +500,39 @@
   "The system itself, for a body that writes to it without capturing it."
   []
   *system*)
+
+#?(:clj
+   (deftype Local [path]
+     clojure.lang.IDeref
+     (deref [_] (get-in (some-> *system* deref) path))
+     clojure.lang.IAtom
+     (swap [_ f] (get-in (swap! *system* update-in path f) path))
+     (swap [_ f a] (get-in (swap! *system* update-in path f a) path))
+     (swap [_ f a b] (get-in (swap! *system* update-in path f a b) path))
+     (swap [_ f a b args] (get-in (apply swap! *system* update-in path f a b args) path))
+     (reset [_ v] (get-in (swap! *system* assoc-in path v) path))
+     (compareAndSet [_ old new]
+       (let [before (some-> *system* deref)]
+         (if (= old (get-in before path))
+           (do (swap! *system* assoc-in path new) true)
+           false)))))
+
+(defn local
+  "The system, narrowed to one place in it -- `swap!` and `reset!` and `deref`
+  all reach the live state through the path they were given.
+
+  The same verb as `system`, aimed at a slice rather than the whole: a body
+  writes with `(swap! (local path) inc)` where it would otherwise have to name
+  the whole state and the place inside it separately. Nothing here is a cursor
+  the program holds; it exists for the duration of one write, so a place never
+  becomes a value that outlives the intent that meant it.
+
+  Takes a path rather than a stem on purpose. `server!` rewrites
+  `(local some-stem)` at macroexpansion so the *path* is what the render holds,
+  because a stem carries the whole state map with it -- holding that would mint
+  a token per render instead of one per place."
+  [path]
+  #?(:clj (->Local (vec path))))
 
 (defn conn-id
   "The connection this body is running for."
