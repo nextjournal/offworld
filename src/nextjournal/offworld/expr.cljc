@@ -192,6 +192,15 @@
      (and (seq? x) (symbol? (first x)) (= nm (name (first x))))))
 
 #?(:clj
+   (def ^:private expression-binders
+     (quote #{let let* loop loop* letfn for doseq dotimes
+              if-let when-let if-some when-some})))
+
+#?(:clj
+   (defn- bound-syms [pattern]
+     (into #{} (filter simple-symbol?) (tree-seq coll? seq pattern))))
+
+#?(:clj
    (defn- infer
      "Decide, form by form, what is client-side and what the render computes.
 
@@ -200,13 +209,40 @@
   explicit unquote, a local from the surrounding scope, and a nested `server!`
   or wrapped action, whose value is an action the client-side control flow
   chooses between. A nested `client!` string is neither: it is already client
-  code, so it is spliced verbatim."
+  code, so it is spliced verbatim.
+
+  Scope is tracked as the walk descends, because a name the expression binds for
+  itself is not a name it reached out of the page for -- an inner `fn` or `let`
+  may shadow a var freely, and refusing that would forbid the one way to factor
+  a helper into an expression at all."
      [form locals !holes]
      (letfn [(hole! [expr mode]
                (let [h (str "__ow_" (count @!holes) "__")]
                  (swap! !holes conj [h expr mode])
                  (symbol h)))
-             (xf [node]
+             (binder [head node bound]
+               (if (#{"fn" "fn*"} (name head))
+                 (let [[_ & more] node
+                       [nm more]  (if (symbol? (first more)) [(first more) (rest more)] [nil more])
+                       bound      (cond-> bound nm (conj nm))
+                       arity      (fn [[params & body]]
+                                    (let [b (into bound (bound-syms params))]
+                                      (cons params (map #(xf % b) body))))]
+                   (concat (list head) (when nm [nm])
+                           (if (vector? (first more))
+                             (arity more)
+                             (map arity more))))
+                 (let [[_ bindings & body] node
+                       [pairs bound']
+                       (reduce (fn [[acc bound] [pattern expr]]
+                                 (if (keyword? pattern)
+                                   [(conj acc pattern (xf expr bound)) bound]
+                                   [(conj acc pattern (xf expr bound))
+                                    (into bound (bound-syms pattern))]))
+                               [[] bound]
+                               (partition 2 bindings))]
+                   (list* head (vec pairs) (map #(xf % bound') body)))))
+             (xf [node bound]
                (cond
                  (marker-form? node "unquote")
                  (hole! (second node) :value)
@@ -217,12 +253,10 @@
                  (or (marker-form? node "server!") (marker-form? node "client!"))
                  (hole! node :value)
 
-                 (and (seq? node) (keyword? (first node)))
-                 (hole! node :value)
-
-                 (seq? node)
-                 (let [[head & args] node]
-                   (cons (if (symbol? head) (check-symbol! head) (xf head)) (map xf args)))
+                 (and (seq? node) (symbol? (first node))
+                      (or (contains? expression-binders (symbol (name (first node))))
+                          (#{"fn" "fn*"} (name (first node)))))
+                 (binder (first node) node bound)
 
                  (and (vector? node) (keyword? (first node)))
                  (throw (ex-info (str "a reference cannot appear inside a client expression: "
@@ -233,17 +267,29 @@
                                  {:violation :reference-in-client-expression
                                   :key       (first node)}))
 
-                 (vector? node) (mapv xf node)
-                 (map? node)    (into {} (map (fn [[k v]] [(xf k) (xf v)])) node)
-                 (set? node)    (into #{} (map xf) node)
+                 (and (seq? node) (keyword? (first node)))
+                 (hole! node :value)
+
+                 (seq? node)
+                 (let [[head & args] node]
+                   (cons (cond
+                           (not (symbol? head))          (xf head bound)
+                           (contains? bound head)        head
+                           :else                         (check-symbol! head))
+                         (map #(xf % bound) args)))
+
+                 (vector? node) (mapv #(xf % bound) node)
+                 (map? node)    (into {} (map (fn [[k v]] [(xf k bound) (xf v bound)])) node)
+                 (set? node)    (into #{} (map #(xf % bound)) node)
 
                  (and (symbol? node) (contains? locals node))
                  (hole! node :value)
 
-                 (symbol? node) (check-symbol! node)
+                 (and (symbol? node) (not (contains? bound node)))
+                 (check-symbol! node)
 
                  :else node))]
-       (xf form))))
+       (xf form #{}))))
 
 #?(:clj
    (defn compile-expression

@@ -320,3 +320,17 @@
                 nil
                 (catch clojure.lang.ExceptionInfo e (:violation (ex-data e)))))
         "and neither does a reference")))
+
+(defn- a-render-time-helper [a b] (+ a b))
+
+(deftest a-name-the-expression-binds-for-itself-is-its-own
+  (binding [inline/*conn-id* "conn-b"]
+    (let [[_ js] (inline/client!
+                   (let [a-render-time-helper (fn [a b] (+ a b))]
+                     (a-render-time-helper 1 evt.movementX)))]
+      (is (re-find #"a_render_time_helper" js)
+          "an inner binding shadows the var freely, which is the only way to factor a helper in"))
+    (is (thrown? Exception
+                 (macroexpand '(nextjournal.offworld.inline/client!
+                                (nextjournal.offworld-inline-test/a-render-time-helper 1 2))))
+        "while calling the render's own fn is still refused")))
