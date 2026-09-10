@@ -21,7 +21,8 @@
   datastar-expressions (MIT)."
   (:require
    [clojure.string :as str]
-   [clojure.walk :as walk]))
+   [clojure.walk :as walk]
+   [nextjournal.offworld.stem :as 🌿]))
 
 #?(:clj
    (defn- bool [e]
@@ -257,6 +258,15 @@
                (cond
                  (marker-form? node "unquote")
                  (hole! (second node) :value)
+
+                 ;; (el path-or-stem) -- the render derives the id, so what
+                 ;; reaches the page is a plain lookup by a literal name rather
+                 ;; than an id string threaded through every render-fn on the way
+                 ;; down. Legible in the compiled expression, which a call into
+                 ;; something of ours would not be.
+                 (marker-form? node "el")
+                 (list (quote js/document.getElementById)
+                       (hole! `(🌿/id ~(second node)) :value))
 
                  (and (marker-form? node "client!") (string? (second node)))
                  (hole! (second node) :raw)

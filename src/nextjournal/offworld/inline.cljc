@@ -518,6 +518,18 @@
          (do (swap! *system* assoc-in path new) true)
          false))))
 
+(defn el
+  "The element a path names, looked up on the page.
+
+  Only means anything inside a `client!` expression, where `server!` rewrites it:
+  the render derives the id from the path with `stem/id` and the expression
+  carries a plain `document.getElementById(\"...\")` with that name in it. So a
+  render-fn passes the *path* it already has rather than threading an id string
+  down beside it, and what the page evaluates is still a lookup anyone can read."
+  [path-or-stem]
+  (throw (ex-info "el names an element for a client expression, so it means nothing outside one"
+                  {:at path-or-stem})))
+
 (defn *local
   "The system, narrowed to one place in it: `swap!`, `reset!` and `deref` all
   reach that place and nothing else.
