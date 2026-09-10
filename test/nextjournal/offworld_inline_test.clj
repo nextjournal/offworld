@@ -375,3 +375,21 @@
     (binding [inline/*system* (atom {:box {:w 7}})]
       (is (= 7 @(inline/*local state))
           "and in a body the live state does, so the same form means the same thing in both"))))
+
+(defonce !tailed (atom 0))
+
+(deftest an-action-is-selected-or-sequenced-and-only-two-positions-select
+  (binding [inline/*conn-id* "conn-t"]
+    (is (= 2 (count (inline/client! "a()" (inline/server! (swap! !tailed inc)))))
+        "tail position makes it a sibling: the client work, then the remainder travels")
+    (is (= ::inline/choose
+           (first (inline/client! (when (inline/client! "c()")
+                                    (inline/server! (swap! !tailed inc))))))
+        "a branch selects it whole")
+    (doseq [form ['(nextjournal.offworld.inline/client!
+                    (do (nextjournal.offworld.inline/server! (swap! !tailed inc)) 1))
+                  '(nextjournal.offworld.inline/client!
+                    (+ 1 (nextjournal.offworld.inline/server! (swap! !tailed inc))))]]
+      (let [e (try (macroexpand form) nil (catch Exception e e))]
+        (is (= :action-inside-client-expression (:violation (ex-data (ex-cause e))))
+            "and anywhere else it would compile to a value nothing dispatches")))))

@@ -271,8 +271,25 @@
                  (and (marker-form? node "client!") (string? (second node)))
                  (hole! (second node) :raw)
 
+                 ;; An action spliced into the middle of an expression becomes a
+                 ;; JavaScript array and nothing dispatches it. Nor could it mean
+                 ;; anything if it did: the expression runs to completion before
+                 ;; the server-bound remainder is posted, so a server! here can
+                 ;; only mean "also send this" -- what a tail form already means
+                 ;; -- while reading as though it were sequenced. Tail position
+                 ;; and a conditional's branches are the two places an action is
+                 ;; selected rather than sequenced, and both are handled before
+                 ;; anything reaches here.
                  (or (marker-form? node "server!") (marker-form? node "client!"))
-                 (hole! node :value)
+                 (throw (ex-info (str "an action cannot sit inside a client expression: "
+                                      (pr-str (first node))
+                                      " here would compile to a value and never be dispatched."
+                                      " Put it in tail position, where it becomes a sibling"
+                                      " action, or in a branch of an `if`/`when` whose test is"
+                                      " the client fact -- those are the two positions that"
+                                      " select an action rather than sequence one.")
+                                 {:violation :action-inside-client-expression
+                                  :marker    (first node)}))
 
                  (and (seq? node) (symbol? (first node))
                       (or (contains? expression-binders (symbol (name (first node))))
