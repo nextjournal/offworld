@@ -139,6 +139,44 @@
            (str/replace #";$" "")))))
 
 #?(:clj
+   (def ^:private compiler-namespaces
+     "Namespaces the compiler can emit calls into, given the page holds its
+  runtime. A symbol resolving anywhere else names something that exists only
+  where the render is."
+     #{"clojure.core" "clojure.string" "clojure.set" "clojure.math" "clojure.edn"}))
+
+#?(:clj
+   (defn- server-side-var
+     [sym]
+     (when-let [v (try (resolve sym) (catch Throwable _ nil))]
+       (when (var? v)
+         (let [vns (some-> v meta :ns ns-name str)]
+           (when-not (contains? compiler-namespaces vns)
+             v))))))
+
+#?(:clj
+   (defn- check-symbol!
+     "Refuse a name that would compile to an identifier the browser does not have.
+
+  A symbol the render can see but the page cannot -- anything resolving to a var
+  outside the compiler's own namespaces -- otherwise compiles to a bare
+  identifier, survives every static check, renders correctly, and throws only on
+  the click. Unlike a missing runtime this cannot be fixed by shipping anything,
+  because the thing it names lives in the render's process and nowhere else. The
+  fix is to say which stage you meant: `~x` splices the value the render has."
+     [sym]
+     (when-let [v (server-side-var sym)]
+       (throw (ex-info (str "a client expression cannot name " sym
+                            ", which resolves to " v
+                            " -- that exists where the render is, not on the page. "
+                            "Splice its value with ~" sym ", or move the work into a "
+                            "registered client effect.")
+                       {:violation :server-side-name-in-client-expression
+                        :symbol    sym
+                        :var       (str v)})))
+     sym))
+
+#?(:clj
    (defn- marker-form?
      [x nm]
      (and (seq? x) (symbol? (first x)) (= nm (name (first x))))))
@@ -174,7 +212,7 @@
 
                  (seq? node)
                  (let [[head & args] node]
-                   (cons (if (symbol? head) head (xf head)) (map xf args)))
+                   (cons (if (symbol? head) (check-symbol! head) (xf head)) (map xf args)))
 
                  (and (vector? node) (keyword? (first node)))
                  (throw (ex-info (str "a reference cannot appear inside a client expression: "
@@ -191,6 +229,8 @@
 
                  (and (symbol? node) (contains? locals node))
                  (hole! node :value)
+
+                 (symbol? node) (check-symbol! node)
 
                  :else node))]
        (xf form))))

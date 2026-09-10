@@ -291,3 +291,19 @@
           "anything richer compiles to a call into the compiler's core, and says so in the string")
       (is (re-find #"squint_core\.max" rich)
           "so the ceiling is the compiler's, not a hand-drawn list of allowed forms"))))
+
+(def ^:private a-render-time-constant 30)
+
+(deftest a-name-only-the-render-has-is-refused-rather-than-emitted
+  (binding [inline/*conn-id* "conn-v"]
+    (let [e (try (macroexpand '(nextjournal.offworld.inline/client!
+                                (max nextjournal.offworld-inline-test/a-render-time-constant
+                                     evt.movementX)))
+                 nil
+                 (catch Exception e e))]
+      (is (some? e))
+      (is (= :server-side-name-in-client-expression (:violation (ex-data (ex-cause e))))
+          "a var compiles to a bare identifier the page has never heard of"))
+    (let [[_ js] (inline/client! (max ~a-render-time-constant evt.movementX))]
+      (is (re-find #"squint_core\.max\(30," js)
+          "and saying which stage you meant splices the value the render has"))))
