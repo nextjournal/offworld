@@ -132,7 +132,7 @@
   evaluates rather than the body, so that a place travels as a path and not as
   the whole state a stem carries."
      [x]
-     (and (seq? x) (symbol? (first x)) (= "local" (name (first x)))
+     (and (seq? x) (symbol? (first x)) (= "*local" (name (first x)))
           (= 2 (count x)))))
 
 #?(:clj
@@ -431,7 +431,7 @@
                      ;; it counts as reached-for and the two analyses must agree
                      (doseq [sym (filter locals (tree-seq coll? seq arg))]
                        (swap! !held assoc sym ::at-a-path))
-                     (list `local (add! at)))
+                     (list `*local (add! at)))
 
                    (client-marker? node) (add! (hoisted-ref (rest node) env))
 
@@ -502,9 +502,11 @@
   *system*)
 
 #?(:clj
-   (deftype Local [path]
+   (deftype Local [path snapshot]
      clojure.lang.IDeref
-     (deref [_] (get-in (some-> *system* deref) path))
+     (deref [_] (if *system*
+                  (get-in @*system* path)
+                  (get-in snapshot path)))
      clojure.lang.IAtom
      (swap [_ f] (get-in (swap! *system* update-in path f) path))
      (swap [_ f a] (get-in (swap! *system* update-in path f a) path))
@@ -512,27 +514,31 @@
      (swap [_ f a b args] (get-in (apply swap! *system* update-in path f a b args) path))
      (reset [_ v] (get-in (swap! *system* assoc-in path v) path))
      (compareAndSet [_ old new]
-       (let [before (some-> *system* deref)]
-         (if (= old (get-in before path))
-           (do (swap! *system* assoc-in path new) true)
-           false)))))
+       (if (= old (get-in @*system* path))
+         (do (swap! *system* assoc-in path new) true)
+         false))))
 
-(defn local
-  "The system, narrowed to one place in it -- `swap!` and `reset!` and `deref`
-  all reach the live state through the path they were given.
+(defn *local
+  "The system, narrowed to one place in it: `swap!`, `reset!` and `deref` all
+  reach that place and nothing else.
 
-  The same verb as `system`, aimed at a slice rather than the whole: a body
-  writes with `(swap! (local path) inc)` where it would otherwise have to name
-  the whole state and the place inside it separately. Nothing here is a cursor
-  the program holds; it exists for the duration of one write, so a place never
-  becomes a value that outlives the intent that meant it.
+  Give it a **stem** and it derives the place the stem already names -- the path
+  the component was handed, so a render-fn writes where it reads without either
+  of them restating a path. Give it a **vector** and that is the place.
 
-  Takes a path rather than a stem on purpose. `server!` rewrites
-  `(local some-stem)` at macroexpansion so the *path* is what the render holds,
-  because a stem carries the whole state map with it -- holding that would mint
-  a token per render instead of one per place."
-  [path]
-  #?(:clj (->Local (vec path))))
+  Reads answer from whichever state is at hand: the live system when a body is
+  running, and the render's own snapshot otherwise, so `@*local` means the same
+  thing in a view and in the intent the view emits. It is not a cursor the
+  program keeps -- it lives for one write, and a place never becomes a value
+  that outlives the intent that meant it.
+
+  `server!` rewrites the call so a *stem* argument contributes only its path to
+  the body. A stem carries the whole state map with it, and holding that would
+  mint a claim per render instead of one per place."
+  [at]
+  #?(:clj (if (map? at)
+            (->Local (vec (🌿/path at)) (🌿/stem at))
+            (->Local (vec at) nil))))
 
 (defn conn-id
   "The connection this body is running for."

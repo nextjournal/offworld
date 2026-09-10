@@ -350,7 +350,7 @@
   (std/register-standard-nexus!)
   (let [render (fn [n] (binding [inline/*conn-id* "conn-l"]
                          (let [state (🌿/> (🌿/init-state {:box {:w n}}) [:box :w])]
-                           (inline/server! (swap! (inline/local state) inc)))))
+                           (inline/server! (swap! (inline/*local state) inc)))))
         a      (render 120)
         b      (render 140)]
     (is (inline/derived-token? (second a))
@@ -365,5 +365,13 @@
 
 (deftest a-literal-path-is-already-a-place
   (binding [inline/*conn-id* "conn-l2"]
-    (let [[_ _ at] (inline/server! (reset! (inline/local [:box :w]) 9))]
+    (let [[_ _ at] (inline/server! (reset! (inline/*local [:box :w]) 9))]
       (is (= [:box :w] at) "so it is held as written, with no stem to ask"))))
+
+(deftest a-deref-answers-from-whichever-state-is-at-hand
+  (let [state (🌿/> (🌿/init-state {:box {:w 42}}) [:box :w])]
+    (is (= 42 @(inline/*local state))
+        "at render there is no system, so the stem's own snapshot answers")
+    (binding [inline/*system* (atom {:box {:w 7}})]
+      (is (= 7 @(inline/*local state))
+          "and in a body the live state does, so the same form means the same thing in both"))))
