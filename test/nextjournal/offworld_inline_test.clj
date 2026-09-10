@@ -279,3 +279,16 @@
   (let [x 1]
     (is (thrown? clojure.lang.ExceptionInfo (inline/server! (reset! !read x)))
         "no connection at render time is a loud failure, not a body that reads nils")))
+
+(deftest an-expression-that-needs-a-runtime-is-refused-here-not-in-the-browser
+  (binding [inline/*conn-id* "conn-r"]
+    (is (some? (inline/client! (.setPointerCapture el (.-pointerId evt))))
+        "the event and the node are in scope, and interop needs no runtime")
+    (let [e (try (macroexpand '(nextjournal.offworld.inline/client!
+                                (clojure.string/split "a b" #" ")))
+                 nil
+                 (catch Exception e e))]
+      (is (some? e))
+      (is (= :runtime-reference-in-client-expression
+             (:violation (ex-data (ex-cause e))))
+          "a name the browser will not have is an error at macroexpansion, not a click-time throw"))))

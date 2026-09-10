@@ -108,6 +108,36 @@
           template holes))
 
 #?(:clj
+   (def ^:private runtime-reference
+     #"(squint_core|[A-Za-z0-9_$]*_DOT_[A-Za-z0-9_$.]*)\."))
+
+#?(:clj
+   (defn- no-runtime!
+     "Refuse an expression that compiled to a call into a language runtime.
+
+  The target is a sandboxed evaluator holding nothing but the page, so a
+  reference to a compiler's own core -- or to a namespace it munged -- is a name
+  that will not exist when the expression runs. Left alone it compiles happily,
+  renders happily, reads back happily in any static analysis, and then throws in
+  the browser on the click, which is the worst place to find out. So it is an
+  error here instead.
+
+  What to do about it is not to work around the compiler: reach for a registered
+  client effect, whose body is ordinary ClojureScript with a whole runtime behind
+  it, and name it from `client!` as a vector."
+     [js form]
+     (if-let [m (re-find runtime-reference js)]
+       (throw (ex-info (str "a client expression cannot call into a language runtime, and "
+                            (pr-str form) " compiled to " (pr-str (first m))
+                            " -- the browser has no such name. Use a registered client effect "
+                            "for anything needing more than operators, and name it from client! "
+                            "as a vector.")
+                       {:violation :runtime-reference-in-client-expression
+                        :form      form
+                        :compiled  js}))
+       js)))
+
+#?(:clj
    (defn- compile-form
      [form]
      (let [compile-string (try (requiring-resolve (quote squint.compiler/compile-string))
@@ -123,7 +153,8 @@
            (str/replace #"squint_core\.truth_\((.*)\)" "!!($1)")
            (str/replace #"\n" " ")
            str/trim
-           (str/replace #";$" "")))))
+           (str/replace #";$" "")
+           (no-runtime! form)))))
 
 #?(:clj
    (defn- marker-form?
