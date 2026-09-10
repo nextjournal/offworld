@@ -55,15 +55,24 @@
 
 (defonce !outlives (atom 0))
 
-(deftest a-derived-body-outlives-every-connection
+(deftest an-address-is-a-name-for-code-and-not-a-permission-to-run-it
   (reset! !outlives 0)
-  (let [action (inline/server! (swap! !outlives inc))]
-    (nxr/register-system->state! deref)
-    (std/register-standard-nexus!)
+  (nxr/register-system->state! deref)
+  (std/register-standard-nexus!)
+  (let [action (binding [inline/*conn-id* "conn-9"]
+                 (inline/server! (swap! !outlives inc)))]
+    (nexus/dispatch (nxr/get-registry)
+                    (atom {}) {::🪐/conn-id "conn-8"} [action])
+    (is (= 0 @!outlives)
+        "a connection that was never handed this body cannot run it, however public its name")
+    (nexus/dispatch (nxr/get-registry)
+                    (atom {}) {::🪐/conn-id "conn-9"} [action])
+    (is (= 1 @!outlives) "the connection the render offered it to can")
     (inline/release! "conn-9")
     (nexus/dispatch (nxr/get-registry)
                     (atom {}) {::🪐/conn-id "conn-9"} [action])
-    (is (= 1 @!outlives) "no connection was holding it, and none had to be")))
+    (is (= 1 @!outlives)
+        "and the offer goes when the connection does, though the code itself stays")))
 
 (deftest two-instances-share-one-address-and-differ-only-in-what-they-hold
   (let [seen (atom [])]
@@ -88,21 +97,23 @@
 
 (deftest a-body-reaches-its-connection-without-capturing-it
   (reset! !per-conn {})
-  (let [action  (inline/server! (swap! !per-conn update (inline/conn-id) (fnil inc 0)))
-        [_ tok] action]
-    (is (inline/derived-token? tok)
-        "ambient context is read, not closed over, so the form is the whole of it")
-    (nxr/register-system->state! deref)
-    (std/register-standard-nexus!)
+  (nxr/register-system->state! deref)
+  (std/register-standard-nexus!)
+  (let [render  (fn [c] (binding [inline/*conn-id* c]
+                          (inline/server! (swap! !per-conn update (inline/conn-id) (fnil inc 0)))))
+        actions (into {} (map (juxt identity render)) ["conn-a" "conn-b"])]
+    (is (apply = (map (comp second val) actions))
+        "two connections render one piece of code, so they render one name for it")
     (doseq [c ["conn-a" "conn-b" "conn-a"]]
-      (nexus/dispatch (nxr/get-registry) (atom {}) {::🪐/conn-id c} [action]))
+      (nexus/dispatch (nxr/get-registry) (atom {}) {::🪐/conn-id c} [(get actions c)]))
     (is (= {"conn-a" 2 "conn-b" 1} @!per-conn)
         "one shared entry, and each dispatch runs for its own connection")))
 
 (defonce !slotted (atom nil))
 
 (deftest a-client-value-rides-beside-the-token
-  (let [action      (inline/server! (reset! !slotted (inline/client! [:event.target/value])))
+  (let [action      (binding [inline/*conn-id* "conn-s"]
+                      (inline/server! (reset! !slotted (inline/client! [:event.target/value]))))
         [k tok ref] action]
     (is (= ::inline/invoke k))
     (is (inline/derived-token? tok) "the ref left the body, so the body is its own whole")
@@ -110,7 +121,7 @@
         "and the client value the intent reads is visible without running it")
     (nxr/register-system->state! deref)
     (std/register-standard-nexus!)
-    (nexus/dispatch (nxr/get-registry) (atom {}) {}
+    (nexus/dispatch (nxr/get-registry) (atom {}) {::🪐/conn-id "conn-s"}
                     [[::inline/invoke tok "typed"]])
     (is (= "typed" @!slotted) "the slot arrives as an argument")))
 
@@ -246,7 +257,8 @@
 
 (deftest quoted-data-is-data
   (let [n 3
-        action (inline/server! (reset! !read (quote (n n n))))]
+        action (binding [inline/*conn-id* "conn-q"]
+                 (inline/server! (reset! !read (quote (n n n)))))]
     (nxr/register-system->state! deref)
     (std/register-standard-nexus!)
     (nexus/dispatch (nxr/get-registry) (atom {}) {::🪐/conn-id "conn-q"} [action])

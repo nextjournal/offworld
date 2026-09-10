@@ -48,7 +48,8 @@
   nothing here evicts."
      [token f]
      (swap! !derived (fn [m] (if (contains? m token) m (assoc m token f))))
-     token))
+     (binding [conn/*conn-id* (or *conn-id* conn/*conn-id*)]
+       (conn/offer! token))))
 
 (defn derived-token?
   "Whether `token` names a body by its form rather than by a minted secret."
@@ -490,6 +491,8 @@
   (fn [ctx system tok & slots]
     #?(:clj
        (binding [*ctx* ctx *system* system *slots* (vec slots)]
-         (let [f (or (get @!derived tok)
-                     (conn/fetch (conn-id) tok))]
+         (let [id (conn-id)
+               f  (if (derived-token? tok)
+                    (when (conn/offered? id tok) (get @!derived tok))
+                    (conn/fetch id tok))]
            (when f (f)))))))

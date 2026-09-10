@@ -33,6 +33,23 @@
                #(-> % (assoc-in [:by-value v] tok) (assoc tok v))))
       tok)))
 
+(defn offer!
+  "Record that `token` was rendered for the current connection.
+
+  A content address is a name for code, and code is permanent and shared, so the
+  address alone cannot say who may run it. What is per-connection is not the
+  body but the *offer*: the server rendered this one into this page, and that is
+  the thing an arriving dispatch has to match."
+  [token]
+  (when *conn-id*
+    (swap! !store update-in [*conn-id* :offered] (fnil conj #{}) token))
+  token)
+
+(defn offered?
+  "Whether `token` was rendered for `conn-id`."
+  [conn-id token]
+  (contains? (get-in @!store [conn-id :offered] #{}) token))
+
 (defn fetch [conn-id token] (get-in @!store [conn-id token]))
 
 (defn release! [conn-id] (swap! !store dissoc conn-id))
