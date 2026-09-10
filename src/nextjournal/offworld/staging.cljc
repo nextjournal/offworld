@@ -276,3 +276,59 @@
   (unregistered-actions nexus [[:effcts/save "typo"]])
   ;;=> [{:type :unregistered-action :key :effcts/save ...}]
   )
+
+;; ---------------------------------------------------------------------------
+;; The stage plan — what an intent is, read without running it.
+
+(defn describe
+  "One action or reference as a tree: its key, kind and stage, and the same for
+  every reference nested inside it.
+
+  Possible only because an intent is a value. A framework that compiles the
+  boundary into strings has nothing to walk here: the expression is opaque to
+  its own author, so there is no reading of it that does not involve running
+  it."
+  [nexus node]
+  (if (keyword-headed? node)
+    (let [{:keys [key kind world]} (lookup nexus (first node))
+          args                     (mapv #(describe nexus %) (rest node))]
+      (cond-> {:key key :kind kind :stage world}
+        (seq args) (assoc :args args)))
+    (cond
+      (vector? node) (mapv #(describe nexus %) node)
+      (map? node)    (reduce-kv (fn [m k v] (assoc m k (describe nexus v))) (empty node) node)
+      :else          node)))
+
+(defn- nodes
+  [described]
+  (filter (every-pred map? :key) (tree-seq coll? #(if (map? %) (:args %) (seq %)) described)))
+
+(defn by-stage
+  "Every reference in a described intent, grouped by the stage that resolves it,
+  in pipeline order."
+  [described]
+  (let [all (nodes described)]
+    (into []
+          (keep (fn [stage]
+                  (when-let [at (seq (filter (comp #{stage} :stage) all))]
+                    {:stage stage :steps (vec at)})))
+          (concat stage-order [:unknown]))))
+
+(defn plan
+  "The staged shape of one dispatch, and whether it holds together.
+
+  The stranded-client-ref check is deliberately not run here: a client
+  placeholder sitting inside a server-bound action is the ordinary case, since
+  it resolves on the client before the request. That check belongs to what
+  survives diversion, not to what a render declared.
+
+  Three things fall out of the intent being data, and each is something a
+  compiled-string boundary cannot offer: the pipeline can be read off the page
+  without executing it, every reference can be attributed to the stage that
+  resolves it, and the invariants are decidable rather than conventional."
+  [nexus dispatch]
+  (let [actions   (if (keyword-headed? dispatch) [dispatch] (vec dispatch))
+        described (mapv #(describe nexus %) actions)]
+    {:actions    described
+     :by-stage   (by-stage described)
+     :violations (unregistered-actions nexus dispatch)}))

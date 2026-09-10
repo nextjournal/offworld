@@ -163,6 +163,15 @@
                  (let [[head & args] node]
                    (cons (if (symbol? head) head (xf head)) (map xf args)))
 
+                 (and (vector? node) (keyword? (first node)))
+                 (throw (ex-info (str "a reference cannot appear inside a client expression: "
+                                      (pr-str (first node))
+                                      " names something a stage resolves, and a compiled expression "
+                                      "has no stage left to resolve it at. Hoist it into a slot instead, "
+                                      "or splice a render-time value with ~")
+                                 {:violation :reference-in-client-expression
+                                  :key       (first node)}))
+
                  (vector? node) (mapv xf node)
                  (map? node)    (into {} (map (fn [[k v]] [(xf k) (xf v)])) node)
                  (set? node)    (into #{} (map xf) node)
