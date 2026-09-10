@@ -1,7 +1,9 @@
 (ns nextjournal.offworld.inline
   (:require
    [clojure.string :as str]
+   [clojure.walk :as walk]
    [nextjournal.offworld :as-alias 🪐]
+   [nextjournal.offworld.claim :as claim]
    [nextjournal.offworld.conn :as conn]
    [nextjournal.offworld.expr :as expr])
   #?(:clj (:import [java.security MessageDigest] [java.util Base64]))
@@ -21,6 +23,18 @@
      [f]
      (binding [conn/*conn-id* (or *conn-id* conn/*conn-id*)]
        (conn/stash! f))))
+
+#?(:clj
+   (defn hold!
+     "Render-time. Hold `v` for the current connection, for a body hoisted out of
+  the scope that had it, and return the reference that resolves back to it."
+     [v]
+     (let [id (or *conn-id* conn/*conn-id*)]
+       (when-not id
+         (throw (ex-info "an inline body hoists its environment, so rendering one needs a connection"
+                         {:held (type v)})))
+       (binding [conn/*conn-id* id]
+         (claim/hold! v)))))
 
 #?(:clj (defn release! [conn-id] (conn/release! conn-id)))
 
@@ -88,18 +102,6 @@
      "The content address of `forms`: a compile-time constant standing for a body."
      [forms]
      (str "sha256." (digest (pr-str (canonicalize forms))))))
-
-#?(:clj
-   (defn captured-locals
-     "The locals of `env` that `forms` reads.
-
-  An over-approximation — a shadowing binding of the same name counts — which
-  errs toward minting a token that could have been derived."
-     [env forms]
-     (let [locals (set (keys env))]
-       (into (sorted-set)
-             (comp (filter symbol?) (filter locals))
-             (tree-seq coll? seq forms)))))
 
 (def ^:dynamic *slots* nil)
 
@@ -241,31 +243,196 @@
          `[~@server-tail]))))
 
 #?(:clj
-   (defn hoist-slots
-     "Split `forms` into a body and the client refs it reads.
+   (defn- elide-render-time
+     "Drop the subtrees whose symbols are not references from inside the body.
 
-  The hoist is what makes the rung: every `client!` form leaves the body and
-  becomes a named argument, so what stays inside is control flow and nothing
-  else. Two consequences fall out. A ref mentioning a local no longer makes the
-  body capture anything, since the ref is evaluated at render time, outside it.
-  And two sites differing only in which client value they read share one
-  address, because the difference is not in the body any more -- a collision
-  that is the hoist working rather than a hash being coarse."
+  A `client!` form is evaluated where the render is, so the names in it are the
+  render's own and not free in the body at all. A quoted form is data."
+     [forms]
+     (walk/prewalk
+      (fn [x]
+        (if (or (client-marker? x) (and (seq? x) (= (quote quote) (first x))))
+          nil
+          x))
+      forms)))
+
+#?(:clj
+   (defn- free-in
+     [node locals bound]
+     (letfn [(binds [pattern] (into #{} (filter symbol?) (tree-seq coll? seq pattern)))
+             (fs [node bound]
+               (cond
+                 (and (seq? node) (= (quote quote) (first node))) #{}
+
+                 (and (seq? node) (#{(quote let*) (quote loop*)} (first node)))
+                 (let [[_ bindings & body] node
+                       [free bound']
+                       (reduce (fn [[free bound] [sym expr]]
+                                 [(into free (fs expr bound)) (conj bound sym)])
+                               [#{} bound]
+                               (partition 2 bindings))]
+                   (into free (mapcat #(fs % bound')) body))
+
+                 (and (seq? node) (= (quote fn*) (first node)))
+                 (let [[_ & more] node
+                       [nm more]  (if (symbol? (first more)) [(first more) (rest more)] [nil more])
+                       bound      (cond-> bound nm (conj nm))
+                       arities    (if (vector? (first more)) [more] more)]
+                   (into #{}
+                         (mapcat (fn [[params & body]]
+                                   (let [b (into bound (binds params))]
+                                     (mapcat #(fs % b) body))))
+                         arities))
+
+                 (and (seq? node) (= (quote letfn*) (first node)))
+                 (let [[_ bindings & body] node
+                       bound' (into bound (take-nth 2 bindings))]
+                   (into (into #{} (mapcat #(fs % bound')) (take-nth 2 (rest bindings)))
+                         (mapcat #(fs % bound'))
+                         body))
+
+                 (and (seq? node) (= (quote catch) (first node)))
+                 (let [[_ _klass sym & body] node]
+                   (into #{} (mapcat #(fs % (conj bound sym))) body))
+
+                 (map? node)  (into #{} (mapcat (fn [[k v]] (into (fs k bound) (fs v bound)))) node)
+                 (coll? node) (into #{} (mapcat #(fs % bound)) (seq node))
+
+                 (and (symbol? node) (contains? locals node) (not (contains? bound node)))
+                 #{node}
+
+                 :else #{}))]
+       (fs node bound))))
+
+#?(:clj
+   (defn free-locals
+     "The names `forms` reaches out of its own scope for.
+
+  Answered on the macroexpanded form, because there the set of forms that can
+  bind a name is small and closed -- four special forms and a catch clause --
+  where on source it is however many binding macros exist. The rewrite is done
+  on the source, so the two are compared before the result is trusted: they
+  agree for anything the rewrite understood, and a disagreement is what makes it
+  fall back rather than guess."
      [forms env]
-     (let [!refs (atom [])]
-       (letfn [(walk [x]
+     (let [locals (set (keys env))]
+       (if (empty? locals)
+         #{}
+         (free-in (walk/macroexpand-all (elide-render-time forms)) locals #{})))))
+
+#?(:clj
+   (def ^:private pair-binders
+     "Forms whose second element is a vector of pattern/expression pairs."
+     (quote #{let let* loop loop* if-let when-let if-some when-some with-open
+              doseq for})))
+
+#?(:clj
+   (defn- pattern-syms
+     "Every name a binding pattern could introduce.
+
+  Over-approximated on purpose -- a default in an `:or` map contributes its
+  symbols too. Naming too much as bound only ever means a value is left in the
+  body instead of hoisted out of it, which costs a derived address and never
+  costs correctness."
+     [pattern]
+     (into #{} (filter simple-symbol?) (tree-seq coll? seq pattern))))
+
+#?(:clj
+   (defn hoist-slots
+     "Split `forms` into a closed body and the references it used to reach out with.
+
+  Two kinds of reach, and both leave the body: a `client!` form, which the client
+  resolves before the request, and a plain local from the surrounding render,
+  which the server resolves at dispatch from a value the render held. What is
+  left is a *closed* term -- no free variable, nothing implicit -- which is what
+  makes its content address a complete identity rather than a pointer that needs
+  an environment beside it to mean anything.
+
+  Scope is tracked as the walk descends, so a name the body binds for itself is
+  not a name it reached out for. That distinction is the whole reason this can
+  hoist at all: the earlier over-approximation could only ever answer *did the
+  body mention this name*, which is not the question."
+     [forms env]
+     (let [!refs   (atom [])
+           !held   (atom {})
+           locals  (set (keys env))
+           add!    (fn [ref] (let [n (count @!refs)] (swap! !refs conj ref) (list `slot n)))
+           hold!   (fn [sym] (or (get @!held sym)
+                                 (let [s (add! `(hold! ~sym))]
+                                   (swap! !held assoc sym s)
+                                   s)))]
+       (letfn [(binder-body [head node bound]
+                 (case (name head)
+                   ("fn" "fn*") (fn-form head node bound)
+                   "letfn"      (letfn-form head node bound)
+                   "catch"      (let [[_ klass sym & body] node]
+                                  (list* head klass sym (map #(w % (conj bound sym)) body)))
+                   (pairs-form head node bound)))
+
+               (pairs-form [head node bound]
+                 (let [[_ bindings & body] node
+                       [pairs bound']
+                       (reduce (fn [[acc bound] [pattern expr]]
+                                 (if (and (keyword? pattern) (not= :let pattern))
+                                   [(conj acc pattern (w expr bound)) bound]
+                                   (let [[pattern' bound']
+                                         (if (= :let pattern)
+                                           [pattern bound]
+                                           [pattern (into bound (pattern-syms pattern))])]
+                                     [(conj acc pattern' (w expr bound))
+                                      (if (= :let pattern)
+                                        (into bound' (pattern-syms (take-nth 2 expr)))
+                                        bound')])))
+                               [[] bound]
+                               (partition 2 bindings))]
+                   (list* head (vec pairs) (map #(w % bound') body))))
+
+               (arity [node bound]
+                 (let [[params & body] node
+                       bound' (into bound (pattern-syms params))]
+                   (list* params (map #(w % bound') body))))
+
+               (fn-form [head node bound]
+                 (let [[_ & more]   node
+                       [nm more]    (if (symbol? (first more)) [(first more) (rest more)] [nil more])
+                       bound        (cond-> bound nm (conj nm))
+                       arities      (if (vector? (first more)) [more] more)
+                       done         (map #(arity % bound) arities)]
+                   (concat (list head) (when nm [nm])
+                           (if (vector? (first more)) (first done) done))))
+
+               (letfn-form [head node bound]
+                 (let [[_ fns & body] node
+                       bound          (into bound (map first fns))]
+                   (list* head
+                          (vec (map (fn [f] (cons (first f) (arity (rest f) bound))) fns))
+                          (map #(w % bound) body))))
+
+               (w [node bound]
                  (cond
-                   (client-marker? x) (let [n (count @!refs)]
-                                      (swap! !refs conj (hoisted-ref (rest x) env))
-                                      (list `slot n))
-                   (map? x)         (into (empty x) (map (fn [[k v]] [(walk k) (walk v)])) x)
-                   (map-entry? x)   x
-                   (vector? x)      (mapv walk x)
-                   (set? x)         (into #{} (map walk) x)
-                   (seq? x)         (apply list (map walk x))
-                   :else            x))]
-         {:body (walk forms)
-          :refs @!refs}))))
+                   (and (seq? node) (= (quote quote) (first node))) node
+
+                   (client-marker? node) (add! (hoisted-ref (rest node) env))
+
+                   (and (seq? node) (symbol? (first node))
+                        (or (contains? pair-binders (symbol (name (first node))))
+                            (#{"fn" "fn*" "letfn" "catch"} (name (first node)))))
+                   (binder-body (first node) node bound)
+
+                   (map? node)    (into (empty node) (map (fn [[k v]] [(w k bound) (w v bound)])) node)
+                   (map-entry? node) node
+                   (vector? node) (mapv #(w % bound) node)
+                   (set? node)    (into #{} (map #(w % bound)) node)
+                   (seq? node)    (apply list (map #(w % bound) node))
+
+                   (and (symbol? node) (contains? locals node) (not (contains? bound node)))
+                   (hold! node)
+
+                   :else node))]
+         (let [body (mapv #(w % #{}) forms)]
+           {:body body
+            :refs @!refs
+            :held (set (keys @!held))})))))
 
 #?(:clj
    (defmacro server!
@@ -286,9 +453,11 @@
   all there is, and sits beside named data actions in one dispatch where it is
   not -- without teaching Replicant's `:on` convention a second shape."
      [& body]
-     (let [{:keys [body refs]} (hoist-slots body &env)
+     (let [free                     (free-locals body &env)
+           {:keys [refs held] :as h} (hoist-slots body &env)
+           body                      (:body h)
            marked (fn [action] `(with-meta ~action {::🪐/action true}))]
-       (if (seq (captured-locals &env body))
+       (if (not= free held)
          (marked `[::invoke (register! (fn [] ~@body)) ~@refs])
          (marked `[::invoke (derive! ~(form-token body) (fn [] ~@body)) ~@refs])))))
 

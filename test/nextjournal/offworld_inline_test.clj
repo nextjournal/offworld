@@ -19,22 +19,26 @@
         (nxr/register-system->state! deref)
         (std/register-standard-nexus!)
         (nexus/dispatch (nxr/get-registry)
-                        (atom {::🪐/conn-id "conn-1"}) {} [action])
+                        (atom {}) {::🪐/conn-id "conn-1"} [action])
         (is (true? @ran) "and runs when the server resolves the token")))))
 
-(deftest a-minted-body-is-scoped-to-its-connection
-  (let [ran (atom false)]
+(deftest the-code-outlives-the-connection-and-the-environment-does-not
+  (let [ran (atom 0)]
     (binding [inline/*conn-id* "conn-1"]
-      (let [action (inline/server! (reset! ran true))]
+      (let [action (inline/server! (swap! ran inc))]
         (nxr/register-system->state! deref)
         (std/register-standard-nexus!)
         (nexus/dispatch (nxr/get-registry)
-                        (atom {::🪐/conn-id "conn-2"}) {} [action])
-        (is (false? @ran) "another connection cannot invoke it")
+                        (atom {}) {::🪐/conn-id "conn-1"} [action])
+        (is (= 1 @ran) "the body runs with what the render held for it")
+        (nexus/dispatch (nxr/get-registry)
+                        (atom {}) {::🪐/conn-id "conn-2"} [action])
+        (is (= 1 @ran) "another connection holds nothing, so nothing happens")
         (inline/release! "conn-1")
         (nexus/dispatch (nxr/get-registry)
-                        (atom {::🪐/conn-id "conn-1"}) {} [action])
-        (is (false? @ran) "and it is gone once the connection closes")))))
+                        (atom {}) {::🪐/conn-id "conn-1"} [action])
+        (is (= 1 @ran)
+            "and the address still resolves once the connection closes -- what expired is the environment")))))
 
 (defonce !shared (atom 0))
 
@@ -58,23 +62,27 @@
     (std/register-standard-nexus!)
     (inline/release! "conn-9")
     (nexus/dispatch (nxr/get-registry)
-                    (atom {::🪐/conn-id "conn-9"}) {} [action])
+                    (atom {}) {::🪐/conn-id "conn-9"} [action])
     (is (= 1 @!outlives) "no connection was holding it, and none had to be")))
 
-(deftest a-captured-local-keeps-the-bodies-apart
+(deftest two-instances-share-one-address-and-differ-only-in-what-they-hold
   (let [seen (atom [])]
     (binding [inline/*conn-id* "conn-1"]
       (let [actions (doall (for [v [:a :b]] (inline/server! (swap! seen conj v))))
             tokens  (map second actions)]
-        (is (not-any? inline/derived-token? tokens)
-            "the form is not the whole of a body that reads its scope")
-        (is (apply not= tokens) "so each instance is named separately")
+        (is (every? inline/derived-token? tokens)
+            "the scope left the body, so the form is the whole of it after all")
+        (is (apply = tokens) "and one piece of code has one name, however many times it is rendered")
+        (is (apply not= (map #(drop 2 %) actions))
+            "what differs between the two is the environment, and only that")
+        (is (apply = (map #(nth % 2) actions))
+            "and the atom both bodies reach is one thing held once, not one per render")
         (nxr/register-system->state! deref)
         (std/register-standard-nexus!)
         (doseq [action actions]
           (nexus/dispatch (nxr/get-registry)
-                          (atom {::🪐/conn-id "conn-1"}) {} [action]))
-        (is (= [:a :b] @seen) "and each runs with the value it closed over")))))
+                          (atom {}) {::🪐/conn-id "conn-1"} [action]))
+        (is (= [:a :b] @seen) "each still runs with the value its own render held")))))
 
 (defonce !per-conn (atom {}))
 
@@ -87,7 +95,7 @@
     (nxr/register-system->state! deref)
     (std/register-standard-nexus!)
     (doseq [c ["conn-a" "conn-b" "conn-a"]]
-      (nexus/dispatch (nxr/get-registry) (atom {::🪐/conn-id c}) {} [action]))
+      (nexus/dispatch (nxr/get-registry) (atom {}) {::🪐/conn-id c} [action]))
     (is (= {"conn-a" 2 "conn-b" 1} @!per-conn)
         "one shared entry, and each dispatch runs for its own connection")))
 
@@ -228,3 +236,34 @@
     (let [ran (nexus/dispatch (divert/client-nexus (nxr/get-registry)) (atom {}) {} [dispatch])]
       (is (= [[::inline/invoke]] (mapv (comp vector first) (::🪐/server-actions ran)))
           "the client decided and only the branch it chose travelled -- no round trip to decide"))))
+
+(deftest a-name-the-body-binds-is-not-a-name-it-reached-for
+  (let [state {:n 1}
+        action (inline/server! (swap! !shared (fn [state] (+ state (:n state)))))]
+    (is (inline/derived-token? (second action))
+        "the inner binding shadows the render's, so nothing was reached for and nothing is held")
+    (is (= 2 (count action)) "and no slot was opened for a name that was never free")))
+
+(deftest quoted-data-is-data
+  (let [n 3
+        action (inline/server! (reset! !read (quote (n n n))))]
+    (nxr/register-system->state! deref)
+    (std/register-standard-nexus!)
+    (nexus/dispatch (nxr/get-registry) (atom {}) {::🪐/conn-id "conn-q"} [action])
+    (is (= '(n n n) @!read) "a quoted symbol is not a reference, so it is left alone")))
+
+(deftest a-local-in-head-position-is-held-like-any-other
+  (binding [inline/*conn-id* "conn-h"]
+    (let [f      (fn [x] (reset! !read x))
+          action (inline/server! (f :called))]
+      (is (inline/derived-token? (second action)))
+      (nxr/register-system->state! deref)
+      (std/register-standard-nexus!)
+      (nexus/dispatch (nxr/get-registry) (atom {}) {::🪐/conn-id "conn-h"} [action])
+      (is (= :called @!read)
+          "the function itself is part of the environment, not part of the code"))))
+
+(deftest hoisting-an-environment-needs-somewhere-to-put-it
+  (let [x 1]
+    (is (thrown? clojure.lang.ExceptionInfo (inline/server! (reset! !read x)))
+        "no connection at render time is a loud failure, not a body that reads nils")))

@@ -11,6 +11,13 @@
   [v]
   [::🎫/value (conn/stash! v)])
 
+(defn hold!
+  "Render-time. Like `stash!`, for a value the render will hand to a body it
+  hoisted out of. Interned rather than minted, because the same value hoisted on
+  every render is one thing held, not one per render."
+  [v]
+  [::🎫/value (conn/intern! v)])
+
 (def value ^::🪐/server
   (fn [dispatch-data token]
     (conn/fetch (conn/id dispatch-data) token)))
