@@ -1307,7 +1307,6 @@ of server-side rendering shows that some kind of reified procedure
 to build an abstract machine, but whether to admit you have built one.
 
 The worst part of lisp-in-lisp is when data represents control-flow.
-Offworld offers a standard 
 
 ** Why not infer the client/server boundary with macros?
 Hyper and Electric Clojure do versions of this, offering real
@@ -1345,6 +1344,16 @@ neither a mutable cell nor a setter. What the critique lands on is
 making the place-cell your general model of client state.
 
 ** Why not cursors?
+
+
+offworld defunctionalizes the cursor.
+
+writes name a place, not a meaning.
+
+places should be downstream of intents.
+
+
+
 A cursor fuses read and write onto one path, and Offworld already
 hands a render-fn both halves separately — =🌿/local= reads at the
 path, =[:effects/save path v]= writes at it. Why not fuse them?
