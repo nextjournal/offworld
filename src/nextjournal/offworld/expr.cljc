@@ -98,6 +98,13 @@
     (number? v)  (str v)
     (map? v)     (str "{" (str/join "," (map (fn [[k val]] (str (js-literal k) ":" (js-literal val))) v)) "}")
     (coll? v)    (str "[" (str/join "," (map js-literal v)) "]")
+    (or (fn? v) #?(:clj (instance? clojure.lang.IDeref v) :cljs (satisfies? IDeref v)))
+    (throw (ex-info (str "a client expression can carry a value the render computed, but not "
+                         (if (fn? v) "a function" "a reference") ": "
+                         (pr-str v) " has no written form, so splicing it would put its identity "
+                         "on the page as a string. Move the work into a registered client effect "
+                         "instead, and name it from client! as a vector.")
+                    {:violation :unwritable-splice :value v}))
     :else        (js-literal (str v))))
 
 (defn substitute
@@ -169,8 +176,11 @@
        (throw (ex-info (str "a client expression cannot name " sym
                             ", which resolves to " v
                             " -- that exists where the render is, not on the page. "
-                            "Splice its value with ~" sym ", or move the work into a "
-                            "registered client effect.")
+                            (if (fn? (deref v))
+                              (str "It holds code, and code has no written form, so there is "
+                                   "nothing to splice: move the work into a registered client "
+                                   "effect and name it from client! as a vector.")
+                              (str "Splice its value with ~" sym ".")))
                        {:violation :server-side-name-in-client-expression
                         :symbol    sym
                         :var       (str v)})))

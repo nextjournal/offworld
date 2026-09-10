@@ -307,3 +307,16 @@
     (let [[_ js] (inline/client! (max ~a-render-time-constant evt.movementX))]
       (is (re-find #"squint_core\.max\(30," js)
           "and saying which stage you meant splices the value the render has"))))
+
+(defn- a-render-time-fn [z] z)
+
+(deftest a-splice-carries-a-value-and-refuses-to-carry-code
+  (binding [inline/*conn-id* "conn-w"]
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (inline/client! (~a-render-time-fn 1)))
+        "code has no written form, so splicing it would ship its identity as a string")
+    (is (= :unwritable-splice
+           (try (inline/client! (~(atom 1)))
+                nil
+                (catch clojure.lang.ExceptionInfo e (:violation (ex-data e)))))
+        "and neither does a reference")))
