@@ -184,7 +184,18 @@
                        {:violation :server-side-name-in-client-expression
                         :symbol    sym
                         :var       (str v)})))
-     sym))
+     ;; Canonicalize an alias to the namespace it names. Squint emits whatever
+     ;; identifier the author wrote, so `str/split` becomes `str.split(...)` --
+     ;; a name the page has never heard of, which `runtime-names` cannot see
+     ;; because it is looking for a module and this looks like a local. Emitting
+     ;; the namespace in full is what makes the compiler and the runtime map
+     ;; agree on one name.
+     (or (when-let [v (try (resolve sym) (catch Throwable _ nil))]
+           (when (var? v)
+             (let [vns (some-> v meta :ns ns-name str)]
+               (when (and vns (not= "clojure.core" vns) (not= vns (namespace sym)))
+                 (symbol vns (name sym))))))
+         sym)))
 
 #?(:clj
    (defn- marker-form?

@@ -6,6 +6,7 @@
    [nextjournal.offworld :as 🪐]
    [nextjournal.offworld.divert :as divert]
    [nextjournal.offworld.expr :as expr]
+   [clojure.string :as str]
    [nextjournal.offworld.inline :as inline]
    [nextjournal.offworld.standard :as std]))
 
@@ -334,3 +335,11 @@
                  (macroexpand '(nextjournal.offworld.inline/client!
                                 (nextjournal.offworld-inline-test/a-render-time-helper 1 2))))
         "while calling the render's own fn is still refused")))
+
+(deftest an-alias-is-canonicalised-so-the-page-can-hold-what-it-names
+  (binding [inline/*conn-id* "conn-a"]
+    (let [[_ js] (inline/client! (str/join "-" ["a" "b"]))]
+      (is (re-find #"clojure_DOT_string\.join" js)
+          "squint emits the identifier the author wrote, so an alias has to be spelled out")
+      (is (= #{"clojure_DOT_string"} (expr/runtime-names js))
+          "otherwise the expression declares no runtime, the page holds none, and the click throws"))))
