@@ -107,35 +107,18 @@
             (str/replace s hole (if (= :raw mode) (str v) (js-literal v))))
           template holes))
 
-#?(:clj
-   (def ^:private runtime-reference
-     #"(squint_core|[A-Za-z0-9_$]*_DOT_[A-Za-z0-9_$.]*)\."))
+(def ^:private runtime-reference
+  #"\b(squint_core|clojure_DOT_[A-Za-z0-9_$]+)\.")
 
-#?(:clj
-   (defn- no-runtime!
-     "Refuse an expression that compiled to a call into a language runtime.
+(defn runtime-names
+  "The language runtimes a compiled expression needs by name.
 
-  The target is a sandboxed evaluator holding nothing but the page, so a
-  reference to a compiler's own core -- or to a namespace it munged -- is a name
-  that will not exist when the expression runs. Left alone it compiles happily,
-  renders happily, reads back happily in any static analysis, and then throws in
-  the browser on the click, which is the worst place to find out. So it is an
-  error here instead.
-
-  What to do about it is not to work around the compiler: reach for a registered
-  client effect, whose body is ordinary ClojureScript with a whole runtime behind
-  it, and name it from `client!` as a vector."
-     [js form]
-     (if-let [m (re-find runtime-reference js)]
-       (throw (ex-info (str "a client expression cannot call into a language runtime, and "
-                            (pr-str form) " compiled to " (pr-str (first m))
-                            " -- the browser has no such name. Use a registered client effect "
-                            "for anything needing more than operators, and name it from client! "
-                            "as a vector.")
-                       {:violation :runtime-reference-in-client-expression
-                        :form      form
-                        :compiled  js}))
-       js)))
+  A compiled expression is mostly operators, but anything richer than an
+  operator becomes a call into the compiler's own core, and that core is a
+  module the page has to be holding. Derivable from the expression itself, so
+  any tool can ask what an intent depends on without being told."
+  [js]
+  (into (sorted-set) (map second) (re-seq runtime-reference (str js))))
 
 #?(:clj
    (defn- compile-form
@@ -153,8 +136,7 @@
            (str/replace #"squint_core\.truth_\((.*)\)" "!!($1)")
            (str/replace #"\n" " ")
            str/trim
-           (str/replace #";$" "")
-           (no-runtime! form)))))
+           (str/replace #";$" "")))))
 
 #?(:clj
    (defn- marker-form?
@@ -224,19 +206,50 @@
 
 #?(:cljs (defonce ^:private !compiled (atom {})))
 
+#?(:cljs (defonce !runtimes (atom {})))
+
+#?(:cljs
+   (defn register-runtime!
+     "Make a language runtime reachable from client expressions, by the name the
+  compiler emits for it -- `squint_core`, `clojure_DOT_string`.
+
+  The page has to hold these, because a compiled expression is evaluated with
+  nothing but what it is handed. A host that bundles the compiler's core can
+  register it here, or leave it on `globalThis.offworldRuntimes` under the same
+  names and it is picked up lazily, which is what a plugin loaded before this
+  namespace has to do."
+     [nm module]
+     (swap! !runtimes assoc nm module)))
+
+#?(:cljs
+   (defn- runtime-module
+     [nm]
+     (or (get @!runtimes nm)
+         (some-> (aget js/globalThis "offworldRuntimes") (aget nm)))))
+
 #?(:cljs
    (defn- compiled
-     [js]
+     [js needed]
      (or (get @!compiled js)
-         (let [f (js/Function. "evt" "el" (str "return (" js ");"))]
+         (let [f (.apply js/Function nil
+                         (to-array (concat ["evt" "el"] needed
+                                           [(str "return (" js ");")])))]
            (swap! !compiled assoc js f)
            f))))
 
 #?(:cljs
    (defn- evaluate
      [dispatch-data js]
-     (let [{:replicant/keys [dom-event node]} dispatch-data]
-       ((compiled js) dom-event node))))
+     (let [{:replicant/keys [dom-event node]} dispatch-data
+           needed  (vec (runtime-names js))
+           modules (mapv runtime-module needed)]
+       (when-let [missing (seq (keep (fn [[nm m]] (when-not m nm)) (map vector needed modules)))]
+         (throw (ex-info (str "a client expression needs " (str/join ", " missing)
+                              " and the page is not holding it -- register it with "
+                              "nextjournal.offworld.expr/register-runtime!, or expose it as "
+                              "globalThis.offworldRuntimes")
+                         {:violation :runtime-missing :needed needed :expression js})))
+       (.apply (compiled js needed) nil (to-array (concat [dom-event node] modules))))))
 
 (def expr
   "A client value the intent reads, named by the expression that produces it."

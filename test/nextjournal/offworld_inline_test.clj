@@ -5,6 +5,7 @@
    [nexus.registry :as nxr]
    [nextjournal.offworld :as 🪐]
    [nextjournal.offworld.divert :as divert]
+   [nextjournal.offworld.expr :as expr]
    [nextjournal.offworld.inline :as inline]
    [nextjournal.offworld.standard :as std]))
 
@@ -280,15 +281,13 @@
     (is (thrown? clojure.lang.ExceptionInfo (inline/server! (reset! !read x)))
         "no connection at render time is a loud failure, not a body that reads nils")))
 
-(deftest an-expression-that-needs-a-runtime-is-refused-here-not-in-the-browser
+(deftest an-expression-declares-the-runtime-it-needs
   (binding [inline/*conn-id* "conn-r"]
-    (is (some? (inline/client! (.setPointerCapture el (.-pointerId evt))))
-        "the event and the node are in scope, and interop needs no runtime")
-    (let [e (try (macroexpand '(nextjournal.offworld.inline/client!
-                                (clojure.string/split "a b" #" ")))
-                 nil
-                 (catch Exception e e))]
-      (is (some? e))
-      (is (= :runtime-reference-in-client-expression
-             (:violation (ex-data (ex-cause e))))
-          "a name the browser will not have is an error at macroexpansion, not a click-time throw"))))
+    (let [[_ plain] (inline/client! (.setPointerCapture el (.-pointerId evt)))
+          [_ rich]  (inline/client! (clojure.string/join " " (assoc [1] 0 (max 2 3))))]
+      (is (empty? (expr/runtime-names plain))
+          "the event and the node are in scope, and interop needs no runtime at all")
+      (is (= #{"clojure_DOT_string" "squint_core"} (expr/runtime-names rich))
+          "anything richer compiles to a call into the compiler's core, and says so in the string")
+      (is (re-find #"squint_core\.max" rich)
+          "so the ceiling is the compiler's, not a hand-drawn list of allowed forms"))))
